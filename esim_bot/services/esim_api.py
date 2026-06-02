@@ -41,18 +41,27 @@ async def _post(endpoint: str, payload: dict) -> dict:
 
 
 async def get_countries_by_region(region_code: str) -> list[dict]:
+    import logging
     data = await _post("location/list", {})
+    logging.info(f"location/list success={data.get('success')} errorCode={data.get('errorCode')} errorMsg={data.get('errorMsg')}")
     if not data.get("success"):
+        logging.error(f"location/list failed: {data}")
         return []
 
     locations = data["obj"].get("locationList", [])
+    logging.info(f"location/list returned {len(locations)} locations, looking for {region_code}")
+    codes = [loc.get("code") for loc in locations[:20]]
+    logging.info(f"First 20 codes: {codes}")
+
     for loc in locations:
         if loc.get("code") == region_code:
             sub = loc.get("subLocationList") or []
+            logging.info(f"Found region {region_code} with {len(sub)} countries")
             return sorted(
                 [{"slug": s["code"], "name": s["name"]} for s in sub if s.get("code")],
                 key=lambda x: x["name"],
             )
+    logging.warning(f"Region {region_code} not found in location list")
     return []
 
 
