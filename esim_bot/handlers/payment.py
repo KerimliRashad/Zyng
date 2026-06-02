@@ -9,7 +9,7 @@ from aiogram.types import (
 )
 
 from database import create_order, complete_order, get_order_by_id
-from services.esim_api import order_esim, get_packages_for_country
+from services.esim_api import order_esim
 
 router = Router()
 

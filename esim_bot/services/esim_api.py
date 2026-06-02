@@ -1,4 +1,6 @@
 import math
+import time
+import logging
 import aiohttp
 from config import ESIM_API_KEY, ESIM_API_URL, MARKUP_PERCENT, STARS_PER_USD
 
@@ -7,7 +9,6 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
-# Коды регионов из /location/list API
 REGIONS = {
     "🇪🇺 Европа": "EU-42",
     "🌏 Азия": "AS-31",
@@ -25,8 +26,7 @@ def apply_markup(price_usd: float) -> int:
 
 
 def usd_to_stars(price_usd: float) -> int:
-    stars = math.ceil(price_usd * STARS_PER_USD)
-    return max(stars, 1)
+    return max(math.ceil(price_usd * STARS_PER_USD), 1)
 
 
 async def _post(endpoint: str, payload: dict) -> dict:
@@ -35,88 +35,110 @@ async def _post(endpoint: str, payload: dict) -> dict:
             f"{ESIM_API_URL}/{endpoint}",
             json=payload,
             headers=HEADERS,
-            timeout=aiohttp.ClientTimeout(total=15),
+            timeout=aiohttp.ClientTimeout(total=20),
         ) as resp:
             return await resp.json()
 
 
 async def get_countries_by_region(region_code: str) -> list[dict]:
-    import logging
     data = await _post("location/list", {})
-    logging.info(f"location/list success={data.get('success')} errorCode={data.get('errorCode')} errorMsg={data.get('errorMsg')}")
     if not data.get("success"):
         logging.error(f"location/list failed: {data}")
         return []
 
-    locations = data["obj"].get("locationList", [])
-    logging.info(f"location/list returned {len(locations)} locations, looking for {region_code}")
-    codes = [loc.get("code") for loc in locations[:20]]
-    logging.info(f"First 20 codes: {codes}")
-
-    for loc in locations:
+    for loc in (data["obj"].get("locationList") or []):
         if loc.get("code") == region_code:
             sub = loc.get("subLocationList") or []
-            logging.info(f"Found region {region_code} with {len(sub)} countries")
             return sorted(
                 [{"slug": s["code"], "name": s["name"]} for s in sub if s.get("code")],
                 key=lambda x: x["name"],
             )
-    logging.warning(f"Region {region_code} not found in location list")
     return []
 
 
-async def get_packages_for_country(slug: str) -> list[dict]:
-    import logging
-    data = await _post("package/list", {"locationCode": slug, "type": 0})
-    logging.info(f"package/list [{slug}] success={data.get('success')} errorCode={data.get('errorCode')} errorMsg={data.get('errorMsg')}")
-    if data.get("obj"):
-        pkgs = data["obj"].get("packageList", [])
-        logging.info(f"package/list [{slug}] returned {len(pkgs)} packages")
-        if pkgs:
-            logging.info(f"First package sample: {pkgs[0]}")
+async def get_packages_for_country(location_code: str) -> list[dict]:
+    # locationCode фильтрует пакеты по стране/региону
+    data = await _post("package/list", {"locationCode": location_code})
+    logging.info(f"package/list [{location_code}] success={data.get('success')} errorCode={data.get('errorCode')}")
+
     if not data.get("success") or not data.get("obj"):
+        logging.error(f"package/list failed: {data}")
         return []
 
+    packages = data["obj"].get("packageList") or []
+    logging.info(f"package/list [{location_code}] got {len(packages)} packages")
+
     result = []
-    for pkg in data["obj"].get("packageList", []):
-        price_usd = float(pkg.get("price", 0)) / 10000
+    for pkg in packages:
+        price_raw = pkg.get("price", 0) or 0
+        price_usd = float(price_raw) / 10000
         if price_usd <= 0:
             continue
+
         duration = pkg.get("duration", 0)
-        data_bytes = pkg.get("volume", 0)
-        data_gb = data_bytes / 1073741824 if data_bytes else 0
-        data_mb = data_bytes / 1048576 if data_bytes else 0
+        data_bytes = pkg.get("volume", 0) or 0
         if data_bytes == 0:
             data_str = "Безлимит"
-        elif data_gb >= 1:
-            data_str = f"{data_gb:.0f} ГБ"
+        elif data_bytes >= 1073741824:
+            data_str = f"{data_bytes / 1073741824:.0f} ГБ"
         else:
-            data_str = f"{data_mb:.0f} МБ"
+            data_str = f"{data_bytes / 1048576:.0f} МБ"
+
+        pkg_code = pkg.get("packageCode", "") or pkg.get("slug", "")
+        if not pkg_code:
+            continue
 
         result.append({
-            "packageId": pkg.get("packageCode", ""),
-            "name": pkg.get("name", ""),
+            "packageId": pkg_code,
+            "name": pkg.get("name", pkg_code),
             "data": data_str,
             "days": duration,
             "price_usd": price_usd,
-            "price_rub": apply_markup(price_usd),
             "price_stars": usd_to_stars(price_usd),
         })
 
     return sorted(result, key=lambda x: x["price_stars"])
 
 
-async def order_esim(package_id: str, count: int = 1) -> dict | None:
-    import time
+async def order_esim(package_code: str) -> dict | None:
+    """Заказывает eSIM, возвращает данные профиля (iccid, qrCodeUrl, ac, smdpAddress)."""
+    transaction_id = f"tg_{int(time.time() * 1000)}"
     payload = {
-        "transactionId": f"tg_{package_id}_{int(time.time()*1000)}",
-        "packageInfoList": [{"packageCode": package_id, "count": count}],
+        "transactionId": transaction_id,
+        "packageInfoList": [{"packageCode": package_code, "count": 1}],
     }
     data = await _post("esim/order", payload)
-    if data.get("success") and data.get("obj"):
-        esim_list = data["obj"].get("esimList", [])
-        return esim_list[0] if esim_list else None
+    logging.info(f"esim/order [{package_code}] success={data.get('success')} errorCode={data.get('errorCode')}")
+
+    if not data.get("success") or not data.get("obj"):
+        logging.error(f"esim/order failed: {data}")
+        return None
+
+    # Получаем orderNo и запрашиваем профиль
+    order_no = data["obj"].get("orderNo")
+    esim_list = data["obj"].get("esimList") or []
+
+    # Если eSIM уже в ответе — возвращаем сразу
+    if esim_list:
+        return esim_list[0]
+
+    # Иначе запрашиваем по orderNo
+    if order_no:
+        return await query_esim_by_order(order_no)
+
     return None
+
+
+async def query_esim_by_order(order_no: str) -> dict | None:
+    """Запрашивает eSIM профиль по номеру заказа."""
+    data = await _post("esim/query", {"orderNo": order_no})
+    logging.info(f"esim/query [{order_no}] success={data.get('success')}")
+
+    if not data.get("success") or not data.get("obj"):
+        return None
+
+    esim_list = data["obj"].get("esimList") or []
+    return esim_list[0] if esim_list else None
 
 
 async def query_esim(iccid: str) -> dict | None:
