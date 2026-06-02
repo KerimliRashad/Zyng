@@ -158,18 +158,21 @@ async def show_package_detail(callback: CallbackQuery):
         await callback.answer("Тариф не найден", show_alert=True)
         return
 
+    from config import STARS_PER_USD
+    price_usd = pkg['price_stars'] / STARS_PER_USD
+
     text = (
         f"📦 <b>{pkg['name']}</b>\n\n"
         f"📊 Трафик: <b>{pkg['data']}</b>\n"
         f"📅 Срок: <b>{pkg['days']} дней</b>\n"
-        f"⭐️ Цена: <b>{pkg['price_stars']} Stars</b>\n\n"
+        f"💵 Цена: <b>${price_usd:.2f}</b>  (~{pkg['price_stars']} ⭐)\n\n"
         f"✅ Мгновенная активация\n"
         f"📱 iPhone XS+, Samsung S20+, Pixel 3+"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text=f"⭐️ Купить — {pkg['price_stars']} Stars",
+            text=f"🛒 Купить — ${price_usd:.2f}",
             callback_data=f"buy:{pkg_id}:{slug}:{pkg['price_stars']}:{pkg['name'][:30]}"
         )],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"country:{slug}")],
