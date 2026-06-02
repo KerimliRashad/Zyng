@@ -66,7 +66,14 @@ async def get_countries_by_region(region_code: str) -> list[dict]:
 
 
 async def get_packages_for_country(slug: str) -> list[dict]:
+    import logging
     data = await _post("package/list", {"locationCode": slug, "type": 0})
+    logging.info(f"package/list [{slug}] success={data.get('success')} errorCode={data.get('errorCode')} errorMsg={data.get('errorMsg')}")
+    if data.get("obj"):
+        pkgs = data["obj"].get("packageList", [])
+        logging.info(f"package/list [{slug}] returned {len(pkgs)} packages")
+        if pkgs:
+            logging.info(f"First package sample: {pkgs[0]}")
     if not data.get("success") or not data.get("obj"):
         return []
 
