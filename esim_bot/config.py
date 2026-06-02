@@ -15,3 +15,5 @@ ESIM_API_URL = os.getenv("ESIM_API_URL", "https://api.esimaccess.com/api/v1/open
 STARS_PER_USD = int(os.getenv("STARS_PER_USD", "100"))
 
 MARKUP_PERCENT = float(os.getenv("MARKUP_PERCENT", "30"))
+
+XROCKET_API_KEY = os.getenv("XROCKET_API_KEY", "")
