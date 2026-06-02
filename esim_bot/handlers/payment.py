@@ -62,12 +62,25 @@ async def successful_payment(message: Message):
 
     await message.answer("⏳ Оплата получена! Выпускаю eSIM...")
 
-    esim = await order_esim(pkg_id)
+    esim, err_msg = await order_esim(pkg_id)
     if not esim:
+        # Refund Stars automatically
+        try:
+            await message.bot.refund_star_payment(
+                user_id=message.from_user.id,
+                telegram_payment_charge_id=charge_id,
+            )
+            refund_note = "⭐️ Звёзды возвращены автоматически."
+        except Exception as ref_err:
+            import logging
+            logging.error(f"Refund failed: {ref_err}")
+            refund_note = f"Верните звёзды вручную, Charge ID: <code>{charge_id}</code>"
+
         await message.answer(
-            f"❌ Ошибка выпуска eSIM. Свяжитесь с поддержкой.\n"
-            f"ID заказа: #{order_id}\n"
-            f"Charge ID: <code>{charge_id}</code>",
+            f"❌ <b>Ошибка выпуска eSIM</b>\n\n"
+            f"Причина: <code>{err_msg}</code>\n"
+            f"ID заказа: #{order_id}\n\n"
+            f"{refund_note}",
             parse_mode="HTML",
         )
         return

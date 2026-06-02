@@ -100,45 +100,60 @@ async def get_packages_for_country(location_code: str) -> list[dict]:
     return sorted(result, key=lambda x: x["price_stars"])
 
 
-async def order_esim(package_code: str) -> dict | None:
-    """Заказывает eSIM, возвращает данные профиля (iccid, qrCodeUrl, ac, smdpAddress)."""
+async def order_esim(package_code: str) -> tuple[dict | None, str]:
+    """Заказывает eSIM. Возвращает (профиль, сообщение_об_ошибке)."""
+    import asyncio
     transaction_id = f"tg_{int(time.time() * 1000)}"
     payload = {
         "transactionId": transaction_id,
         "packageInfoList": [{"packageCode": package_code, "count": 1}],
     }
     data = await _post("esim/order", payload)
-    logging.info(f"esim/order [{package_code}] success={data.get('success')} errorCode={data.get('errorCode')}")
+    logging.info(f"esim/order [{package_code}] full response: {data}")
 
-    if not data.get("success") or not data.get("obj"):
+    if not data.get("success"):
+        err = data.get("errorMsg") or data.get("errorCode") or str(data)
         logging.error(f"esim/order failed: {data}")
-        return None
+        return None, f"API error: {err}"
 
-    # Получаем orderNo и запрашиваем профиль
+    if not data.get("obj"):
+        return None, "Empty response from API"
+
     order_no = data["obj"].get("orderNo")
     esim_list = data["obj"].get("esimList") or []
 
-    # Если eSIM уже в ответе — возвращаем сразу
     if esim_list:
-        return esim_list[0]
+        return esim_list[0], ""
 
-    # Иначе запрашиваем по orderNo
-    if order_no:
-        return await query_esim_by_order(order_no)
+    if not order_no:
+        return None, "No orderNo in response"
 
-    return None
+    # eSIM provisioning may take a few seconds — retry up to 5 times
+    for attempt in range(5):
+        await asyncio.sleep(3)
+        result, err = await query_esim_by_order(order_no)
+        if result:
+            return result, ""
+        logging.info(f"esim/query attempt {attempt+1} not ready yet: {err}")
+
+    return None, f"eSIM not provisioned after retries (orderNo={order_no})"
 
 
-async def query_esim_by_order(order_no: str) -> dict | None:
+async def query_esim_by_order(order_no: str) -> tuple[dict | None, str]:
     """Запрашивает eSIM профиль по номеру заказа."""
     data = await _post("esim/query", {"orderNo": order_no})
-    logging.info(f"esim/query [{order_no}] success={data.get('success')}")
+    logging.info(f"esim/query [{order_no}] response: {data}")
 
-    if not data.get("success") or not data.get("obj"):
-        return None
+    if not data.get("success"):
+        return None, data.get("errorMsg", "failed")
+
+    if not data.get("obj"):
+        return None, "empty obj"
 
     esim_list = data["obj"].get("esimList") or []
-    return esim_list[0] if esim_list else None
+    if not esim_list:
+        return None, "esimList empty"
+    return esim_list[0], ""
 
 
 async def query_esim(iccid: str) -> dict | None:
