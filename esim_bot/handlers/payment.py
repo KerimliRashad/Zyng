@@ -86,22 +86,31 @@ async def successful_payment(message: Message):
         return
 
     iccid = esim.get("iccid", "")
-    qr_code = esim.get("qrCodeUrl", "") or esim.get("ac", "")
     smdp = esim.get("smdpAddress", "")
-    ac = esim.get("activationCode", "") or esim.get("ac", "")
+    ac = esim.get("activationCode", "")
+    lpa = esim.get("lpaCode", "")
+    qr_url = esim.get("qrCodeUrl", "")
 
-    await complete_order(order_id, iccid, qr_code, smdp, ac)
+    await complete_order(order_id, iccid, qr_url or lpa, smdp, ac)
 
-    text = f"✅ <b>eSIM готова!</b>\n\n"
+    text = "✅ <b>eSIM готова!</b>\n\n"
+    text += f"📋 <b>ICCID:</b> <code>{iccid}</code>\n\n"
+
     if smdp and ac:
         text += f"📡 <b>SM-DP+ адрес:</b>\n<code>{smdp}</code>\n\n"
         text += f"🔑 <b>Код активации:</b>\n<code>{ac}</code>\n\n"
-    if qr_code and qr_code.startswith("http"):
-        text += f"📷 <b>QR-код:</b> <a href='{qr_code}'>Открыть</a>\n\n"
+
+    if lpa:
+        text += f"📲 <b>LPA строка (для ручной установки):</b>\n<code>{lpa}</code>\n\n"
+
+    if qr_url and qr_url.startswith("http"):
+        text += f"📷 <b>QR-код:</b> <a href='{qr_url}'>Открыть</a>\n\n"
 
     text += (
-        "📱 <b>Установка:</b>\n"
-        "Настройки → Сотовая связь → Добавить план → Сканировать QR"
+        "📱 <b>Установка на iPhone:</b>\n"
+        "Настройки → Сотовая связь → Добавить план → Сканировать QR\n\n"
+        "📱 <b>Установка на Android:</b>\n"
+        "Настройки → Подключения → SIM-карты → Добавить eSIM"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[

@@ -128,13 +128,13 @@ async def order_esim(package_code: str) -> tuple[dict | None, str]:
     if not order_no:
         return None, "No orderNo in response"
 
-    # eSIM provisioning may take a few seconds — retry up to 5 times
-    for attempt in range(5):
+    # eSIM provisioning is async — retry up to 10 times over 30 seconds
+    for attempt in range(10):
         await asyncio.sleep(3)
         result, err = await query_esim_by_order(order_no)
         if result:
             return result, ""
-        logging.info(f"esim/query attempt {attempt+1} not ready yet: {err}")
+        logging.info(f"esim/query attempt {attempt+1} not ready: {err}")
 
     return None, f"eSIM not provisioned after retries (orderNo={order_no})"
 
@@ -153,7 +153,23 @@ async def query_esim_by_order(order_no: str) -> tuple[dict | None, str]:
     esim_list = data["obj"].get("esimList") or []
     if not esim_list:
         return None, "esimList empty"
-    return esim_list[0], ""
+
+    esim = esim_list[0]
+    # Normalize field names across API versions
+    if not esim.get("smdpAddress"):
+        esim["smdpAddress"] = esim.get("smdpAddr") or esim.get("rspAddr") or ""
+    if not esim.get("activationCode"):
+        esim["activationCode"] = (
+            esim.get("matchingId") or esim.get("ac") or esim.get("confirmationCode") or ""
+        )
+    if not esim.get("qrCodeUrl"):
+        esim["qrCodeUrl"] = esim.get("qrCode") or esim.get("qrurl") or ""
+    # Build LPA string if we have the parts
+    if esim.get("smdpAddress") and esim.get("activationCode") and not esim.get("lpaCode"):
+        esim["lpaCode"] = f"LPA:1${esim['smdpAddress']}${esim['activationCode']}"
+
+    logging.info(f"esim/query [{order_no}] normalized: iccid={esim.get('iccid')} smdp={esim.get('smdpAddress')} ac={esim.get('activationCode')}")
+    return esim, ""
 
 
 async def query_esim(iccid: str) -> dict | None:
