@@ -44,17 +44,72 @@ async def show_orders(callback: CallbackQuery):
         await callback.answer("У вас пока нет заказов", show_alert=True)
         return
 
-    text = "📋 <b>Ваши заказы:</b>\n\n"
+    buttons = []
     for o in orders:
         status_map = {"completed": "✅", "pending": "⏳", "waiting_payment": "💳", "failed": "❌"}
         icon = status_map.get(o["status"], "❓")
-        text += f"{icon} <b>{o['package_name']}</b>\n"
-        text += f"   {o['price_rub']}₽ · {o['created_at'][:10]}\n\n"
+        label = f"{icon} {o['package_name']} · {o['created_at'][:10]}"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"order_detail:{o['id']}")])
+
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu")])
+
+    await callback.message.edit_text(
+        "📋 <b>Ваши заказы</b>\n\nНажмите на заказ, чтобы увидеть детали:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data.startswith("order_detail:"))
+async def show_order_detail(callback: CallbackQuery):
+    from database import get_order_by_id
+    order_id = int(callback.data.split(":")[1])
+    o = await get_order_by_id(order_id)
+
+    if not o or o["user_id"] != callback.from_user.id:
+        await callback.answer("Заказ не найден", show_alert=True)
+        return
+
+    status_map = {"completed": "✅ Активна", "pending": "⏳ Обрабатывается", "failed": "❌ Ошибка"}
+    status_text = status_map.get(o["status"], "❓ Неизвестно")
+
+    text = (
+        f"📦 <b>{o['package_name']}</b>\n"
+        f"📅 {o['created_at'][:10]}  |  {status_text}\n"
+        f"💫 Оплачено: {o['price_rub']} Stars\n"
+    )
+
+    smdp = o.get("smdp_address") or ""
+    ac = o.get("activation_code") or ""
+    qr = o.get("qr_code") or ""
+    iccid = o.get("esim_order_id") or ""
+
+    if o["status"] == "completed" and (smdp or ac or qr):
+        text += "\n━━━━━━━━━━━━━━━━━━\n"
+        text += "📲 <b>Данные для установки:</b>\n\n"
+        if iccid and not iccid.startswith("http") and not iccid.startswith("LPA"):
+            text += f"🔢 <b>ICCID:</b>\n<code>{iccid}</code>\n\n"
+        if smdp:
+            text += f"📡 <b>SM-DP+ адрес:</b>\n<code>{smdp}</code>\n\n"
+        if ac:
+            text += f"🔑 <b>Код активации:</b>\n<code>{ac}</code>\n\n"
+        if smdp and ac:
+            lpa = f"LPA:1${smdp}${ac}"
+            text += f"📲 <b>LPA строка:</b>\n<code>{lpa}</code>\n\n"
+        if qr and qr.startswith("http"):
+            text += f"📷 <b>QR-код:</b> <a href='{qr}'>Открыть</a>\n\n"
+        text += (
+            "━━━━━━━━━━━━━━━━━━\n"
+            "📱 <b>iPhone:</b> Настройки → Сотовая связь → Добавить план\n"
+            "📱 <b>Android:</b> Настройки → Подключения → SIM → Добавить eSIM"
+        )
+    elif o["status"] != "completed":
+        text += "\n⏳ eSIM данные появятся после активации заказа."
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu")]
+        [InlineKeyboardButton(text="◀️ Мои заказы", callback_data="my_orders")]
     ])
-    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
 
 
 @router.message(Command("resend"))
