@@ -57,6 +57,60 @@ async def show_orders(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
+@router.message(Command("resend"))
+async def cmd_resend(message: Message):
+    """Достать eSIM по номеру заказа из дашборда и отправить пользователю.
+    Использование: /resend B26060204340021 <user_id>
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    from services.esim_api import _post
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("Использование: /resend <order_no> <user_id>\nПример: /resend B26060204340021 123456789")
+        return
+    order_no = args[1]
+    try:
+        target_user_id = int(args[2])
+    except ValueError:
+        await message.answer("❌ Неверный user_id")
+        return
+
+    await message.answer(f"🔍 Запрашиваю eSIM для заказа {order_no}...")
+    data = await _post("esim/query", {"orderNo": order_no})
+    await message.answer(f"📦 Ответ API:\n<code>{str(data)[:800]}</code>", parse_mode="HTML")
+
+    if not data.get("success") or not data.get("obj"):
+        await message.answer("❌ Не удалось получить данные")
+        return
+
+    esim_list = data["obj"].get("esimList") or []
+    if not esim_list:
+        await message.answer("❌ esimList пустой — eSIM ещё не готова или другой формат ответа")
+        return
+
+    esim = esim_list[0]
+    iccid = esim.get("iccid", "")
+    smdp = esim.get("smdpAddress") or esim.get("smdpAddr") or ""
+    ac = esim.get("activationCode") or esim.get("matchingId") or esim.get("ac") or ""
+    qr_url = esim.get("qrCodeUrl") or ""
+    lpa = f"LPA:1${smdp}${ac}" if smdp and ac else ""
+
+    text = f"✅ <b>eSIM готова!</b>\n\n"
+    text += f"📋 <b>ICCID:</b> <code>{iccid}</code>\n\n"
+    if smdp and ac:
+        text += f"📡 <b>SM-DP+ адрес:</b>\n<code>{smdp}</code>\n\n"
+        text += f"🔑 <b>Код активации:</b>\n<code>{ac}</code>\n\n"
+    if lpa:
+        text += f"📲 <b>LPA:</b>\n<code>{lpa}</code>\n\n"
+    if qr_url and qr_url.startswith("http"):
+        text += f"📷 <b>QR-код:</b> <a href='{qr_url}'>Открыть</a>\n\n"
+    text += "📱 Настройки → Сотовая связь → Добавить план → Сканировать QR"
+
+    await message.bot.send_message(target_user_id, text, parse_mode="HTML")
+    await message.answer(f"✅ Отправлено пользователю {target_user_id}")
+
+
 @router.message(Command("test"))
 async def cmd_test(message: Message):
     if message.from_user.id not in ADMIN_IDS:
