@@ -1,3 +1,4 @@
+import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from services.esim_api import REGIONS, get_countries_by_region, get_packages_for_country
@@ -28,10 +29,19 @@ async def show_regions(callback: CallbackQuery):
 async def show_countries(callback: CallbackQuery):
     region_label = callback.data.split(":", 1)[1]
     region_code = REGIONS.get(region_label, "")
+    logging.info(f"show_countries: label={region_label} code={region_code}")
 
-    await callback.message.edit_text("⏳ Загружаю страны...", parse_mode="HTML")
+    await callback.message.edit_text("⏳ Загружаю страны...")
 
-    countries = await get_countries_by_region(region_code)
+    try:
+        countries = await get_countries_by_region(region_code)
+    except Exception as e:
+        logging.exception(f"get_countries_by_region error: {e}")
+        await callback.message.edit_text(f"❌ Ошибка загрузки стран: {e}")
+        return
+
+    logging.info(f"show_countries: got {len(countries)} countries")
+
     if not countries:
         await callback.message.edit_text(
             "😔 Нет доступных стран для этого региона.",
@@ -73,16 +83,41 @@ async def _show_countries_page(callback: CallbackQuery, region_label: str, count
     )
 
 
+@router.callback_query(F.data.startswith("cpage:"))
+async def paginate_countries(callback: CallbackQuery):
+    parts = callback.data.split(":", 2)
+    region_label = parts[1]
+    page = int(parts[2])
+    region_code = REGIONS.get(region_label, "")
+    countries = await get_countries_by_region(region_code)
+    await _show_countries_page(callback, region_label, countries, page)
+
+
 @router.callback_query(F.data.startswith("country:"))
 async def show_packages(callback: CallbackQuery):
     slug = callback.data.split(":", 1)[1]
+    logging.info(f"show_packages: slug={slug}")
 
     await callback.message.edit_text("⏳ Загружаю тарифы...")
 
-    packages = await get_packages_for_country(slug)
+    try:
+        packages = await get_packages_for_country(slug)
+    except Exception as e:
+        logging.exception(f"get_packages_for_country error: {e}")
+        await callback.message.edit_text(
+            f"❌ Ошибка загрузки тарифов: {e}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="esim_regions")]
+            ]),
+        )
+        return
+
+    logging.info(f"show_packages: got {len(packages)} packages for {slug}")
+
     if not packages:
         await callback.message.edit_text(
-            "😔 Нет доступных тарифов для этой страны.",
+            f"😔 Нет доступных тарифов для {slug.upper()}.\n\n"
+            "Попробуйте другую страну или регион.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="esim_regions")]
             ]),
@@ -112,7 +147,12 @@ async def show_package_detail(callback: CallbackQuery):
     pkg_id = parts[1]
     slug = parts[2] if len(parts) > 2 else ""
 
-    packages = await get_packages_for_country(slug)
+    try:
+        packages = await get_packages_for_country(slug)
+    except Exception as e:
+        await callback.answer(f"Ошибка: {e}", show_alert=True)
+        return
+
     pkg = next((p for p in packages if p["packageId"] == pkg_id), None)
     if not pkg:
         await callback.answer("Тариф не найден", show_alert=True)
@@ -124,7 +164,7 @@ async def show_package_detail(callback: CallbackQuery):
         f"📅 Срок: <b>{pkg['days']} дней</b>\n"
         f"⭐️ Цена: <b>{pkg['price_stars']} Stars</b>\n\n"
         f"✅ Мгновенная активация\n"
-        f"📱 Совместимо с iPhone XS+, Samsung S20+, Pixel 3+"
+        f"📱 iPhone XS+, Samsung S20+, Pixel 3+"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[

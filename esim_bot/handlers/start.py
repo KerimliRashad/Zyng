@@ -1,6 +1,7 @@
 from aiogram import Router, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from config import ADMIN_IDS
 from database import get_user_orders
 
 router = Router()
@@ -54,6 +55,31 @@ async def show_orders(callback: CallbackQuery):
         [InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu")]
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.message(Command("test"))
+async def cmd_test(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    from services.esim_api import _post, get_packages_for_country
+    await message.answer("🔍 Тестирую API...")
+    try:
+        # Баланс
+        bal = await _post("balance/query", {})
+        balance_usd = bal.get("obj", {}).get("balance", 0) / 10000
+        await message.answer(f"✅ Баланс: ${balance_usd:.2f}")
+
+        # Пакеты для Германии
+        pkgs = await get_packages_for_country("DE")
+        if pkgs:
+            p = pkgs[0]
+            await message.answer(f"✅ Пакеты DE: {len(pkgs)} шт\nПример: {p['name']} {p['data']} {p['days']}дн ⭐️{p['price_stars']}")
+        else:
+            # Пробуем сырой запрос
+            raw = await _post("package/list", {"locationCode": "DE"})
+            await message.answer(f"❌ Пакеты DE пусты\nRaw: {str(raw)[:300]}")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 
 
 @router.callback_query(F.data == "help")
