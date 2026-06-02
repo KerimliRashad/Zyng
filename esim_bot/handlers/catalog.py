@@ -91,7 +91,7 @@ async def show_packages(callback: CallbackQuery):
 
     buttons = []
     for pkg in packages:
-        label = f"{pkg['data']} · {pkg['days']} дн · {pkg['price_rub']}₽"
+        label = f"{pkg['data']} · {pkg['days']} дн · ⭐️{pkg['price_stars']}"
         buttons.append([InlineKeyboardButton(
             text=label,
             callback_data=f"pkg:{pkg['packageId']}:{slug}"
@@ -122,15 +122,15 @@ async def show_package_detail(callback: CallbackQuery):
         f"📦 <b>{pkg['name']}</b>\n\n"
         f"📊 Трафик: <b>{pkg['data']}</b>\n"
         f"📅 Срок: <b>{pkg['days']} дней</b>\n"
-        f"💰 Цена: <b>{pkg['price_rub']}₽</b>\n\n"
+        f"⭐️ Цена: <b>{pkg['price_stars']} Stars</b>\n\n"
         f"✅ Мгновенная активация\n"
         f"📱 Совместимо с iPhone XS+, Samsung S20+, Pixel 3+"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text=f"💳 Купить — {pkg['price_rub']}₽",
-            callback_data=f"buy:{pkg_id}:{slug}:{pkg['price_rub']}:{pkg['name'][:30]}"
+            text=f"⭐️ Купить — {pkg['price_stars']} Stars",
+            callback_data=f"buy:{pkg_id}:{slug}:{pkg['price_stars']}:{pkg['name'][:30]}"
         )],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"country:{slug}")],
     ])

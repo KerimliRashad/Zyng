@@ -55,6 +55,14 @@ async def get_order_by_payment_id(payment_id: str) -> dict | None:
         return dict(row) if row else None
 
 
+async def get_order_by_id(order_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM orders WHERE id=?", (order_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
 async def complete_order(order_id: int, esim_order_id: str, qr_code: str, smdp: str, activation_code: str):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(

@@ -1,5 +1,6 @@
+import math
 import aiohttp
-from config import ESIM_API_KEY, ESIM_API_URL, MARKUP_PERCENT
+from config import ESIM_API_KEY, ESIM_API_URL, MARKUP_PERCENT, STARS_PER_USD
 
 HEADERS = {
     "RT-AccessCode": ESIM_API_KEY,
@@ -20,6 +21,11 @@ def apply_markup(price_usd: float) -> int:
     usd_to_rub = 90
     rub = price_usd * usd_to_rub * (1 + MARKUP_PERCENT / 100)
     return int(round(rub / 10) * 10)
+
+
+def usd_to_stars(price_usd: float) -> int:
+    stars = math.ceil(price_usd * STARS_PER_USD)
+    return max(stars, 1)
 
 
 async def get_packages(location: str = None, country: str = None) -> list[dict]:
@@ -83,6 +89,7 @@ async def get_packages_for_country(slug: str) -> list[dict]:
             "days": duration,
             "price_rub": price_rub,
             "price_usd": price_usd,
+            "price_stars": usd_to_stars(price_usd),
         })
 
     return sorted(result, key=lambda x: x["price_rub"])
