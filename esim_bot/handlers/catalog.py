@@ -27,11 +27,11 @@ async def show_regions(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("region:"))
 async def show_countries(callback: CallbackQuery):
     region_label = callback.data.split(":", 1)[1]
-    region_en = REGIONS.get(region_label, "")
+    region_code = REGIONS.get(region_label, "")
 
     await callback.message.edit_text("⏳ Загружаю страны...", parse_mode="HTML")
 
-    countries = await get_countries_by_region(region_en)
+    countries = await get_countries_by_region(region_code)
     if not countries:
         await callback.message.edit_text(
             "😔 Нет доступных стран для этого региона.",
