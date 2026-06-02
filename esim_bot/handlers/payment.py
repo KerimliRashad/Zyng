@@ -6,6 +6,7 @@ from aiogram.types import (
     LabeledPrice,
     PreCheckoutQuery,
     Message,
+    URLInputFile,
 )
 
 from database import create_order, complete_order, get_order_by_id
@@ -88,32 +89,41 @@ async def successful_payment(message: Message):
     iccid = esim.get("iccid", "")
     smdp = esim.get("smdpAddress", "")
     ac = esim.get("activationCode", "")
-    lpa = esim.get("lpaCode", "")
+    lpa = esim.get("lpaCode", "") or (f"LPA:1${smdp}${ac}" if smdp and ac else "")
     qr_url = esim.get("qrCodeUrl", "")
 
-    await complete_order(order_id, iccid, qr_url or lpa, smdp, ac)
+    await complete_order(order_id, iccid, qr_url, smdp, ac)
 
     text = "✅ <b>eSIM готова!</b>\n\n"
-    text += f"📋 <b>ICCID:</b> <code>{iccid}</code>\n\n"
-
-    if smdp and ac:
-        text += f"📡 <b>SM-DP+ адрес:</b>\n<code>{smdp}</code>\n\n"
+    if iccid:
+        text += f"🔢 <b>ICCID:</b> <code>{iccid}</code>\n\n"
+    if smdp:
+        text += f"📡 <b>SM-DP+:</b>\n<code>{smdp}</code>\n\n"
+    if ac:
         text += f"🔑 <b>Код активации:</b>\n<code>{ac}</code>\n\n"
-
     if lpa:
-        text += f"📲 <b>LPA строка (для ручной установки):</b>\n<code>{lpa}</code>\n\n"
+        text += f"📲 <b>LPA:</b>\n<code>{lpa}</code>\n\n"
+
+    ios_link = f"https://esimsetup.apple.com/esim_qrcode_provisioning?carddata={lpa}" if lpa else ""
+    android_link = f"https://esimsetup.android.com/esim_qrcode_provisioning?carddata={lpa}" if lpa else ""
+
+    kb_rows = []
+    if ios_link:
+        kb_rows.append([InlineKeyboardButton(text="📱 Установить на iPhone", url=ios_link)])
+    if android_link:
+        kb_rows.append([InlineKeyboardButton(text="🤖 Установить на Android", url=android_link)])
+    kb_rows.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
+    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
 
     if qr_url and qr_url.startswith("http"):
-        text += f"📷 <b>QR-код:</b> <a href='{qr_url}'>Открыть</a>\n\n"
-
-    text += (
-        "📱 <b>Установка на iPhone:</b>\n"
-        "Настройки → Сотовая связь → Добавить план → Сканировать QR\n\n"
-        "📱 <b>Установка на Android:</b>\n"
-        "Настройки → Подключения → SIM-карты → Добавить eSIM"
-    )
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
-    ])
-    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        try:
+            await message.answer_photo(
+                photo=URLInputFile(qr_url, filename="esim_qr.png"),
+                caption=text,
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+        except Exception:
+            await message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        await message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)

@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, URLInputFile
 from config import ADMIN_IDS
 from database import get_user_orders
 
@@ -96,8 +96,6 @@ async def show_order_detail(callback: CallbackQuery):
         if smdp and ac:
             lpa = f"LPA:1${smdp}${ac}"
             text += f"📲 <b>LPA строка:</b>\n<code>{lpa}</code>\n\n"
-        if qr and qr.startswith("http"):
-            text += f"📷 <b>QR-код:</b> <a href='{qr}'>Открыть</a>\n\n"
         text += (
             "━━━━━━━━━━━━━━━━━━\n"
             "📱 <b>iPhone:</b> Настройки → Сотовая связь → Добавить план\n"
@@ -109,7 +107,21 @@ async def show_order_detail(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Мои заказы", callback_data="my_orders")]
     ])
-    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+
+    # If there's a QR image URL — send it as a photo with the details in caption
+    if o["status"] == "completed" and qr and qr.startswith("http"):
+        try:
+            await callback.message.delete()
+            await callback.message.answer_photo(
+                photo=URLInputFile(qr, filename="esim_qr.png"),
+                caption=text,
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+        except Exception:
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
 
 
 @router.message(Command("resend"))
@@ -149,20 +161,42 @@ async def cmd_resend(message: Message):
     smdp = esim.get("smdpAddress") or esim.get("smdpAddr") or ""
     ac = esim.get("activationCode") or esim.get("matchingId") or esim.get("ac") or ""
     qr_url = esim.get("qrCodeUrl") or ""
-    lpa = f"LPA:1${smdp}${ac}" if smdp and ac else ""
+    lpa = esim.get("lpaCode") or (f"LPA:1${smdp}${ac}" if smdp and ac else "")
 
-    text = f"✅ <b>eSIM готова!</b>\n\n"
-    text += f"📋 <b>ICCID:</b> <code>{iccid}</code>\n\n"
-    if smdp and ac:
-        text += f"📡 <b>SM-DP+ адрес:</b>\n<code>{smdp}</code>\n\n"
+    text = "✅ <b>eSIM готова!</b>\n\n"
+    if iccid:
+        text += f"🔢 <b>ICCID:</b> <code>{iccid}</code>\n\n"
+    if smdp:
+        text += f"📡 <b>SM-DP+:</b>\n<code>{smdp}</code>\n\n"
+    if ac:
         text += f"🔑 <b>Код активации:</b>\n<code>{ac}</code>\n\n"
     if lpa:
         text += f"📲 <b>LPA:</b>\n<code>{lpa}</code>\n\n"
-    if qr_url and qr_url.startswith("http"):
-        text += f"📷 <b>QR-код:</b> <a href='{qr_url}'>Открыть</a>\n\n"
-    text += "📱 Настройки → Сотовая связь → Добавить план → Сканировать QR"
 
-    await message.bot.send_message(target_user_id, text, parse_mode="HTML")
+    ios_link = f"https://esimsetup.apple.com/esim_qrcode_provisioning?carddata={lpa}" if lpa else ""
+    android_link = f"https://esimsetup.android.com/esim_qrcode_provisioning?carddata={lpa}" if lpa else ""
+
+    kb_rows = []
+    if ios_link:
+        kb_rows.append([InlineKeyboardButton(text="📱 Установить на iPhone", url=ios_link)])
+    if android_link:
+        kb_rows.append([InlineKeyboardButton(text="🤖 Установить на Android", url=android_link)])
+    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
+
+    if qr_url and qr_url.startswith("http"):
+        try:
+            await message.bot.send_photo(
+                chat_id=target_user_id,
+                photo=URLInputFile(qr_url, filename="esim_qr.png"),
+                caption=text,
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+        except Exception:
+            await message.bot.send_message(target_user_id, text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        await message.bot.send_message(target_user_id, text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+
     await message.answer(f"✅ Отправлено пользователю {target_user_id}")
 
 

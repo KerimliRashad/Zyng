@@ -10,6 +10,7 @@ HEADERS = {
 }
 
 REGIONS = {
+    "⭐️ Популярные": "POPULAR",
     "🇪🇺 Европа": "EU-42",
     "🌏 Азия": "AS-31",
     "🌍 Африка": "AF-29",
@@ -17,6 +18,31 @@ REGIONS = {
     "🌐 Глобальный": "GL-144",
     "🏖 Ближний Восток": "ME-13",
 }
+
+POPULAR_COUNTRIES = [
+    {"slug": "RU", "name": "🇷🇺 Россия"},
+    {"slug": "TR", "name": "🇹🇷 Турция"},
+    {"slug": "AE", "name": "🇦🇪 ОАЭ"},
+    {"slug": "TH", "name": "🇹🇭 Таиланд"},
+    {"slug": "DE", "name": "🇩🇪 Германия"},
+    {"slug": "IT", "name": "🇮🇹 Италия"},
+    {"slug": "ES", "name": "🇪🇸 Испания"},
+    {"slug": "FR", "name": "🇫🇷 Франция"},
+    {"slug": "GB", "name": "🇬🇧 Великобритания"},
+    {"slug": "US", "name": "🇺🇸 США"},
+    {"slug": "CY", "name": "🇨🇾 Кипр"},
+    {"slug": "GR", "name": "🇬🇷 Греция"},
+    {"slug": "EG", "name": "🇪🇬 Египет"},
+    {"slug": "ID", "name": "🇮🇩 Индонезия (Бали)"},
+    {"slug": "JP", "name": "🇯🇵 Япония"},
+]
+
+
+def _flag(code: str) -> str:
+    """Convert 2-letter country code to flag emoji."""
+    if len(code) != 2:
+        return ""
+    return chr(0x1F1E6 + ord(code[0].upper()) - 65) + chr(0x1F1E6 + ord(code[1].upper()) - 65)
 
 
 def apply_markup(price_usd: float) -> int:
@@ -41,6 +67,9 @@ async def _post(endpoint: str, payload: dict) -> dict:
 
 
 async def get_countries_by_region(region_code: str) -> list[dict]:
+    if region_code == "POPULAR":
+        return POPULAR_COUNTRIES
+
     data = await _post("location/list", {})
     if not data.get("success"):
         logging.error(f"location/list failed: {data}")
@@ -49,10 +78,15 @@ async def get_countries_by_region(region_code: str) -> list[dict]:
     for loc in (data["obj"].get("locationList") or []):
         if loc.get("code") == region_code:
             sub = loc.get("subLocationList") or []
-            return sorted(
-                [{"slug": s["code"], "name": s["name"]} for s in sub if s.get("code")],
-                key=lambda x: x["name"],
-            )
+            countries = []
+            for s in sub:
+                if not s.get("code"):
+                    continue
+                code = s["code"]
+                flag = _flag(code)
+                name = f"{flag} {s['name']}" if flag else s["name"]
+                countries.append({"slug": code, "name": name})
+            return sorted(countries, key=lambda x: x["name"])
     return []
 
 
