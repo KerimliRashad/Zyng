@@ -1,8 +1,9 @@
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
-import os
+from fastapi.responses import FileResponse
 
 from app.database import init_db
 from app.api import auth, users, chats, ws
@@ -11,10 +12,11 @@ from app.api import auth, users, chats, ws
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await create_admin()
     yield
 
 
-app = FastAPI(title="ICQ Messenger", lifespan=lifespan)
+app = FastAPI(title="Jeff Messenger", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,12 +31,31 @@ app.include_router(users.router)
 app.include_router(chats.router)
 app.include_router(ws.router)
 
-# Serve frontend
-static_dir = "/app/static"
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=os.path.join(static_dir, "static")), name="static_files")
-    from fastapi.responses import FileResponse
+# Static files
+STATIC = "/app/static"
+if os.path.exists(STATIC):
+    app.mount("/css", StaticFiles(directory=os.path.join(STATIC, "css")), name="css")
+    app.mount("/js", StaticFiles(directory=os.path.join(STATIC, "js")), name="js")
 
     @app.get("/")
-    async def serve_frontend():
-        return FileResponse(os.path.join(static_dir, "index.html"))
+    async def index():
+        return FileResponse(os.path.join(STATIC, "index.html"))
+
+
+async def create_admin():
+    """Create admin user (ID=1) if not exists."""
+    from app.database import AsyncSessionLocal
+    from app.models import User
+    from app.auth import hash_password
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(User).where(User.username == "admin"))
+        if not res.scalar_one_or_none():
+            admin = User(
+                username="admin",
+                password_hash=hash_password("a1523415"),
+                avatar_color="#5B8DEF",
+            )
+            db.add(admin)
+            await db.commit()
