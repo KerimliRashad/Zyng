@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, Integer, Enum as SAEnum
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, Integer, Enum as SAEnum, BigInteger
 from sqlalchemy.orm import relationship, DeclarativeBase
 import enum
 
@@ -19,14 +19,10 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    avatar_color = Column(String(7), default="#00a2ff")
+    avatar_color = Column(String(7), default="#5B8DEF")
     status = Column(String(20), default="offline")
     status_message = Column(String(255), default="")
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    @property
-    def display_name(self):
-        return self.username
 
     @property
     def is_admin(self):
@@ -68,7 +64,11 @@ class Message(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    text = Column(Text, nullable=False)
+    text = Column(Text, nullable=True)
+    file_url = Column(String(500), nullable=True)
+    file_name = Column(String(255), nullable=True)
+    file_size = Column(BigInteger, nullable=True)
+    file_type = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
 

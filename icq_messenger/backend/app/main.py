@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.database import init_db
-from app.api import auth, users, chats, ws
+from app.api import auth, users, chats, ws, upload
 
 
 @asynccontextmanager
@@ -30,8 +30,14 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(chats.router)
 app.include_router(ws.router)
+app.include_router(upload.router)
 
-# Static files
+# Serve uploaded files
+UPLOAD_DIR = "/app/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Serve frontend
 STATIC = "/app/static"
 if os.path.exists(STATIC):
     app.mount("/css", StaticFiles(directory=os.path.join(STATIC, "css")), name="css")
@@ -43,7 +49,6 @@ if os.path.exists(STATIC):
 
 
 async def create_admin():
-    """Create admin user (ID=1) if not exists."""
     from app.database import AsyncSessionLocal
     from app.models import User
     from app.auth import hash_password

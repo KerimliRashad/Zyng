@@ -1,10 +1,9 @@
 import json
 import jwt
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select, and_
 from app.database import AsyncSessionLocal
-from app.models import User, Message, Chat, ChatMember
+from app.models import User, Message, ChatMember
 from app.auth import SECRET_KEY, ALGORITHM
 from app.websocket.manager import manager
 from datetime import datetime
@@ -12,7 +11,7 @@ from datetime import datetime
 router = APIRouter()
 
 
-async def get_user_from_token(token: str) -> str | None:
+async def get_uid(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
@@ -21,110 +20,108 @@ async def get_user_from_token(token: str) -> str | None:
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str = ""):
-    user_id = await get_user_from_token(token)
-    if not user_id:
+async def ws_endpoint(websocket: WebSocket, token: str = ""):
+    uid = await get_uid(token)
+    if not uid:
         await websocket.close(code=4001)
         return
 
-    await manager.connect(websocket, user_id)
+    await manager.connect(websocket, uid)
 
     async with AsyncSessionLocal() as db:
-        # Load user's chats into manager
-        result = await db.execute(
-            select(ChatMember).where(ChatMember.user_id == int(user_id))
-        )
-        for member in result.scalars().all():
-            manager.join_chat(str(member.chat_id), user_id)
-
-        # Update status to online
-        user_result = await db.execute(select(User).where(User.id == int(user_id)))
-        user = user_result.scalar_one_or_none()
-        if user:
-            user.status = "online"
+        res = await db.execute(select(ChatMember).where(ChatMember.user_id == int(uid)))
+        for m in res.scalars().all():
+            manager.join_chat(str(m.chat_id), uid)
+        u = await db.get(User, int(uid))
+        if u:
+            u.status = "online"
             await db.commit()
 
-    await manager.broadcast_status(user_id, "online")
+    await manager.broadcast_status(uid, "online")
 
     try:
         while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            await handle_message(user_id, msg)
+            raw = await websocket.receive_text()
+            await handle(uid, json.loads(raw))
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(websocket, user_id)
+        manager.disconnect(websocket, uid)
         async with AsyncSessionLocal() as db:
-            user_result = await db.execute(select(User).where(User.id == int(user_id)))
-            user = user_result.scalar_one_or_none()
-            if user:
-                user.status = "offline"
+            u = await db.get(User, int(uid))
+            if u:
+                u.status = "offline"
                 await db.commit()
-        await manager.broadcast_status(user_id, "offline")
-
-        # Leave all chats
-        for chat_id in list(manager.chat_users.keys()):
-            manager.leave_chat(chat_id, user_id)
+        await manager.broadcast_status(uid, "offline")
+        for cid in list(manager.chat_users.keys()):
+            manager.leave_chat(cid, uid)
 
 
-async def handle_message(user_id: str, data: dict):
-    msg_type = data.get("type")
+async def handle(uid: str, data: dict):
+    t = data.get("type")
 
-    if msg_type == "send_message":
+    if t == "send_message":
         chat_id = data.get("chat_id")
         text = data.get("text", "").strip()
-        if not chat_id or not text:
+        file_url = data.get("file_url")
+        file_name = data.get("file_name")
+        file_size = data.get("file_size")
+        file_type = data.get("file_type")
+
+        if not chat_id or (not text and not file_url):
             return
 
         async with AsyncSessionLocal() as db:
-            # Verify membership
-            member = await db.execute(
+            mem = await db.execute(
                 select(ChatMember).where(
-                    and_(ChatMember.chat_id == int(chat_id), ChatMember.user_id == int(user_id))
+                    and_(ChatMember.chat_id == int(chat_id), ChatMember.user_id == int(uid))
                 )
             )
-            if not member.scalar_one_or_none():
+            if not mem.scalar_one_or_none():
                 return
 
-            user_result = await db.execute(select(User).where(User.id == int(user_id)))
-            user = user_result.scalar_one()
-
-            message = Message(
-                chat_id=chat_id,
-                sender_id=user_id,
-                text=text,
+            user = await db.get(User, int(uid))
+            msg = Message(
+                chat_id=int(chat_id),
+                sender_id=int(uid),
+                text=text or None,
+                file_url=file_url,
+                file_name=file_name,
+                file_size=file_size,
+                file_type=file_type,
                 created_at=datetime.utcnow(),
             )
-            db.add(message)
+            db.add(msg)
             await db.commit()
-            await db.refresh(message)
+            await db.refresh(msg)
 
             payload = {
                 "type": "new_message",
-                "id": str(message.id),
-                "chat_id": chat_id,
-                "sender_id": user_id,
-                "sender_name": user.display_name,
+                "id": msg.id,
+                "chat_id": int(chat_id),
+                "sender_id": int(uid),
+                "sender_name": user.username,
                 "sender_color": user.avatar_color,
-                "text": text,
-                "created_at": message.created_at.isoformat(),
+                "text": text or "",
+                "file_url": file_url,
+                "file_name": file_name,
+                "file_size": file_size,
+                "file_type": file_type,
+                "created_at": msg.created_at.isoformat(),
                 "is_read": False,
             }
 
-        await manager.send_to_user(user_id, {**payload, "is_mine": True})
-        await manager.broadcast_to_chat(chat_id, {**payload, "is_mine": False}, exclude_user=user_id)
+        await manager.send_to_user(uid, {**payload, "is_mine": True})
+        await manager.broadcast_to_chat(str(chat_id), {**payload, "is_mine": False}, exclude_user=uid)
 
-    elif msg_type == "typing":
+    elif t == "typing":
         chat_id = data.get("chat_id")
         if chat_id:
-            await manager.broadcast_to_chat(chat_id, {
-                "type": "typing",
-                "chat_id": chat_id,
-                "user_id": user_id,
-            }, exclude_user=user_id)
+            await manager.broadcast_to_chat(str(chat_id), {
+                "type": "typing", "chat_id": int(chat_id), "user_id": int(uid)
+            }, exclude_user=uid)
 
-    elif msg_type == "join_chat":
+    elif t == "join_chat":
         chat_id = data.get("chat_id")
         if chat_id:
-            manager.join_chat(chat_id, user_id)
+            manager.join_chat(str(chat_id), uid)
