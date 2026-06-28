@@ -3,7 +3,7 @@ import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select, and_
 from app.database import AsyncSessionLocal
-from app.models import User, Message, ChatMember
+from app.models import User, Message, ChatMember, Chat, ChatType
 from app.auth import SECRET_KEY, ALGORITHM
 from app.websocket.manager import manager
 from datetime import datetime
@@ -67,6 +67,7 @@ async def handle(uid: str, data: dict):
         file_name = data.get("file_name")
         file_size = data.get("file_size")
         file_type = data.get("file_type")
+        reply_to_id = data.get("reply_to_id")
 
         if not chat_id or (not text and not file_url):
             return
@@ -77,7 +78,13 @@ async def handle(uid: str, data: dict):
                     and_(ChatMember.chat_id == int(chat_id), ChatMember.user_id == int(uid))
                 )
             )
-            if not mem.scalar_one_or_none():
+            my_mem = mem.scalar_one_or_none()
+            if not my_mem:
+                return
+
+            # Channel: only owner/admin can post
+            chat = await db.get(Chat, int(chat_id))
+            if chat and chat.is_channel and my_mem.role not in ("owner", "admin"):
                 return
 
             user = await db.get(User, int(uid))
@@ -89,6 +96,7 @@ async def handle(uid: str, data: dict):
                 file_name=file_name,
                 file_size=file_size,
                 file_type=file_type,
+                reply_to_id=reply_to_id,
                 created_at=datetime.utcnow(),
             )
             db.add(msg)
@@ -107,6 +115,7 @@ async def handle(uid: str, data: dict):
                 "file_name": file_name,
                 "file_size": file_size,
                 "file_type": file_type,
+                "reply_to_id": reply_to_id,
                 "created_at": msg.created_at.isoformat(),
                 "is_read": False,
             }
@@ -125,3 +134,44 @@ async def handle(uid: str, data: dict):
         chat_id = data.get("chat_id")
         if chat_id:
             manager.join_chat(str(chat_id), uid)
+
+    # WebRTC signaling for voice/video calls
+    elif t == "call_offer":
+        target_uid = str(data.get("to_user_id"))
+        await manager.send_to_user(target_uid, {
+            "type": "call_offer",
+            "from_user_id": int(uid),
+            "from_name": data.get("from_name", ""),
+            "sdp": data.get("sdp"),
+            "call_type": data.get("call_type", "voice"),  # voice or video
+        })
+
+    elif t == "call_answer":
+        target_uid = str(data.get("to_user_id"))
+        await manager.send_to_user(target_uid, {
+            "type": "call_answer",
+            "from_user_id": int(uid),
+            "sdp": data.get("sdp"),
+        })
+
+    elif t == "call_ice":
+        target_uid = str(data.get("to_user_id"))
+        await manager.send_to_user(target_uid, {
+            "type": "call_ice",
+            "from_user_id": int(uid),
+            "candidate": data.get("candidate"),
+        })
+
+    elif t == "call_end":
+        target_uid = str(data.get("to_user_id"))
+        await manager.send_to_user(target_uid, {
+            "type": "call_end",
+            "from_user_id": int(uid),
+        })
+
+    elif t == "call_reject":
+        target_uid = str(data.get("to_user_id"))
+        await manager.send_to_user(target_uid, {
+            "type": "call_reject",
+            "from_user_id": int(uid),
+        })

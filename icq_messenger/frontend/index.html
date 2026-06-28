@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Jeff Messenger</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -37,7 +37,9 @@
 
 <!-- APP -->
 <div id="app-screen" class="screen hidden">
-  <div class="sidebar">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
     <div class="sbar-head">
       <div class="me-info">
         <div class="avatar" id="me-av"></div>
@@ -48,6 +50,7 @@
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0">
         <button class="ico-btn" title="Найти пользователя" onclick="openAddModal()">＋</button>
+        <button class="ico-btn" title="Новая группа/канал" onclick="openGroupModal()">👥</button>
         <button class="ico-btn" title="Выйти" onclick="doLogout()">⏻</button>
       </div>
     </div>
@@ -71,7 +74,8 @@
     </div>
   </div>
 
-  <div class="chat-area">
+  <!-- CHAT AREA -->
+  <div class="chat-area" id="chat-area">
     <div id="no-chat" class="no-chat">
       <div class="brand-icon big">J</div>
       <p>Выберите чат чтобы начать общение</p>
@@ -79,53 +83,103 @@
 
     <div id="chat-view">
       <div class="chat-head">
+        <button class="back-btn" id="back-btn" onclick="goBack()">‹</button>
         <div class="avatar" id="ch-av"></div>
-        <div>
+        <div style="min-width:0;flex:1">
           <div class="ch-name" id="ch-name"></div>
           <div class="ch-status" id="ch-status"></div>
         </div>
+        <div class="chat-head-actions">
+          <button class="ico-btn" id="btn-voice-call" title="Голосовой звонок" onclick="startCall('voice')">📞</button>
+          <button class="ico-btn" id="btn-video-call" title="Видеозвонок" onclick="startCall('video')">📹</button>
+          <button class="ico-btn members-toggle" id="btn-members" title="Участники" onclick="toggleMembersPanel()">👤</button>
+        </div>
       </div>
 
-      <div class="msgs" id="msgs">
-        <div id="msg-list"></div>
-        <div id="typing" class="typing hidden"><span></span><span></span><span></span></div>
-      </div>
+      <div style="display:flex;flex:1;overflow:hidden">
+        <div style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+          <div class="msgs" id="msgs">
+            <div id="msg-list"></div>
+            <div id="typing" class="typing hidden"><span></span><span></span><span></span></div>
+          </div>
 
-      <!-- Emoji picker -->
-      <div id="emoji-picker" class="emoji-picker hidden"></div>
+          <div id="emoji-picker" class="emoji-picker hidden"></div>
 
-      <div class="inp-area">
-        <button class="tool-btn" onclick="toggleEmoji()" title="Эмодзи">😊</button>
-        <label class="tool-btn" title="Прикрепить файл">
-          📎<input type="file" id="file-inp" style="display:none" onchange="handleFile(event)">
-        </label>
-        <textarea id="msg-inp" placeholder="Напишите сообщение..." rows="1"
-          onkeydown="onKey(event)" oninput="onType()"></textarea>
-        <button class="send-btn" onclick="sendMsg()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M22 2L11 13" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
+          <div id="file-preview" class="file-preview hidden">
+            <span id="file-preview-name"></span>
+            <button onclick="clearFile()">✕</button>
+          </div>
 
-      <!-- File preview -->
-      <div id="file-preview" class="file-preview hidden">
-        <span id="file-preview-name"></span>
-        <button onclick="clearFile()">✕</button>
+          <div class="inp-area">
+            <button class="tool-btn" onclick="toggleEmoji()" title="Эмодзи">😊</button>
+            <label class="tool-btn" title="Прикрепить файл">
+              📎<input type="file" id="file-inp" style="display:none" onchange="handleFile(event)">
+            </label>
+            <button class="tool-btn" id="voice-rec-btn" title="Голосовое сообщение" onclick="toggleVoiceRec()">🎤</button>
+            <textarea id="msg-inp" placeholder="Напишите сообщение..." rows="1"
+              onkeydown="onKey(event)" oninput="onType()"></textarea>
+            <button class="send-btn" onclick="sendMsg()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M22 2L11 13" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Members side panel -->
+        <div id="members-panel" class="hidden">
+          <div class="mp-head">
+            <span>Участники</span>
+            <button class="ico-btn" style="width:24px;height:24px;font-size:12px" onclick="toggleMembersPanel()">✕</button>
+          </div>
+          <div class="mp-list" id="mp-list"></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Add Contact Modal -->
-<div id="add-modal" class="overlay hidden" onclick="closeModal(event)">
+<div id="add-modal" class="overlay hidden" onclick="closeModal(event,'add-modal')">
   <div class="modal-box">
     <h3>Найти пользователя</h3>
-    <input class="field" id="modal-q" placeholder="Введите логин..." oninput="onSearchModal()">
+    <input class="field" id="modal-q" placeholder="Логин или ID пользователя..." oninput="onSearchModal()">
     <div id="modal-res"></div>
-    <button class="btn-sec" onclick="closeModal()">Закрыть</button>
+    <button class="btn-sec" onclick="closeModalById('add-modal')">Закрыть</button>
   </div>
+</div>
+
+<!-- Create Group/Channel Modal -->
+<div id="group-modal" class="overlay hidden" onclick="closeModal(event,'group-modal')">
+  <div class="modal-box">
+    <h3>Новая группа / канал</h3>
+    <input class="field" id="gm-name" placeholder="Название">
+    <input class="field" id="gm-desc" placeholder="Описание (необязательно)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <input type="checkbox" id="gm-ischannel" style="width:16px;height:16px;accent-color:var(--blue)">
+      <label for="gm-ischannel" style="font-size:13px;cursor:pointer">
+        Канал (только владелец пишет)
+      </label>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Добавить участников:</div>
+    <div class="member-list-modal" id="gm-friends"></div>
+    <button class="btn" onclick="doCreateGroup()" style="margin-top:10px">Создать</button>
+    <button class="btn-sec" onclick="closeModalById('group-modal')">Отмена</button>
+    <div class="errmsg" id="gm-err"></div>
+  </div>
+</div>
+
+<!-- Incoming/active call overlay -->
+<div id="call-overlay" class="hidden">
+  <div id="call-video-wrap">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay playsinline muted></video>
+  </div>
+  <div class="call-avatar" id="call-av"></div>
+  <div class="call-name" id="call-name"></div>
+  <div class="call-status" id="call-status">Вызов...</div>
+  <div class="call-actions" id="call-actions"></div>
 </div>
 
 <div id="notif" class="notif hidden"></div>

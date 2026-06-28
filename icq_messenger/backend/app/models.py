@@ -11,6 +11,7 @@ class Base(DeclarativeBase):
 class ChatType(str, enum.Enum):
     PERSONAL = "PERSONAL"
     GROUP = "GROUP"
+    CHANNEL = "CHANNEL"
 
 
 class User(Base):
@@ -40,6 +41,10 @@ class Chat(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=True)
     type = Column(SAEnum(ChatType), nullable=False)
+    description = Column(String(500), nullable=True)
+    avatar_color = Column(String(7), default="#5B8DEF")
+    is_channel = Column(Boolean, default=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     messages = relationship("Message", back_populates="chat", order_by="Message.created_at")
@@ -52,6 +57,7 @@ class ChatMember(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String(20), default="member")  # owner, admin, member
     joined_at = Column(DateTime, default=datetime.utcnow)
 
     chat = relationship("Chat", back_populates="members")
@@ -69,6 +75,7 @@ class Message(Base):
     file_name = Column(String(255), nullable=True)
     file_size = Column(BigInteger, nullable=True)
     file_type = Column(String(100), nullable=True)
+    reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
 

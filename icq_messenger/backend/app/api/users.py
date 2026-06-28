@@ -11,11 +11,17 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 @router.get("/search")
 async def search_users(q: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    result = await db.execute(
-        select(User).where(
-            and_(User.username.ilike(f"%{q}%"), User.id != current_user.id)
-        ).limit(20)
-    )
+    # Search by ID if query is a number, otherwise by username
+    if q.isdigit():
+        result = await db.execute(
+            select(User).where(and_(User.id == int(q), User.id != current_user.id))
+        )
+    else:
+        result = await db.execute(
+            select(User).where(
+                and_(User.username.ilike(f"%{q}%"), User.id != current_user.id)
+            ).limit(20)
+        )
     users = result.scalars().all()
     return [
         {
