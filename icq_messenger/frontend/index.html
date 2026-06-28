@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICQ Messenger</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" type="image/svg+xml" href="/static/img/icq-logo.svg">
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="screen">
+        <div class="auth-container">
+            <div class="icq-logo">
+                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                    <circle cx="40" cy="40" r="40" fill="#00A2FF"/>
+                    <circle cx="40" cy="40" r="28" fill="white"/>
+                    <circle cx="40" cy="40" r="18" fill="#00A2FF"/>
+                    <circle cx="40" cy="40" r="8" fill="white"/>
+                </svg>
+                <h1>ICQ</h1>
+                <p>Messenger</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="tab-btn active" onclick="showTab('login')">Войти</button>
+                <button class="tab-btn" onclick="showTab('register')">Регистрация</button>
+            </div>
+
+            <form id="login-form" class="auth-form">
+                <input type="text" id="login-username" placeholder="Логин" required autocomplete="username">
+                <input type="password" id="login-password" placeholder="Пароль" required autocomplete="current-password">
+                <button type="submit" class="btn-primary">Войти</button>
+                <div id="login-error" class="error-msg"></div>
+            </form>
+
+            <form id="register-form" class="auth-form hidden">
+                <input type="text" id="reg-username" placeholder="Логин (уникальный)" required autocomplete="username">
+                <input type="text" id="reg-display" placeholder="Имя в мессенджере" required>
+                <input type="email" id="reg-email" placeholder="Email" required autocomplete="email">
+                <input type="password" id="reg-password" placeholder="Пароль" required autocomplete="new-password">
+                <button type="submit" class="btn-primary">Создать аккаунт</button>
+                <div id="register-error" class="error-msg"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app-screen" class="screen hidden">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="current-user" id="current-user-info">
+                    <div class="avatar" id="my-avatar"></div>
+                    <div class="user-info">
+                        <div class="user-name" id="my-display-name"></div>
+                        <div class="user-status online">В сети</div>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" title="Добавить контакт" onclick="showAddContact()">+</button>
+                    <button class="icon-btn" title="Выйти" onclick="logout()">⏻</button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="sidebar-tabs">
+                <button class="stab active" onclick="showSideTab('contacts')">Контакты</button>
+                <button class="stab" onclick="showSideTab('chats')">Чаты</button>
+            </div>
+
+            <!-- Contacts Panel -->
+            <div id="contacts-panel" class="side-panel">
+                <div class="panel-search">
+                    <input type="text" id="search-input" placeholder="Поиск людей..." oninput="searchUsers()">
+                </div>
+                <div id="search-results" class="hidden"></div>
+                <div id="pending-requests" class="pending-section"></div>
+                <div id="friends-list" class="contacts-list"></div>
+            </div>
+
+            <!-- Chats Panel -->
+            <div id="chats-panel" class="side-panel hidden">
+                <div id="chats-list" class="chats-list"></div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div id="no-chat" class="no-chat">
+                <div class="no-chat-inner">
+                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                        <circle cx="40" cy="40" r="40" fill="#00A2FF" opacity="0.15"/>
+                        <circle cx="40" cy="40" r="28" fill="#00A2FF" opacity="0.3"/>
+                        <circle cx="40" cy="40" r="18" fill="#00A2FF" opacity="0.5"/>
+                        <circle cx="40" cy="40" r="8" fill="#00A2FF"/>
+                    </svg>
+                    <p>Выберите чат или найдите контакт</p>
+                </div>
+            </div>
+
+            <div id="active-chat" class="hidden">
+                <div class="chat-header">
+                    <div class="avatar" id="chat-avatar"></div>
+                    <div class="chat-info">
+                        <div class="chat-name" id="chat-name"></div>
+                        <div class="chat-status" id="chat-status"></div>
+                    </div>
+                </div>
+
+                <div class="messages-container" id="messages-container">
+                    <div id="messages-list"></div>
+                    <div id="typing-indicator" class="typing-indicator hidden">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+
+                <div class="message-input-area">
+                    <textarea
+                        id="message-input"
+                        placeholder="Напишите сообщение..."
+                        rows="1"
+                        onkeydown="handleInputKey(event)"
+                        oninput="onTyping()"
+                    ></textarea>
+                    <button class="send-btn" onclick="sendMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M22 2L11 13" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Contact Modal -->
+    <div id="add-contact-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Добавить контакт</h3>
+            <input type="text" id="contact-search" placeholder="Введите логин или имя..." oninput="searchForContact()">
+            <div id="contact-search-results"></div>
+            <button class="btn-secondary" onclick="closeModal()">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="notification" class="notification hidden"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
