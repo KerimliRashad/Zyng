@@ -1,7 +1,5 @@
-import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, Integer, Enum as SAEnum
 from sqlalchemy.orm import relationship, DeclarativeBase
 import enum
 
@@ -18,15 +16,21 @@ class ChatType(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False)
-    email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    display_name = Column(String(100), nullable=False)
     avatar_color = Column(String(7), default="#00a2ff")
     status = Column(String(20), default="offline")
     status_message = Column(String(255), default="")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def display_name(self):
+        return self.username
+
+    @property
+    def is_admin(self):
+        return self.id == 1
 
     sent_messages = relationship("Message", back_populates="sender", foreign_keys="Message.sender_id")
     memberships = relationship("ChatMember", back_populates="user")
@@ -37,7 +41,7 @@ class User(Base):
 class Chat(Base):
     __tablename__ = "chats"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=True)
     type = Column(SAEnum(ChatType), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -49,11 +53,10 @@ class Chat(Base):
 class ChatMember(Base):
     __tablename__ = "chat_members"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    chat_id = Column(UUID(as_uuid=True), ForeignKey("chats.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     joined_at = Column(DateTime, default=datetime.utcnow)
-    is_admin = Column(Boolean, default=False)
 
     chat = relationship("Chat", back_populates="members")
     user = relationship("User", back_populates="memberships")
@@ -62,13 +65,12 @@ class ChatMember(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    chat_id = Column(UUID(as_uuid=True), ForeignKey("chats.id"), nullable=False)
-    sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     text = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
-    edited = Column(Boolean, default=False)
 
     chat = relationship("Chat", back_populates="messages")
     sender = relationship("User", back_populates="sent_messages")
@@ -77,10 +79,10 @@ class Message(Base):
 class FriendRequest(Base):
     __tablename__ = "friend_requests"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    receiver_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    status = Column(String(20), default="pending")  # pending, accepted, declined
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    receiver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     sender = relationship("User", back_populates="friend_requests_sent", foreign_keys=[sender_id])

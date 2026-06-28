@@ -69,8 +69,6 @@ document.getElementById('register-form').onsubmit = async (e) => {
     e.preventDefault();
     const body = {
         username: document.getElementById('reg-username').value,
-        display_name: document.getElementById('reg-display').value,
-        email: document.getElementById('reg-email').value,
         password: document.getElementById('reg-password').value,
     };
     const res = await fetch(`${API}/api/auth/register`, {
@@ -89,7 +87,7 @@ document.getElementById('register-form').onsubmit = async (e) => {
 
 function saveSession(data) {
     token = data.access_token;
-    me = { id: data.user_id, username: data.username, display_name: data.display_name, avatar_color: data.avatar_color };
+    me = { id: data.user_id, username: data.username, is_admin: data.is_admin, avatar_color: data.avatar_color };
     localStorage.setItem('icq_token', token);
     localStorage.setItem('icq_me', JSON.stringify(me));
 }
@@ -99,8 +97,10 @@ function saveSession(data) {
 function renderCurrentUser() {
     const av = document.getElementById('my-avatar');
     av.style.background = me.avatar_color;
-    av.textContent = me.display_name[0];
-    document.getElementById('my-display-name').textContent = me.display_name;
+    av.textContent = me.username[0].toUpperCase();
+    document.getElementById('my-display-name').textContent = me.username;
+    const label = `ID: ${me.id}${me.is_admin ? ' 👑 Админ' : ''}`;
+    document.getElementById('my-id-label').textContent = label;
 }
 
 // ── WEBSOCKET ──────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ function handleWSMessage(msg) {
         case 'friend_accepted':
             loadFriends();
             loadChats();
-            showNotification('Новый контакт', `${msg.display_name} принял(а) ваш запрос`);
+            showNotification('Новый контакт', `${msg.username} принял(а) ваш запрос`);
             break;
     }
 }
@@ -175,15 +175,15 @@ function friendItem(f) {
     div.className = 'contact-item';
     div.dataset.userId = f.id;
     div.innerHTML = `
-        <div class="avatar" style="background:${f.avatar_color}">${f.display_name[0]}</div>
+        <div class="avatar" style="background:${f.avatar_color}">${f.username[0]}</div>
         <div class="contact-meta">
-            <div class="contact-name">${esc(f.display_name)}</div>
+            <div class="contact-name">${esc(f.username)}</div>
             <div class="contact-sub">${esc(f.status_message || f.username)}</div>
         </div>
         <div class="status-dot ${f.status}"></div>
     `;
     if (f.chat_id) {
-        div.onclick = () => openChat(f.chat_id, f.display_name, f.avatar_color, f.status);
+        div.onclick = () => openChat(f.chat_id, f.username, f.avatar_color, f.status);
     }
     return div;
 }
@@ -269,9 +269,9 @@ async function doSearchUsers(q, containerId) {
         div.className = 'search-result-item';
         const alreadyFriend = myFriendIds.has(u.id);
         div.innerHTML = `
-            <div class="avatar" style="background:${u.avatar_color}">${u.display_name[0]}</div>
+            <div class="avatar" style="background:${u.avatar_color}">${u.username[0]}</div>
             <div class="contact-meta">
-                <div class="contact-name">${esc(u.display_name)}</div>
+                <div class="contact-name">${esc(u.username)}</div>
                 <div class="contact-sub">@${esc(u.username)}</div>
             </div>
             <button class="add-btn" ${alreadyFriend ? 'disabled' : ''} onclick="sendFriendRequest('${u.id}', this)">

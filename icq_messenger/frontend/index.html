@@ -35,9 +35,7 @@
             </form>
 
             <form id="register-form" class="auth-form hidden">
-                <input type="text" id="reg-username" placeholder="Логин (уникальный)" required autocomplete="username">
-                <input type="text" id="reg-display" placeholder="Имя в мессенджере" required>
-                <input type="email" id="reg-email" placeholder="Email" required autocomplete="email">
+                <input type="text" id="reg-username" placeholder="Логин" required autocomplete="username">
                 <input type="password" id="reg-password" placeholder="Пароль" required autocomplete="new-password">
                 <button type="submit" class="btn-primary">Создать аккаунт</button>
                 <div id="register-error" class="error-msg"></div>
@@ -54,7 +52,7 @@
                     <div class="avatar" id="my-avatar"></div>
                     <div class="user-info">
                         <div class="user-name" id="my-display-name"></div>
-                        <div class="user-status online">В сети</div>
+                        <div class="user-status online" id="my-id-label"></div>
                     </div>
                 </div>
                 <div class="header-actions">

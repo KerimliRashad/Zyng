@@ -32,13 +32,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
     async with AsyncSessionLocal() as db:
         # Load user's chats into manager
         result = await db.execute(
-            select(ChatMember).where(ChatMember.user_id == user_id)
+            select(ChatMember).where(ChatMember.user_id == int(user_id))
         )
         for member in result.scalars().all():
             manager.join_chat(str(member.chat_id), user_id)
 
         # Update status to online
-        user_result = await db.execute(select(User).where(User.id == user_id))
+        user_result = await db.execute(select(User).where(User.id == int(user_id)))
         user = user_result.scalar_one_or_none()
         if user:
             user.status = "online"
@@ -56,7 +56,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
     finally:
         manager.disconnect(websocket, user_id)
         async with AsyncSessionLocal() as db:
-            user_result = await db.execute(select(User).where(User.id == user_id))
+            user_result = await db.execute(select(User).where(User.id == int(user_id)))
             user = user_result.scalar_one_or_none()
             if user:
                 user.status = "offline"
@@ -81,13 +81,13 @@ async def handle_message(user_id: str, data: dict):
             # Verify membership
             member = await db.execute(
                 select(ChatMember).where(
-                    and_(ChatMember.chat_id == chat_id, ChatMember.user_id == user_id)
+                    and_(ChatMember.chat_id == int(chat_id), ChatMember.user_id == int(user_id))
                 )
             )
             if not member.scalar_one_or_none():
                 return
 
-            user_result = await db.execute(select(User).where(User.id == user_id))
+            user_result = await db.execute(select(User).where(User.id == int(user_id)))
             user = user_result.scalar_one()
 
             message = Message(
