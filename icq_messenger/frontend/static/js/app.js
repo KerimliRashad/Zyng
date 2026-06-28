@@ -1,536 +1,450 @@
-const API = '';  // same origin
-let token = localStorage.getItem('icq_token');
-let me = JSON.parse(localStorage.getItem('icq_me') || 'null');
+// ── State ─────────────────────────────────────────────────────────────────────
+let token = localStorage.getItem('jf_token');
+let me = JSON.parse(localStorage.getItem('jf_me') || 'null');
 let ws = null;
 let activeChatId = null;
-let typingTimer = null;
 let friends = [];
 let chats = [];
+let typingHideTimer = null;
+let searchTimer = null;
+let notifTimer = null;
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
-
-window.onload = () => {
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
     if (token && me) {
         showApp();
     } else {
-        document.getElementById('auth-screen').classList.remove('hidden');
+        show('auth-screen');
     }
-};
+});
+
+function show(id) {
+    document.getElementById(id).classList.remove('hidden');
+}
+function hide(id) {
+    document.getElementById(id).classList.add('hidden');
+}
 
 function showApp() {
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-screen').classList.remove('hidden');
-    renderCurrentUser();
+    hide('auth-screen');
+    show('app-screen');
+    renderMe();
     connectWS();
     loadFriends();
     loadChats();
-    loadPendingRequests();
+    loadPending();
 }
 
-function logout() {
+function doLogout() {
     token = null; me = null;
-    localStorage.removeItem('icq_token');
-    localStorage.removeItem('icq_me');
-    if (ws) ws.close();
+    localStorage.removeItem('jf_token');
+    localStorage.removeItem('jf_me');
+    if (ws) { ws.onclose = null; ws.close(); }
     location.reload();
 }
 
-// ── AUTH ──────────────────────────────────────────────────────────────────────
-
-function showTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach((b, i) => {
-        b.classList.toggle('active', (i === 0) === (tab === 'login'));
-    });
-    document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
-    document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function showTab(t) {
+    document.getElementById('tab-login').classList.toggle('active', t === 'login');
+    document.getElementById('tab-reg').classList.toggle('active', t === 'register');
+    document.getElementById('pane-login').style.display = t === 'login' ? '' : 'none';
+    document.getElementById('pane-reg').style.display = t === 'register' ? '' : 'none';
 }
 
-document.getElementById('login-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const username = document.getElementById('login-username').value;
-    const password = document.getElementById('login-password').value;
+async function doLogin() {
+    const username = document.getElementById('l-user').value.trim();
+    const password = document.getElementById('l-pass').value;
+    document.getElementById('l-err').textContent = '';
+
+    if (!username || !password) {
+        document.getElementById('l-err').textContent = 'Заполните все поля';
+        return;
+    }
 
     const form = new FormData();
     form.append('username', username);
     form.append('password', password);
 
-    const res = await fetch(`${API}/api/auth/login`, { method: 'POST', body: form });
-    const data = await res.json();
+    try {
+        const res = await fetch('/api/auth/login', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) { document.getElementById('l-err').textContent = data.detail || 'Ошибка'; return; }
+        saveSession(data);
+        showApp();
+    } catch {
+        document.getElementById('l-err').textContent = 'Нет соединения с сервером';
+    }
+}
 
-    if (!res.ok) {
-        document.getElementById('login-error').textContent = data.detail || 'Ошибка входа';
+async function doRegister() {
+    const username = document.getElementById('r-user').value.trim();
+    const password = document.getElementById('r-pass').value;
+    document.getElementById('r-err').textContent = '';
+
+    if (!username || !password) {
+        document.getElementById('r-err').textContent = 'Заполните все поля';
         return;
     }
-    saveSession(data);
-    showApp();
-};
-
-document.getElementById('register-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const body = {
-        username: document.getElementById('reg-username').value,
-        password: document.getElementById('reg-password').value,
-    };
-    const res = await fetch(`${API}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-        document.getElementById('register-error').textContent = data.detail || 'Ошибка регистрации';
+    if (password.length < 4) {
+        document.getElementById('r-err').textContent = 'Пароль минимум 4 символа';
         return;
     }
-    saveSession(data);
-    showApp();
-};
+
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) { document.getElementById('r-err').textContent = data.detail || 'Ошибка'; return; }
+        saveSession(data);
+        showApp();
+    } catch {
+        document.getElementById('r-err').textContent = 'Нет соединения с сервером';
+    }
+}
 
 function saveSession(data) {
     token = data.access_token;
     me = { id: data.user_id, username: data.username, is_admin: data.is_admin, avatar_color: data.avatar_color };
-    localStorage.setItem('icq_token', token);
-    localStorage.setItem('icq_me', JSON.stringify(me));
+    localStorage.setItem('jf_token', token);
+    localStorage.setItem('jf_me', JSON.stringify(me));
 }
 
-// ── CURRENT USER ──────────────────────────────────────────────────────────────
-
-function renderCurrentUser() {
-    const av = document.getElementById('my-avatar');
+// ── Me ────────────────────────────────────────────────────────────────────────
+function renderMe() {
+    const av = document.getElementById('me-av');
     av.style.background = me.avatar_color;
     av.textContent = me.username[0].toUpperCase();
-    document.getElementById('my-display-name').textContent = me.username;
-    const label = `ID: ${me.id}${me.is_admin ? ' 👑 Админ' : ''}`;
-    document.getElementById('my-id-label').textContent = label;
+    document.getElementById('me-name').textContent = me.username;
+    document.getElementById('me-id').textContent = `ID: ${me.id}` + (me.is_admin ? ' 👑' : '');
 }
 
-// ── WEBSOCKET ──────────────────────────────────────────────────────────────────
-
+// ── WebSocket ─────────────────────────────────────────────────────────────────
 function connectWS() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws?token=${token}`);
-
-    ws.onopen = () => console.log('WS connected');
-    ws.onmessage = (e) => handleWSMessage(JSON.parse(e.data));
+    ws.onopen = () => {};
+    ws.onmessage = e => handleWS(JSON.parse(e.data));
     ws.onclose = () => setTimeout(connectWS, 3000);
     ws.onerror = () => ws.close();
 }
 
-function handleWSMessage(msg) {
-    switch (msg.type) {
-        case 'new_message':
-            handleNewMessage(msg);
-            break;
-        case 'typing':
-            if (msg.chat_id === activeChatId) showTyping();
-            break;
-        case 'user_status':
-            updateUserStatus(msg.user_id, msg.status);
-            break;
-        case 'friend_request':
-            addPendingRequest(msg);
-            showNotification(`Запрос в друзья от ${msg.from_name}`, msg.from_username);
-            break;
-        case 'friend_accepted':
-            loadFriends();
-            loadChats();
-            showNotification('Новый контакт', `${msg.username} принял(а) ваш запрос`);
-            break;
+function handleWS(msg) {
+    if (msg.type === 'new_message') {
+        if (msg.chat_id === activeChatId) {
+            hideTyping();
+            appendMsg(msg);
+            scrollBottom();
+        }
+        loadChats();
+        if (!msg.is_mine) notify(msg.sender_name, msg.text);
+    } else if (msg.type === 'typing') {
+        if (msg.chat_id === activeChatId) showTyping();
+    } else if (msg.type === 'user_status') {
+        const f = friends.find(x => x.id === msg.user_id);
+        if (f) { f.status = msg.status; renderFriends(); }
+        loadChats();
+    } else if (msg.type === 'friend_request') {
+        loadPending();
+        notify('Запрос в друзья', `от ${msg.from_name}`);
+    } else if (msg.type === 'friend_accepted') {
+        loadFriends(); loadChats();
+        notify('Jeff Messenger', `${msg.username} принял запрос`);
     }
 }
 
-function sendWS(data) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(data));
-    }
+function wsSend(data) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
 
-// ── CONTACTS ──────────────────────────────────────────────────────────────────
-
+// ── Friends ───────────────────────────────────────────────────────────────────
 async function loadFriends() {
-    const res = await apiFetch('/api/users/friends');
-    if (!res.ok) return;
+    const res = await api('/api/users/friends');
+    if (!res) return;
     friends = await res.json();
     renderFriends();
 }
 
 function renderFriends() {
-    const list = document.getElementById('friends-list');
-    list.innerHTML = '';
-
-    const online = friends.filter(f => f.status === 'online');
-    const offline = friends.filter(f => f.status !== 'online');
-
-    if (online.length) {
-        list.insertAdjacentHTML('beforeend', `<div class="section-label">В сети (${online.length})</div>`);
-        online.forEach(f => list.appendChild(friendItem(f)));
+    const el = document.getElementById('friends-list');
+    el.innerHTML = '';
+    const on = friends.filter(f => f.status === 'online');
+    const off = friends.filter(f => f.status !== 'online');
+    if (on.length) {
+        el.insertAdjacentHTML('beforeend', `<div class="sec-label">В сети · ${on.length}</div>`);
+        on.forEach(f => el.appendChild(mkFriend(f)));
     }
-    if (offline.length) {
-        list.insertAdjacentHTML('beforeend', `<div class="section-label">Не в сети (${offline.length})</div>`);
-        offline.forEach(f => list.appendChild(friendItem(f)));
+    if (off.length) {
+        el.insertAdjacentHTML('beforeend', `<div class="sec-label">Не в сети · ${off.length}</div>`);
+        off.forEach(f => el.appendChild(mkFriend(f)));
     }
 }
 
-function friendItem(f) {
-    const div = document.createElement('div');
-    div.className = 'contact-item';
-    div.dataset.userId = f.id;
-    div.innerHTML = `
-        <div class="avatar" style="background:${f.avatar_color}">${f.username[0]}</div>
-        <div class="contact-meta">
-            <div class="contact-name">${esc(f.username)}</div>
-            <div class="contact-sub">${esc(f.status_message || f.username)}</div>
+function mkFriend(f) {
+    const d = document.createElement('div');
+    d.className = 'c-item';
+    d.innerHTML = `
+        <div class="avatar" style="background:${f.avatar_color}">${f.username[0].toUpperCase()}</div>
+        <div class="c-meta">
+            <div class="c-name">${x(f.username)}</div>
+            <div class="c-sub">ID: ${f.id}</div>
         </div>
-        <div class="status-dot ${f.status}"></div>
-    `;
-    if (f.chat_id) {
-        div.onclick = () => openChat(f.chat_id, f.username, f.avatar_color, f.status);
-    }
-    return div;
+        <div class="dot ${f.status}"></div>`;
+    if (f.chat_id) d.onclick = () => openChat(f.chat_id, f.username, f.avatar_color, f.status);
+    return d;
 }
 
-async function loadPendingRequests() {
-    const res = await apiFetch('/api/users/pending-requests');
-    if (!res.ok) return;
-    const requests = await res.json();
-    renderPending(requests);
-}
-
-function renderPending(requests) {
-    const sec = document.getElementById('pending-requests');
-    sec.innerHTML = '';
-    if (!requests.length) return;
-    sec.insertAdjacentHTML('beforeend', `<div class="pending-header">Запросы в друзья</div>`);
-    requests.forEach(r => addPendingRequest(r, sec));
-}
-
-function addPendingRequest(r, container) {
-    const sec = container || document.getElementById('pending-requests');
-    const div = document.createElement('div');
-    div.className = 'pending-item';
-    div.id = `req-${r.request_id}`;
-    div.innerHTML = `
-        <div class="avatar" style="background:${r.avatar_color || '#00a2ff'}">${r.from_name[0]}</div>
-        <div class="contact-meta">
-            <div class="contact-name">${esc(r.from_name)}</div>
-            <div class="contact-sub">@${esc(r.from_username)}</div>
-        </div>
-        <button class="accept-btn" onclick="acceptRequest('${r.request_id}')">✓</button>
-    `;
-    sec.appendChild(div);
-}
-
-async function acceptRequest(requestId) {
-    const res = await apiFetch(`/api/users/friend-request/${requestId}/accept`, 'POST');
-    if (res.ok) {
-        document.getElementById(`req-${requestId}`)?.remove();
-        loadFriends();
-        loadChats();
-    }
-}
-
-// ── USER SEARCH ──────────────────────────────────────────────────────────────
-
-let searchTimeout = null;
-
-function searchUsers() {
-    const q = document.getElementById('search-input').value.trim();
-    clearTimeout(searchTimeout);
-    if (!q) {
-        document.getElementById('search-results').classList.add('hidden');
-        return;
-    }
-    searchTimeout = setTimeout(() => doSearchUsers(q, 'search-results'), 300);
-}
-
-function searchForContact() {
-    const q = document.getElementById('contact-search').value.trim();
-    clearTimeout(searchTimeout);
-    if (!q) { document.getElementById('contact-search-results').innerHTML = ''; return; }
-    searchTimeout = setTimeout(() => doSearchUsers(q, 'contact-search-results'), 300);
-}
-
-async function doSearchUsers(q, containerId) {
-    const res = await apiFetch(`/api/users/search?q=${encodeURIComponent(q)}`);
-    if (!res.ok) return;
-    const users = await res.json();
-    const container = document.getElementById(containerId);
-    container.classList.remove('hidden');
-    container.innerHTML = '';
-
-    if (!users.length) {
-        container.innerHTML = '<div style="padding:12px;color:var(--text-secondary);font-size:13px">Никого не найдено</div>';
-        return;
-    }
-
-    const myFriendIds = new Set(friends.map(f => f.id));
-
-    users.forEach(u => {
-        const div = document.createElement('div');
-        div.className = 'search-result-item';
-        const alreadyFriend = myFriendIds.has(u.id);
-        div.innerHTML = `
-            <div class="avatar" style="background:${u.avatar_color}">${u.username[0]}</div>
-            <div class="contact-meta">
-                <div class="contact-name">${esc(u.username)}</div>
-                <div class="contact-sub">@${esc(u.username)}</div>
+async function loadPending() {
+    const res = await api('/api/users/pending-requests');
+    if (!res) return;
+    const reqs = await res.json();
+    const el = document.getElementById('pending-list');
+    el.innerHTML = '';
+    if (!reqs.length) return;
+    el.insertAdjacentHTML('beforeend', '<div class="pend-head">Запросы в друзья</div>');
+    reqs.forEach(r => {
+        const d = document.createElement('div');
+        d.className = 'pend-item';
+        d.id = `pr-${r.request_id}`;
+        d.innerHTML = `
+            <div class="avatar" style="background:${r.avatar_color}">${r.from_name[0].toUpperCase()}</div>
+            <div class="c-meta">
+                <div class="c-name">${x(r.from_name)}</div>
+                <div class="c-sub">ID: ${r.from_id}</div>
             </div>
-            <button class="add-btn" ${alreadyFriend ? 'disabled' : ''} onclick="sendFriendRequest('${u.id}', this)">
-                ${alreadyFriend ? '✓' : 'Добавить'}
-            </button>
-        `;
-        container.appendChild(div);
+            <button class="acc-btn" onclick="acceptReq(${r.request_id})">✓</button>`;
+        el.appendChild(d);
     });
 }
 
-async function sendFriendRequest(userId, btn) {
-    btn.disabled = true;
-    btn.textContent = '...';
-    const res = await apiFetch(`/api/users/friend-request/${userId}`, 'POST');
-    if (res.ok) {
-        btn.textContent = 'Отправлено';
-    } else {
-        const d = await res.json();
-        btn.textContent = d.detail || 'Ошибка';
+async function acceptReq(id) {
+    const res = await api(`/api/users/friend-request/${id}/accept`, 'POST');
+    if (res && res.ok) {
+        document.getElementById(`pr-${id}`)?.remove();
+        loadFriends(); loadChats();
     }
 }
 
-// ── CHATS ─────────────────────────────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────────────────────────
+function onSearchContacts() {
+    const q = document.getElementById('q-contact').value.trim();
+    clearTimeout(searchTimer);
+    const el = document.getElementById('search-res');
+    if (!q) { el.innerHTML = ''; return; }
+    searchTimer = setTimeout(() => doSearch(q, 'search-res'), 300);
+}
 
+function onSearchModal() {
+    const q = document.getElementById('modal-q').value.trim();
+    clearTimeout(searchTimer);
+    const el = document.getElementById('modal-res');
+    if (!q) { el.innerHTML = ''; return; }
+    searchTimer = setTimeout(() => doSearch(q, 'modal-res'), 300);
+}
+
+async function doSearch(q, elId) {
+    const res = await api(`/api/users/search?q=${encodeURIComponent(q)}`);
+    if (!res) return;
+    const users = await res.json();
+    const el = document.getElementById(elId);
+    el.innerHTML = '';
+    if (!users.length) {
+        el.innerHTML = '<div style="padding:10px 14px;color:var(--muted);font-size:13px">Не найдено</div>';
+        return;
+    }
+    const myIds = new Set(friends.map(f => f.id));
+    users.forEach(u => {
+        const d = document.createElement('div');
+        d.className = 's-item';
+        const has = myIds.has(u.id);
+        d.innerHTML = `
+            <div class="avatar" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
+            <div class="c-meta">
+                <div class="c-name">${x(u.username)}</div>
+                <div class="c-sub">ID: ${u.id}</div>
+            </div>
+            <button class="add-btn" ${has ? 'disabled' : ''} onclick="sendReq(${u.id},this)">${has ? '✓' : 'Добавить'}</button>`;
+        el.appendChild(d);
+    });
+}
+
+async function sendReq(uid, btn) {
+    btn.disabled = true; btn.textContent = '...';
+    const res = await api(`/api/users/friend-request/${uid}`, 'POST');
+    if (res && res.ok) { btn.textContent = 'Отправлено'; }
+    else { btn.textContent = 'Уже'; }
+}
+
+// ── Chats list ────────────────────────────────────────────────────────────────
 async function loadChats() {
-    const res = await apiFetch('/api/chats');
-    if (!res.ok) return;
+    const res = await api('/api/chats');
+    if (!res) return;
     chats = await res.json();
     renderChats();
 }
 
 function renderChats() {
-    const list = document.getElementById('chats-list');
-    list.innerHTML = '';
+    const el = document.getElementById('chats-list');
+    el.innerHTML = '';
     chats.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'chat-item' + (c.id === activeChatId ? ' active' : '');
-        div.id = `chat-item-${c.id}`;
-        const timeStr = c.last_message ? formatTime(c.last_message.created_at) : '';
-        div.innerHTML = `
-            <div class="avatar" style="background:${c.other_user?.avatar_color || '#00a2ff'}">${(c.name || '?')[0]}</div>
-            <div class="contact-meta">
-                <div class="contact-name">${esc(c.name || 'Чат')}</div>
-                <div class="contact-sub">${esc(c.last_message?.text?.slice(0, 40) || '')}</div>
+        const d = document.createElement('div');
+        d.className = 'c-item' + (c.id === activeChatId ? ' active' : '');
+        d.id = `ci-${c.id}`;
+        const col = c.other_user?.avatar_color || '#5B8DEF';
+        const nm = c.name || 'Чат';
+        const sub = c.last_message?.text?.slice(0, 38) || '';
+        const t = c.last_message ? fmtTime(c.last_message.created_at) : '';
+        d.innerHTML = `
+            <div class="avatar" style="background:${col}">${nm[0].toUpperCase()}</div>
+            <div class="c-meta">
+                <div class="c-name">${x(nm)}</div>
+                <div class="c-sub">${x(sub)}</div>
             </div>
-            <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:11px;color:var(--text-secondary)">${timeStr}</div>
-                ${c.unread_count ? `<div class="unread-badge">${c.unread_count}</div>` : ''}
-            </div>
-        `;
-        div.onclick = () => {
-            const status = c.other_user?.status || 'offline';
-            openChat(c.id, c.name, c.other_user?.avatar_color, status);
-        };
-        list.appendChild(div);
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+                <div style="font-size:10px;color:var(--muted)">${t}</div>
+                ${c.unread_count ? `<div class="badge">${c.unread_count}</div>` : ''}
+            </div>`;
+        d.onclick = () => openChat(c.id, nm, col, c.other_user?.status || 'offline');
+        el.appendChild(d);
     });
 }
 
-// ── OPEN CHAT ─────────────────────────────────────────────────────────────────
-
-async function openChat(chatId, name, avatarColor, status) {
+// ── Open Chat ─────────────────────────────────────────────────────────────────
+async function openChat(chatId, name, color, status) {
     activeChatId = chatId;
 
-    document.getElementById('no-chat').classList.add('hidden');
-    document.getElementById('active-chat').classList.remove('hidden');
+    document.getElementById('no-chat').style.display = 'none';
+    const cv = document.getElementById('chat-view');
+    cv.style.display = 'flex';
 
-    const av = document.getElementById('chat-avatar');
-    av.style.background = avatarColor || '#00a2ff';
-    av.textContent = (name || '?')[0];
-    document.getElementById('chat-name').textContent = name;
+    const av = document.getElementById('ch-av');
+    av.style.background = color || '#5B8DEF';
+    av.textContent = (name || '?')[0].toUpperCase();
+    document.getElementById('ch-name').textContent = name;
+    const st = document.getElementById('ch-status');
+    st.textContent = status === 'online' ? 'В сети' : 'Не в сети';
+    st.className = 'ch-status' + (status === 'online' ? ' online' : '');
 
-    const statusEl = document.getElementById('chat-status');
-    statusEl.textContent = status === 'online' ? 'В сети' : 'Не в сети';
-    statusEl.className = 'chat-status ' + (status === 'online' ? 'online' : '');
+    document.querySelectorAll('.c-item').forEach(e => e.classList.remove('active'));
+    document.getElementById(`ci-${chatId}`)?.classList.add('active');
 
-    // Mark chat as active in list
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    document.getElementById(`chat-item-${chatId}`)?.classList.add('active');
-
-    sendWS({ type: 'join_chat', chat_id: chatId });
-
+    wsSend({ type: 'join_chat', chat_id: chatId });
     await loadMessages(chatId);
-    loadChats(); // refresh unread count
-}
-
-async function loadMessages(chatId) {
-    const list = document.getElementById('messages-list');
-    list.innerHTML = '';
-    const res = await apiFetch(`/api/chats/${chatId}/messages`);
-    if (!res.ok) return;
-    const messages = await res.json();
-    messages.forEach(m => appendMessage(m));
-    scrollToBottom();
-}
-
-function appendMessage(msg) {
-    const list = document.getElementById('messages-list');
-    const div = document.createElement('div');
-    div.className = 'message ' + (msg.is_mine ? 'mine' : 'other');
-    div.id = `msg-${msg.id}`;
-
-    const time = formatTime(msg.created_at);
-
-    div.innerHTML = `
-        ${!msg.is_mine ? `<div class="msg-sender">${esc(msg.sender_name)}</div>` : ''}
-        <div class="msg-bubble">${esc(msg.text)}</div>
-        <div class="msg-time">${time}</div>
-    `;
-    list.appendChild(div);
-}
-
-function handleNewMessage(msg) {
-    if (msg.chat_id === activeChatId) {
-        hideTyping();
-        appendMessage(msg);
-        scrollToBottom();
-        loadChats();
-    } else {
-        // Update chat list unread
-        loadChats();
-        if (!msg.is_mine) {
-            showNotification(msg.sender_name, msg.text);
-        }
-    }
-}
-
-// ── SEND MESSAGE ──────────────────────────────────────────────────────────────
-
-function sendMessage() {
-    const input = document.getElementById('message-input');
-    const text = input.value.trim();
-    if (!text || !activeChatId) return;
-
-    sendWS({ type: 'send_message', chat_id: activeChatId, text });
-    input.value = '';
-    input.style.height = 'auto';
-}
-
-function handleInputKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-    // Auto-resize
-    const inp = e.target;
-    inp.style.height = 'auto';
-    inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
-}
-
-function onTyping() {
-    if (!activeChatId) return;
-    sendWS({ type: 'typing', chat_id: activeChatId });
-}
-
-// ── TYPING INDICATOR ──────────────────────────────────────────────────────────
-
-let typingHideTimer = null;
-
-function showTyping() {
-    document.getElementById('typing-indicator').classList.remove('hidden');
-    scrollToBottom();
-    clearTimeout(typingHideTimer);
-    typingHideTimer = setTimeout(hideTyping, 2500);
-}
-
-function hideTyping() {
-    document.getElementById('typing-indicator').classList.add('hidden');
-}
-
-// ── STATUS UPDATE ─────────────────────────────────────────────────────────────
-
-function updateUserStatus(userId, status) {
-    const friend = friends.find(f => f.id === userId);
-    if (friend) {
-        friend.status = status;
-        renderFriends();
-    }
-    // Update chat header if active chat is with this user
-    const activeChat = chats.find(c => c.id === activeChatId);
-    if (activeChat?.other_user?.id === userId) {
-        const statusEl = document.getElementById('chat-status');
-        statusEl.textContent = status === 'online' ? 'В сети' : 'Не в сети';
-        statusEl.className = 'chat-status ' + (status === 'online' ? 'online' : '');
-    }
     loadChats();
 }
 
-// ── TABS ──────────────────────────────────────────────────────────────────────
+async function loadMessages(chatId) {
+    document.getElementById('msg-list').innerHTML = '';
+    const res = await api(`/api/chats/${chatId}/messages`);
+    if (!res || !res.ok) return;
+    const msgs = await res.json();
+    msgs.forEach(m => appendMsg(m));
+    scrollBottom();
+}
 
-function showSideTab(tab) {
-    document.querySelectorAll('.stab').forEach((b, i) => {
-        b.classList.toggle('active', (i === 0) === (tab === 'contacts'));
+function appendMsg(m) {
+    const list = document.getElementById('msg-list');
+    const d = document.createElement('div');
+    d.className = 'msg ' + (m.is_mine ? 'me' : 'other');
+    d.innerHTML = `
+        ${!m.is_mine ? `<div class="msg-who">${x(m.sender_name)}</div>` : ''}
+        <div class="msg-bubble">${x(m.text)}</div>
+        <div class="msg-time">${fmtTime(m.created_at)}</div>`;
+    list.appendChild(d);
+}
+
+// ── Send ──────────────────────────────────────────────────────────────────────
+function sendMsg() {
+    const inp = document.getElementById('msg-inp');
+    const text = inp.value.trim();
+    if (!text || !activeChatId) return;
+    wsSend({ type: 'send_message', chat_id: activeChatId, text });
+    inp.value = '';
+    inp.style.height = 'auto';
+}
+
+function onKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); return; }
+    const t = e.target;
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+}
+
+function onType() {
+    if (activeChatId) wsSend({ type: 'typing', chat_id: activeChatId });
+}
+
+// ── Typing ────────────────────────────────────────────────────────────────────
+function showTyping() {
+    const t = document.getElementById('typing');
+    t.classList.remove('hidden');
+    scrollBottom();
+    clearTimeout(typingHideTimer);
+    typingHideTimer = setTimeout(hideTyping, 2500);
+}
+function hideTyping() {
+    document.getElementById('typing')?.classList.add('hidden');
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showSide(tab) {
+    ['contacts', 'chats'].forEach(t => {
+        document.getElementById(`stab-${t}`).classList.toggle('active', t === tab);
+        document.getElementById(`panel-${t}`).style.display = t === tab ? 'flex' : 'none';
     });
-    document.getElementById('contacts-panel').classList.toggle('hidden', tab !== 'contacts');
-    document.getElementById('chats-panel').classList.toggle('hidden', tab !== 'chats');
 }
 
-// ── MODAL ─────────────────────────────────────────────────────────────────────
-
-function showAddContact() {
-    document.getElementById('add-contact-modal').classList.remove('hidden');
-    document.getElementById('contact-search').focus();
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openAddModal() {
+    show('add-modal');
+    setTimeout(() => document.getElementById('modal-q').focus(), 50);
+}
+function closeModal(e) {
+    if (!e || e.target === document.getElementById('add-modal')) {
+        hide('add-modal');
+        document.getElementById('modal-q').value = '';
+        document.getElementById('modal-res').innerHTML = '';
+    }
 }
 
-function closeModal() {
-    document.getElementById('add-contact-modal').classList.add('hidden');
-    document.getElementById('contact-search').value = '';
-    document.getElementById('contact-search-results').innerHTML = '';
-}
-
-document.getElementById('add-contact-modal').onclick = (e) => {
-    if (e.target === e.currentTarget) closeModal();
-};
-
-// ── NOTIFICATION ──────────────────────────────────────────────────────────────
-
-let notifTimer = null;
-
-function showNotification(title, body) {
-    const el = document.getElementById('notification');
-    el.innerHTML = `<div class="notif-title">${esc(title)}</div><div class="notif-body">${esc(body)}</div>`;
+// ── Notification ──────────────────────────────────────────────────────────────
+function notify(title, body) {
+    const el = document.getElementById('notif');
+    el.innerHTML = `<div class="notif-t">${x(title)}</div><div class="notif-b">${x(body)}</div>`;
     el.classList.remove('hidden');
     clearTimeout(notifTimer);
     notifTimer = setTimeout(() => el.classList.add('hidden'), 4000);
 }
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('notif').onclick = () => hide('notif');
+});
 
-document.getElementById('notification').onclick = () => {
-    document.getElementById('notification').classList.add('hidden');
-};
-
-// ── UTILS ─────────────────────────────────────────────────────────────────────
-
-async function apiFetch(url, method = 'GET', body = null) {
-    const opts = {
-        method,
-        headers: { 'Authorization': `Bearer ${token}` },
-    };
-    if (body) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(body);
-    }
-    return fetch(API + url, opts);
+// ── Util ──────────────────────────────────────────────────────────────────────
+async function api(url, method = 'GET', body = null) {
+    try {
+        const opts = { method, headers: { 'Authorization': `Bearer ${token}` } };
+        if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+        return await fetch(url, opts);
+    } catch { return null; }
 }
 
-function esc(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function x(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function scrollToBottom() {
-    const c = document.getElementById('messages-container');
-    c.scrollTop = c.scrollHeight;
+function scrollBottom() {
+    const el = document.getElementById('msgs');
+    if (el) el.scrollTop = el.scrollHeight;
 }
 
-function formatTime(isoStr) {
-    if (!isoStr) return '';
-    const d = new Date(isoStr + (isoStr.endsWith('Z') ? '' : 'Z'));
+function fmtTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
     const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    if (isToday) return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === now.toDateString())
+        return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
     return d.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
 }

@@ -24,13 +24,25 @@ class TokenResponse(BaseModel):
     avatar_color: str
 
 
+COLORS = ["#5B8DEF","#9b59b6","#e74c3c","#e67e22","#2ecc71","#1abc9c","#e91e8c","#f39c12"]
+
 @router.post("/register", response_model=TokenResponse)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if len(data.username) < 3:
+        raise HTTPException(status_code=400, detail="Логин минимум 3 символа")
+    if len(data.password) < 4:
+        raise HTTPException(status_code=400, detail="Пароль минимум 4 символа")
+
     existing = await db.execute(select(User).where(User.username == data.username))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Логин уже занят")
 
-    user = User(username=data.username, password_hash=hash_password(data.password))
+    # Count users to pick color
+    count_res = await db.execute(select(User))
+    count = len(count_res.scalars().all())
+    color = COLORS[count % len(COLORS)]
+
+    user = User(username=data.username, password_hash=hash_password(data.password), avatar_color=color)
     db.add(user)
     await db.commit()
     await db.refresh(user)
