@@ -30,6 +30,7 @@ async def search_users(q: str, db: AsyncSession = Depends(get_db), current_user:
             "id": u.id,
             "username": u.username,
             "avatar_color": u.avatar_color,
+            "avatar_url": u.avatar_url,
             "status": "online" if manager.is_online(str(u.id)) else "offline",
             "is_verified": u.is_verified or False,
         }
@@ -172,6 +173,7 @@ async def get_friends(db: AsyncSession = Depends(get_db), current_user: User = D
 class ProfileUpdate(BaseModel):
     username: Optional[str] = None
     avatar_color: Optional[str] = None
+    avatar_url: Optional[str] = None
     status_message: Optional[str] = None
     current_password: Optional[str] = None
     new_password: Optional[str] = None
@@ -205,6 +207,8 @@ async def update_me(
 
     if data.avatar_color and data.avatar_color.startswith('#') and len(data.avatar_color) in (4, 7):
         cu.avatar_color = data.avatar_color
+    if data.avatar_url is not None:
+        cu.avatar_url = data.avatar_url or None
 
     if data.status_message is not None:
         cu.status_message = data.status_message[:100]
@@ -223,6 +227,7 @@ async def update_me(
         "id": cu.id,
         "username": cu.username,
         "avatar_color": cu.avatar_color,
+        "avatar_url": cu.avatar_url,
         "status_message": cu.status_message or "",
         "is_verified": cu.is_verified or False,
     }
@@ -283,6 +288,7 @@ async def get_profile(user_id: int, db: AsyncSession = Depends(get_db), cu: User
         "id": u.id,
         "username": u.username,
         "avatar_color": u.avatar_color,
+        "avatar_url": u.avatar_url,
         "status": "online" if manager.is_online(str(u.id)) else "offline",
         "status_message": u.status_message or "",
         "is_verified": u.is_verified or False,

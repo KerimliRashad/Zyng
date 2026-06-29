@@ -78,6 +78,7 @@ async def get_chats(db: AsyncSession = Depends(get_db), cu: User = Depends(get_c
             "type": c.type.value,
             "description": c.description or "",
             "avatar_color": other.avatar_color if other else (c.avatar_color or "#5B8DEF"),
+            "avatar_url": other.avatar_url if other else c.avatar_url,
             "is_channel": c.is_channel or False,
             "is_verified": c.is_verified or False,
             "member_count": member_count,
@@ -87,6 +88,7 @@ async def get_chats(db: AsyncSession = Depends(get_db), cu: User = Depends(get_c
             "other_user": {
                 "id": other.id, "username": other.username,
                 "avatar_color": other.avatar_color,
+                "avatar_url": other.avatar_url,
                 "status": "online" if manager.is_online(str(other.id)) else "offline",
                 "is_verified": other.is_verified or False,
             } if other else None,
@@ -307,6 +309,7 @@ class ChatSettingsRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     avatar_color: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 @router.put("/{chat_id}/settings")
@@ -332,9 +335,12 @@ async def update_chat_settings(
         chat.description = data.description[:500]
     if data.avatar_color and data.avatar_color.startswith('#') and len(data.avatar_color) in (4, 7):
         chat.avatar_color = data.avatar_color
+    if data.avatar_url is not None:
+        chat.avatar_url = data.avatar_url or None
 
     await db.commit()
-    return {"status": "ok", "name": chat.name, "description": chat.description, "avatar_color": chat.avatar_color}
+    return {"status": "ok", "name": chat.name, "description": chat.description,
+            "avatar_color": chat.avatar_color, "avatar_url": chat.avatar_url}
 
 
 @router.get("/{chat_id}/info")
@@ -361,6 +367,7 @@ async def get_chat_info(
         "name": chat.name,
         "description": chat.description or "",
         "avatar_color": chat.avatar_color,
+        "avatar_url": chat.avatar_url,
         "is_channel": chat.is_channel or False,
         "is_verified": chat.is_verified or False,
         "member_count": member_count,

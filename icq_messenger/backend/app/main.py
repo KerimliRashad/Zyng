@@ -48,6 +48,13 @@ if os.path.exists(STATIC):
     async def index():
         return FileResponse(os.path.join(STATIC, "index.html"))
 
+    @app.get("/admin")
+    async def admin_page():
+        p = os.path.join(STATIC, "admin.html")
+        if os.path.exists(p):
+            return FileResponse(p)
+        return FileResponse(os.path.join(STATIC, "index.html"))
+
 
 async def create_admin():
     from app.database import AsyncSessionLocal

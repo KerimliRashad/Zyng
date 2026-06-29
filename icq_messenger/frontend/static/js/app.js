@@ -196,7 +196,14 @@ function saveSession(d) {
 function renderMe() {
   const av = document.getElementById('me-av');
   av.style.background = me.avatar_color;
-  av.textContent = me.username[0].toUpperCase();
+  if (me.avatar_url) {
+    av.style.backgroundImage = `url(${me.avatar_url})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+  } else {
+    av.style.backgroundImage = '';
+    av.textContent = me.username[0].toUpperCase();
+  }
   document.getElementById('me-name').innerHTML = x(me.username) +
     (me.is_verified ? ' <span class="verified" title="Верифицирован">✓</span>' : '');
   document.getElementById('me-id').textContent = 'ID: ' + me.id + (me.is_admin ? ' 👑' : '');
@@ -443,8 +450,12 @@ function renderChats() {
     const nm = c.name || 'Чат';
     const sub = c.last_message?.text?.slice(0, 40) || '';
     const t = c.last_message ? fmtTime(c.last_message.created_at) : '';
+    const avUrl = c.avatar_url || c.other_user?.avatar_url;
+    const avStyle = avUrl
+      ? `background:${col};background-image:url(${avUrl});background-size:cover`
+      : `background:${col}`;
     d.innerHTML = `
-      <div class="avatar ${isGroup ? 'sq' : ''}" style="background:${col}">${nm[0].toUpperCase()}</div>
+      <div class="avatar ${isGroup ? 'sq' : ''}" style="${avStyle}">${avUrl ? '' : nm[0].toUpperCase()}</div>
       <div class="c-meta">
         <div class="c-name">${x(nm)}${c.is_verified ? '<span class="verified" title="Верифицировано">✓</span>' : ''}${c.is_channel ? '<span class="channel-badge">канал</span>' : (isGroup ? '<span class="group-badge">группа</span>' : '')}</div>
         <div class="c-sub">${x(sub) || '&nbsp;'}</div>
@@ -475,8 +486,16 @@ async function openChat(chatId) {
 
   // Avatar
   const av = document.getElementById('ch-av');
+  const chatAvUrl = chatObj?.avatar_url || chatObj?.other_user?.avatar_url;
   av.style.background = col;
-  av.textContent = nm[0].toUpperCase();
+  if (chatAvUrl) {
+    av.style.backgroundImage = `url(${chatAvUrl})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+  } else {
+    av.style.backgroundImage = '';
+    av.textContent = nm[0].toUpperCase();
+  }
   av.className = 'avatar' + (isGroup ? ' sq' : '');
 
   // Name & badges
@@ -785,11 +804,62 @@ function notify(title, body, push = false) {
   if (push) pushNotify(title, body);
 }
 
+// ── Avatar upload helpers ─────────────────────────────────────────────────────
+async function uploadProfileAvatar(e) {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  const form = new FormData(); form.append('file', file);
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: form });
+    if (!r.ok) { notify('Ошибка', 'Не удалось загрузить фото'); return; }
+    const data = await r.json();
+    // save avatar_url immediately
+    const r2 = await api('/api/users/me', 'PUT', { avatar_url: data.url });
+    if (!r2 || !r2.ok) { notify('Ошибка', 'Не удалось сохранить фото'); return; }
+    me.avatar_url = data.url;
+    localStorage.setItem('jf_me', JSON.stringify(me));
+    // show in modal avatar
+    const av = document.getElementById('prof-av');
+    av.style.background = 'transparent';
+    av.style.backgroundImage = `url(${data.url})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+    notify('Профиль', 'Фото обновлено ✓');
+  } catch { notify('Ошибка', 'Загрузка не удалась'); }
+}
+
+async function uploadGroupAvatar(e) {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  const form = new FormData(); form.append('file', file);
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: form });
+    if (!r.ok) { notify('Ошибка', 'Не удалось загрузить фото'); return; }
+    const data = await r.json();
+    // save to group settings immediately
+    const r2 = await api(`/api/chats/${activeChatId}/settings`, 'PUT', { avatar_url: data.url });
+    if (!r2 || !r2.ok) { notify('Ошибка', 'Не удалось сохранить фото'); return; }
+    // update preview
+    const av = document.getElementById('gs-avatar');
+    av.style.background = 'transparent';
+    av.style.backgroundImage = `url(${data.url})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+    notify('Группа', 'Фото обновлено ✓');
+    await loadChats();
+  } catch { notify('Ошибка', 'Загрузка не удалась'); }
+}
+
 // ══════════════════ WEBRTC CALLS ══════════════════════════════════════════════
 const ICE = { iceServers: [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun.services.mozilla.com' },
+  // Free TURN relay (openrelay.metered.ca)
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ] };
 
 // Ringtone (generated via Web Audio)
@@ -1023,7 +1093,14 @@ function openProfileModal() {
   // render avatar
   const av = document.getElementById('prof-av');
   av.style.background = selectedColor;
-  av.textContent = (me.username || '?')[0].toUpperCase();
+  if (me.avatar_url) {
+    av.style.backgroundImage = `url(${me.avatar_url})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+  } else {
+    av.style.backgroundImage = '';
+    av.textContent = (me.username || '?')[0].toUpperCase();
+  }
   // render color grid
   const grid = document.getElementById('color-grid'); grid.innerHTML = '';
   AVATAR_COLORS.forEach(c => {
@@ -1060,6 +1137,7 @@ async function saveProfile() {
   if (!r.ok) { const d = await r.json(); errEl.textContent = d.detail || 'Ошибка'; return; }
   const d = await r.json();
   me.username = d.username; me.avatar_color = d.avatar_color; me.is_verified = d.is_verified;
+  if (d.avatar_url !== undefined) me.avatar_url = d.avatar_url;
   localStorage.setItem('jf_me', JSON.stringify(me));
   renderMe(); closeModalById('profile-modal');
   notify('Профиль', 'Изменения сохранены');
@@ -1073,7 +1151,14 @@ async function openUserProfile(userId) {
 
   const av = document.getElementById('up-avatar');
   av.style.background = u.avatar_color;
-  av.textContent = u.username[0].toUpperCase();
+  if (u.avatar_url) {
+    av.style.backgroundImage = `url(${u.avatar_url})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+  } else {
+    av.style.backgroundImage = '';
+    av.textContent = u.username[0].toUpperCase();
+  }
 
   const nameEl = document.getElementById('up-name');
   nameEl.innerHTML = x(u.username) +
@@ -1143,12 +1228,24 @@ async function openGroupInfo() {
 
   gsColor = info.avatar_color;
   const av = document.getElementById('gs-avatar');
-  av.style.background = gsColor;
-  av.textContent = (info.name || '?')[0].toUpperCase();
+  if (info.avatar_url) {
+    av.style.background = 'transparent';
+    av.style.backgroundImage = `url(${info.avatar_url})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+  } else {
+    av.style.backgroundImage = '';
+    av.style.background = gsColor;
+    av.textContent = (info.name || '?')[0].toUpperCase();
+  }
 
   document.getElementById('gs-name').value = info.name || '';
   document.getElementById('gs-desc').value = info.description || '';
   document.getElementById('gs-err').textContent = '';
+
+  // Photo upload button
+  const photoLabel = document.getElementById('gs-photo-label');
+  if (photoLabel) photoLabel.style.display = canEdit ? 'flex' : 'none';
 
   // Color grid — only for owner/admin
   const grid = document.getElementById('gs-colors'); grid.innerHTML = '';

@@ -77,6 +77,9 @@
     <div id="panel-chats" class="panel" style="display:none">
       <div id="chats-list"></div>
     </div>
+
+    <!-- FAB: Create group/channel -->
+    <button class="fab" onclick="openGroupModal()" title="Новая группа / канал">+</button>
   </div>
 
   <!-- CHAT AREA -->
@@ -224,8 +227,11 @@
       <h3 style="margin:0">⚙️ Настройки</h3>
       <button class="ico-btn" onclick="closeModalById('grp-settings-modal')">✕</button>
     </div>
-    <div style="display:flex;justify-content:center;margin-bottom:12px">
+    <div style="display:flex;justify-content:center;margin-bottom:12px;position:relative">
       <div id="gs-avatar" class="avatar sq" style="width:72px;height:72px;font-size:28px;cursor:default"></div>
+      <label id="gs-photo-label" class="avatar-upload-label" title="Загрузить фото" style="display:none">
+        📷<input type="file" id="gs-photo-inp" accept="image/*" style="display:none" onchange="uploadGroupAvatar(event)">
+      </label>
     </div>
     <div class="color-grid" id="gs-colors"></div>
     <input class="field" id="gs-name" placeholder="Название группы / канала">
@@ -240,10 +246,13 @@
 <div id="profile-modal" class="overlay hidden" onclick="onOverlayClick(event,'profile-modal')">
   <div class="modal-box">
     <h3>✏️ Редактировать профиль</h3>
-    <div style="display:flex;justify-content:center;margin-bottom:16px">
+    <div style="display:flex;justify-content:center;margin-bottom:12px;position:relative">
       <div id="prof-av" class="avatar" style="width:72px;height:72px;font-size:28px;cursor:pointer" onclick="openColorPicker()" title="Нажми чтобы изменить цвет"></div>
+      <label class="avatar-upload-label" title="Загрузить фото">
+        📷<input type="file" id="prof-photo-inp" accept="image/*" style="display:none" onchange="uploadProfileAvatar(event)">
+      </label>
     </div>
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">Нажми на аватар чтобы выбрать цвет</div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">Нажми на аватар — цвет · 📷 — фото</div>
     <div class="color-grid" id="color-grid"></div>
     <input class="field" id="prof-username" placeholder="Логин">
     <input class="field" id="prof-status" placeholder="Статус (необязательно)">

@@ -9,7 +9,7 @@ DATABASE_URL = os.getenv(
 
 # IMPORTANT: Never decrease this version.
 # New columns are added with ALTER TABLE IF NOT EXISTS — user data & passwords are NEVER lost.
-DB_VERSION = "v7"
+DB_VERSION = "v8"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
@@ -61,6 +61,8 @@ async def init_db():
             await _add_col(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE")
             await _add_col(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE")
             await _add_col(conn, "ALTER TABLE chats ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE")
+            await _add_col(conn, "ALTER TABLE chats ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500)")
+            await _add_col(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500)")
 
             await conn.execute(text(
                 f"INSERT INTO _schema_version(key,value) VALUES('version','{DB_VERSION}') "
