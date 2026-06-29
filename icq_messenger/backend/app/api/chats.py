@@ -236,6 +236,45 @@ async def add_member(
     return {"status": "ok"}
 
 
+@router.post("/{chat_id}/leave")
+async def leave_chat(
+    chat_id: int,
+    db: AsyncSession = Depends(get_db), cu: User = Depends(get_current_user)
+):
+    mem = (await db.execute(
+        select(ChatMember).where(and_(ChatMember.chat_id == chat_id, ChatMember.user_id == cu.id))
+    )).scalar_one_or_none()
+    if not mem:
+        raise HTTPException(status_code=404, detail="Вы не в этом чате")
+
+    chat = await db.get(Chat, chat_id)
+    if chat and chat.type == ChatType.PERSONAL:
+        # For personal chats: delete the chat and all messages
+        await db.execute(select(Message).where(Message.chat_id == chat_id))
+        msgs = (await db.execute(select(Message).where(Message.chat_id == chat_id))).scalars().all()
+        for m in msgs:
+            await db.delete(m)
+        mems = (await db.execute(select(ChatMember).where(ChatMember.chat_id == chat_id))).scalars().all()
+        for m in mems:
+            await db.delete(m)
+        await db.delete(chat)
+    else:
+        # Group/channel: just remove the member
+        await db.delete(mem)
+        # If owner leaves, delete entire group
+        if chat and mem.role == 'owner':
+            msgs = (await db.execute(select(Message).where(Message.chat_id == chat_id))).scalars().all()
+            for m in msgs:
+                await db.delete(m)
+            rest = (await db.execute(select(ChatMember).where(ChatMember.chat_id == chat_id))).scalars().all()
+            for m in rest:
+                await db.delete(m)
+            await db.delete(chat)
+
+    await db.commit()
+    return {"status": "ok"}
+
+
 @router.delete("/{chat_id}/members/{user_id}")
 async def remove_member(
     chat_id: int, user_id: int,

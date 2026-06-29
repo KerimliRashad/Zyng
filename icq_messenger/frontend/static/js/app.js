@@ -823,6 +823,27 @@ function endCallClean() {
   callTargetId = null; incomingSdp = null;
 }
 
+// ── Leave / Delete chat ───────────────────────────────────────────────────────
+async function leaveChat() {
+  if (!activeChatId || !activeChat) return;
+  const isGroup = activeChat.type !== 'PERSONAL';
+  const isOwner = activeChat.my_role === 'owner';
+  let msg;
+  if (!isGroup) msg = 'Удалить переписку? Все сообщения будут удалены.';
+  else if (isOwner) msg = 'Вы владелец. Группа будет полностью удалена для всех. Продолжить?';
+  else msg = 'Покинуть ' + (activeChat.is_channel ? 'канал' : 'группу') + ' «' + (activeChat.name || '') + '»?';
+
+  if (!confirm(msg)) return;
+  const r = await api(`/api/chats/${activeChatId}/leave`, 'POST');
+  if (!r || !r.ok) { notify('Ошибка', 'Не удалось покинуть чат'); return; }
+
+  activeChatId = null; activeChat = null;
+  document.getElementById('chat-view').style.display = 'none';
+  document.getElementById('no-chat').style.display = '';
+  goBack();
+  await loadChats();
+}
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 async function api(url, method = 'GET', body = null) {
   try {
