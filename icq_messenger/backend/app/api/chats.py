@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Chat, ChatMember, Message, User, ChatType
 from app.auth import get_current_user
 from app.websocket.manager import manager
+import random
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -78,6 +79,7 @@ async def get_chats(db: AsyncSession = Depends(get_db), cu: User = Depends(get_c
             "description": c.description or "",
             "avatar_color": other.avatar_color if other else (c.avatar_color or "#5B8DEF"),
             "is_channel": c.is_channel or False,
+            "is_verified": c.is_verified or False,
             "member_count": member_count,
             "my_role": my_role,
             "last_message": {"text": lm_text, "created_at": lm.created_at.isoformat()} if lm else None,
@@ -86,6 +88,7 @@ async def get_chats(db: AsyncSession = Depends(get_db), cu: User = Depends(get_c
                 "id": other.id, "username": other.username,
                 "avatar_color": other.avatar_color,
                 "status": "online" if manager.is_online(str(other.id)) else "offline",
+                "is_verified": other.is_verified or False,
             } if other else None,
         })
 
@@ -141,6 +144,7 @@ async def get_members(
                 "avatar_color": u.avatar_color,
                 "status": "online" if manager.is_online(str(u.id)) else "offline",
                 "role": m.role or "member",
+                "is_verified": u.is_verified or False,
             })
     return out
 
@@ -297,3 +301,69 @@ async def remove_member(
         await db.delete(target)
         await db.commit()
     return {"status": "ok"}
+
+
+class ChatSettingsRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    avatar_color: Optional[str] = None
+
+
+@router.put("/{chat_id}/settings")
+async def update_chat_settings(
+    chat_id: int, data: ChatSettingsRequest,
+    db: AsyncSession = Depends(get_db), cu: User = Depends(get_current_user)
+):
+    my_mem = (await db.execute(
+        select(ChatMember).where(and_(ChatMember.chat_id == chat_id, ChatMember.user_id == cu.id))
+    )).scalar_one_or_none()
+    if not my_mem or my_mem.role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Нет прав")
+
+    chat = await db.get(Chat, chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if chat.type == ChatType.PERSONAL:
+        raise HTTPException(status_code=400, detail="Личный чат нельзя редактировать")
+
+    if data.name and data.name.strip():
+        chat.name = data.name.strip()[:100]
+    if data.description is not None:
+        chat.description = data.description[:500]
+    if data.avatar_color and data.avatar_color.startswith('#') and len(data.avatar_color) in (4, 7):
+        chat.avatar_color = data.avatar_color
+
+    await db.commit()
+    return {"status": "ok", "name": chat.name, "description": chat.description, "avatar_color": chat.avatar_color}
+
+
+@router.get("/{chat_id}/info")
+async def get_chat_info(
+    chat_id: int,
+    db: AsyncSession = Depends(get_db), cu: User = Depends(get_current_user)
+):
+    mem = (await db.execute(
+        select(ChatMember).where(and_(ChatMember.chat_id == chat_id, ChatMember.user_id == cu.id))
+    )).scalar_one_or_none()
+    if not mem:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+
+    chat = await db.get(Chat, chat_id)
+    if not chat:
+        raise HTTPException(status_code=404)
+
+    member_count = len((await db.execute(
+        select(ChatMember).where(ChatMember.chat_id == chat_id)
+    )).scalars().all())
+
+    return {
+        "id": chat.id,
+        "name": chat.name,
+        "description": chat.description or "",
+        "avatar_color": chat.avatar_color,
+        "is_channel": chat.is_channel or False,
+        "is_verified": chat.is_verified or False,
+        "member_count": member_count,
+        "my_role": mem.role or "member",
+        "owner_id": chat.owner_id,
+    }

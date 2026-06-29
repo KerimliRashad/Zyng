@@ -138,12 +138,15 @@ async def handle(uid: str, data: dict):
     # WebRTC signaling for voice/video calls
     elif t == "call_offer":
         target_uid = str(data.get("to_user_id"))
+        async with AsyncSessionLocal() as db:
+            caller = await db.get(User, int(uid))
         await manager.send_to_user(target_uid, {
             "type": "call_offer",
             "from_user_id": int(uid),
-            "from_name": data.get("from_name", ""),
+            "from_name": data.get("from_name", "") or (caller.username if caller else ""),
+            "from_color": caller.avatar_color if caller else "#5288c1",
             "sdp": data.get("sdp"),
-            "call_type": data.get("call_type", "voice"),  # voice or video
+            "call_type": data.get("call_type", "voice"),
         })
 
     elif t == "call_answer":

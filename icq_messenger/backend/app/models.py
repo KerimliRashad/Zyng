@@ -46,6 +46,7 @@ class Chat(Base):
     description = Column(String(500), nullable=True)
     avatar_color = Column(String(7), default="#5B8DEF")
     is_channel = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -106,6 +106,42 @@ async def toggle_ban(user_id: int, db: AsyncSession = Depends(get_db), cu: User 
     return {"is_banned": u.is_banned}
 
 
+@router.post("/chats/{chat_id}/verify")
+async def toggle_chat_verify(chat_id: int, db: AsyncSession = Depends(get_db), cu: User = Depends(require_admin)):
+    chat = await db.get(Chat, chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    chat.is_verified = not (chat.is_verified or False)
+    await db.commit()
+    # notify all members
+    mems = (await db.execute(select(ChatMember).where(ChatMember.chat_id == chat_id))).scalars().all()
+    for m in mems:
+        await manager.send_to_user(str(m.user_id), {
+            "type": "chat_verified",
+            "chat_id": chat_id,
+            "is_verified": chat.is_verified,
+        })
+    return {"is_verified": chat.is_verified}
+
+
+@router.get("/chats")
+async def list_chats(q: str = "", db: AsyncSession = Depends(get_db), cu: User = Depends(require_admin)):
+    query = select(Chat).where(Chat.type != ChatType.PERSONAL)
+    if q:
+        query = query.where(Chat.name.ilike(f"%{q}%"))
+    query = query.order_by(Chat.id.desc()).limit(100)
+    chats = (await db.execute(query)).scalars().all()
+    out = []
+    for c in chats:
+        mc = (await db.execute(select(func.count(ChatMember.id)).where(ChatMember.chat_id == c.id))).scalar()
+        out.append({
+            "id": c.id, "name": c.name, "type": c.type.value,
+            "avatar_color": c.avatar_color, "is_verified": c.is_verified or False,
+            "is_channel": c.is_channel or False, "member_count": mc,
+        })
+    return out
+
+
 @router.post("/stats/send")
 async def send_stats_to_admin(db: AsyncSession = Depends(get_db), cu: User = Depends(require_admin)):
     stats = await get_stats(db=db, cu=cu)

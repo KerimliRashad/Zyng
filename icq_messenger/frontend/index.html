@@ -89,8 +89,8 @@
     <div id="chat-view">
       <div class="chat-head">
         <button class="back-btn" id="back-btn" onclick="goBack()">‹</button>
-        <div class="avatar" id="ch-av"></div>
-        <div class="ch-info">
+        <div class="avatar" id="ch-av" onclick="onChatHeaderClick()" style="cursor:pointer"></div>
+        <div class="ch-info" onclick="onChatHeaderClick()" style="cursor:pointer">
           <div class="ch-name" id="ch-name"></div>
           <div class="ch-status" id="ch-status"></div>
         </div>
@@ -187,14 +187,53 @@
 
 <!-- Call overlay -->
 <div id="call-overlay" class="hidden">
-  <div id="call-video-wrap">
+  <!-- Video (hidden until video call) -->
+  <div id="call-video-wrap" style="display:none">
     <video id="remote-video" autoplay playsinline></video>
     <video id="local-video" autoplay playsinline muted></video>
   </div>
-  <div class="call-avatar" id="call-av"></div>
-  <div class="call-name" id="call-name"></div>
-  <div class="call-status" id="call-status">Вызов...</div>
+  <!-- Audio-only UI -->
+  <div id="call-audio-ui">
+    <div class="call-avatar" id="call-av"></div>
+    <div class="call-name" id="call-name"></div>
+    <div class="call-status" id="call-status">Вызов...</div>
+  </div>
   <div class="call-actions" id="call-actions"></div>
+  <!-- Hidden audio for remote stream in voice calls -->
+  <audio id="remote-audio" autoplay playsinline></audio>
+</div>
+
+<!-- User Profile View Modal -->
+<div id="user-profile-modal" class="overlay hidden" onclick="onOverlayClick(event,'user-profile-modal')">
+  <div class="modal-box" style="max-width:360px;text-align:center">
+    <button class="ico-btn" onclick="closeModalById('user-profile-modal')" style="position:absolute;top:14px;right:14px">✕</button>
+    <div id="up-avatar" class="avatar" style="width:80px;height:80px;font-size:32px;margin:0 auto 12px"></div>
+    <div id="up-name" style="font-size:20px;font-weight:800;margin-bottom:4px"></div>
+    <div id="up-status" style="font-size:13px;margin-bottom:4px"></div>
+    <div id="up-status-msg" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
+    <div id="up-id" style="font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+    <div id="up-mutual" style="font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+    <div id="up-actions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"></div>
+  </div>
+</div>
+
+<!-- Group Settings Modal -->
+<div id="grp-settings-modal" class="overlay hidden" onclick="onOverlayClick(event,'grp-settings-modal')">
+  <div class="modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin:0">⚙️ Настройки</h3>
+      <button class="ico-btn" onclick="closeModalById('grp-settings-modal')">✕</button>
+    </div>
+    <div style="display:flex;justify-content:center;margin-bottom:12px">
+      <div id="gs-avatar" class="avatar sq" style="width:72px;height:72px;font-size:28px;cursor:default"></div>
+    </div>
+    <div class="color-grid" id="gs-colors"></div>
+    <input class="field" id="gs-name" placeholder="Название группы / канала">
+    <textarea class="field" id="gs-desc" placeholder="Описание" rows="3" style="resize:none"></textarea>
+    <button class="btn" onclick="saveGroupSettings()">Сохранить</button>
+    <button class="btn-sec" onclick="closeModalById('grp-settings-modal')">Отмена</button>
+    <div class="errmsg" id="gs-err"></div>
+  </div>
 </div>
 
 <!-- Profile Edit Modal -->
@@ -228,13 +267,26 @@
     <!-- Stats card -->
     <div id="admin-stats" class="admin-stats"></div>
 
-    <div style="display:flex;gap:8px;margin:12px 0 8px">
-      <input class="field" id="admin-search" placeholder="Поиск пользователя..." oninput="adminSearch()" style="margin:0;flex:1">
-      <button class="btn" onclick="adminLoadStats()" style="padding:0 14px;white-space:nowrap">📊 Обновить</button>
-      <button class="btn" onclick="adminSendStats()" style="padding:0 14px;white-space:nowrap;background:var(--online)">📨 Отправить</button>
+    <div style="display:flex;gap:6px;margin:12px 0 6px">
+      <button class="stab active" id="atab-users" onclick="showAdminTab('users')" style="flex:1">👥 Пользователи</button>
+      <button class="stab" id="atab-chats" onclick="showAdminTab('chats')" style="flex:1">💬 Группы</button>
     </div>
 
-    <div id="admin-users" class="admin-users"></div>
+    <div id="apanel-users">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input class="field" id="admin-search" placeholder="Поиск..." oninput="adminSearch()" style="margin:0;flex:1">
+        <button class="btn" onclick="adminLoadStats()" style="padding:0 12px;white-space:nowrap">🔄</button>
+        <button class="btn" onclick="adminSendStats()" style="padding:0 12px;white-space:nowrap;background:var(--online)">📨</button>
+      </div>
+      <div id="admin-users" class="admin-users"></div>
+    </div>
+
+    <div id="apanel-chats" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input class="field" id="admin-chat-search" placeholder="Поиск группы/канала..." oninput="adminChatSearch()" style="margin:0;flex:1">
+      </div>
+      <div id="admin-chats" class="admin-users"></div>
+    </div>
   </div>
 </div>
 

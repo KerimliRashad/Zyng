@@ -228,6 +228,73 @@ async def update_me(
     }
 
 
+@router.get("/profile/{user_id}")
+async def get_profile(user_id: int, db: AsyncSession = Depends(get_db), cu: User = Depends(get_current_user)):
+    u = await db.get(User, user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # mutual friends count
+    my_friends_res = await db.execute(
+        select(FriendRequest).where(
+            and_(or_(FriendRequest.sender_id == cu.id, FriendRequest.receiver_id == cu.id),
+                 FriendRequest.status == "accepted")
+        )
+    )
+    my_ids = set()
+    for r in my_friends_res.scalars().all():
+        my_ids.add(r.receiver_id if r.sender_id == cu.id else r.sender_id)
+
+    their_res = await db.execute(
+        select(FriendRequest).where(
+            and_(or_(FriendRequest.sender_id == user_id, FriendRequest.receiver_id == user_id),
+                 FriendRequest.status == "accepted")
+        )
+    )
+    their_ids = set()
+    for r in their_res.scalars().all():
+        their_ids.add(r.receiver_id if r.sender_id == user_id else r.sender_id)
+
+    mutual = len(my_ids & their_ids)
+    is_friend = user_id in my_ids
+
+    # check pending request
+    pending = (await db.execute(
+        select(FriendRequest).where(
+            or_(
+                and_(FriendRequest.sender_id == cu.id, FriendRequest.receiver_id == user_id, FriendRequest.status == "pending"),
+                and_(FriendRequest.sender_id == user_id, FriendRequest.receiver_id == cu.id, FriendRequest.status == "pending"),
+            )
+        )
+    )).scalar_one_or_none()
+
+    # shared chat
+    chat_id = None
+    cm_res = await db.execute(select(ChatMember).where(ChatMember.user_id == cu.id))
+    for cm in cm_res.scalars().all():
+        other = (await db.execute(
+            select(ChatMember).where(and_(ChatMember.chat_id == cm.chat_id, ChatMember.user_id == user_id))
+        )).scalar_one_or_none()
+        if other:
+            chat_id = cm.chat_id
+            break
+
+    return {
+        "id": u.id,
+        "username": u.username,
+        "avatar_color": u.avatar_color,
+        "status": "online" if manager.is_online(str(u.id)) else "offline",
+        "status_message": u.status_message or "",
+        "is_verified": u.is_verified or False,
+        "is_admin": u.is_admin,
+        "mutual_friends": mutual,
+        "is_friend": is_friend,
+        "has_pending": bool(pending),
+        "chat_id": chat_id,
+        "created_at": u.created_at.isoformat() if u.created_at else "",
+    }
+
+
 @router.get("/pending-requests")
 async def get_pending_requests(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(

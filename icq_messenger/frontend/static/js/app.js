@@ -68,6 +68,43 @@ function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
 function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 function isMobile() { return window.innerWidth <= 680; }
 
+// ── Push Notifications & Sound ────────────────────────────────────────────────
+let notifAudioCtx = null;
+
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function pushNotify(title, body) {
+  // Browser push notification
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try {
+      const n = new Notification(title, { body, icon: '/favicon.ico', badge: '/favicon.ico' });
+      setTimeout(() => n.close(), 5000);
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch {}
+  }
+  // Notification sound (short beep)
+  playNotifSound();
+}
+
+function playNotifSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(1200, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.12);
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    o.start(); o.stop(ctx.currentTime + 0.15);
+    setTimeout(() => ctx.close(), 300);
+  } catch {}
+}
+
 // ── App init ──────────────────────────────────────────────────────────────────
 function showApp() {
   hide('auth-screen');
@@ -77,6 +114,7 @@ function showApp() {
   loadFriends();
   loadChats();
   loadPending();
+  requestNotifPermission();
 }
 
 function doLogout() {
@@ -182,7 +220,7 @@ function onWS(msg) {
       if (!msg.is_mine) {
         const preview = msg.file_type?.startsWith('audio/') ? '🎤 Голосовое' :
                         msg.file_name ? '📎 ' + msg.file_name : (msg.text || 'Сообщение');
-        notify(msg.sender_name, preview);
+        notify(msg.sender_name, preview, true);
       }
       break;
     case 'typing':
@@ -195,7 +233,7 @@ function onWS(msg) {
       loadChats();
       break;
     case 'friend_request':
-      loadPending(); notify('Запрос в друзья', 'от ' + msg.from_name);
+      loadPending(); notify('Запрос в друзья', 'от ' + msg.from_name, true);
       break;
     case 'friend_accepted':
       loadFriends(); loadChats(); notify('Jeff', msg.username + ' принял запрос');
@@ -225,12 +263,24 @@ function onWS(msg) {
       notify('Аккаунт заблокирован', 'Обратитесь к администратору');
       setTimeout(doLogout, 2000);
       break;
+    case 'chat_verified': {
+      const c = chats.find(ch => ch.id === msg.chat_id);
+      if (c) { c.is_verified = msg.is_verified; renderChats(); }
+      if (activeChatId === msg.chat_id) {
+        const badge = msg.is_verified ? ' <span class="verified">✓</span>' : '';
+        const nm = document.getElementById('ch-name');
+        if (nm) nm.innerHTML = nm.innerHTML.replace(/<span class="verified">.*?<\/span>/g, '') + badge;
+      }
+      notify(msg.is_verified ? '✅ Верифицировано' : 'Верификация снята',
+             chats.find(c => c.id === msg.chat_id)?.name || 'Чат');
+      break;
+    }
     case 'call_offer':
       incomingSdp = msg.sdp;
       callTargetId = msg.from_user_id;
       callType = msg.call_type || 'voice';
       isCaller = false;
-      showIncomingCall(msg.from_name, msg.call_type || 'voice');
+      showIncomingCall(msg.from_name, msg.call_type || 'voice', msg.from_color);
       break;
     case 'call_answer':
       if (pc) pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(console.error);
@@ -396,7 +446,7 @@ function renderChats() {
     d.innerHTML = `
       <div class="avatar ${isGroup ? 'sq' : ''}" style="background:${col}">${nm[0].toUpperCase()}</div>
       <div class="c-meta">
-        <div class="c-name">${x(nm)}${c.is_channel ? '<span class="channel-badge">канал</span>' : (isGroup ? '<span class="group-badge">группа</span>' : '')}</div>
+        <div class="c-name">${x(nm)}${c.is_verified ? '<span class="verified" title="Верифицировано">✓</span>' : ''}${c.is_channel ? '<span class="channel-badge">канал</span>' : (isGroup ? '<span class="group-badge">группа</span>' : '')}</div>
         <div class="c-sub">${x(sub) || '&nbsp;'}</div>
       </div>
       <div class="c-right">
@@ -715,28 +765,59 @@ async function loadMembers() {
   const list = document.getElementById('mp-list'); list.innerHTML = '';
   mems.forEach(m => {
     const d = document.createElement('div'); d.className = 'mp-item';
+    d.style.cursor = 'pointer';
     d.innerHTML = `
       <div class="avatar sm" style="background:${m.avatar_color}">${m.username[0].toUpperCase()}</div>
-      <div class="mp-name">${x(m.username)}</div>
+      <div class="mp-name">${x(m.username)}${m.is_verified ? ' <span class="verified">✓</span>' : ''}</div>
       <div class="mp-role">${m.role === 'owner' ? '👑' : m.role === 'admin' ? '⭐' : ''}</div>`;
+    d.onclick = () => openUserProfile(m.id);
     list.appendChild(d);
   });
 }
 
 // ── Notification ──────────────────────────────────────────────────────────────
-function notify(title, body) {
+function notify(title, body, push = false) {
   const el = document.getElementById('notif');
   el.innerHTML = `<div class="notif-t">${x(title)}</div><div class="notif-b">${x(body)}</div>`;
   el.classList.remove('hidden');
   clearTimeout(notifTimer);
   notifTimer = setTimeout(() => el.classList.add('hidden'), 4000);
+  if (push) pushNotify(title, body);
 }
 
 // ══════════════════ WEBRTC CALLS ══════════════════════════════════════════════
 const ICE = { iceServers: [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.services.mozilla.com' },
 ] };
+
+// Ringtone (generated via Web Audio)
+let ringCtx = null, ringNode = null;
+function startRing() {
+  try {
+    ringCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep() {
+      if (!ringCtx) return;
+      const o = ringCtx.createOscillator();
+      const g = ringCtx.createGain();
+      o.connect(g); g.connect(ringCtx.destination);
+      o.frequency.setValueAtTime(880, ringCtx.currentTime);
+      o.frequency.setValueAtTime(1100, ringCtx.currentTime + 0.2);
+      g.gain.setValueAtTime(0.3, ringCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ringCtx.currentTime + 0.5);
+      o.start(); o.stop(ringCtx.currentTime + 0.5);
+    }
+    beep();
+    ringNode = setInterval(beep, 1200);
+    if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
+  } catch {}
+}
+function stopRing() {
+  clearInterval(ringNode); ringNode = null;
+  if (ringCtx) { try { ringCtx.close(); } catch {} ringCtx = null; }
+  if (navigator.vibrate) navigator.vibrate(0);
+}
 
 async function startCall(type) {
   if (!activeChatId || !activeChat?.other_user) return;
@@ -745,61 +826,100 @@ async function startCall(type) {
 
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
-  } catch { notify('Ошибка', 'Нет доступа к ' + (type === 'video' ? 'камере' : 'микрофону')); return; }
+  } catch (e) {
+    notify('Ошибка', 'Нет доступа к ' + (type === 'video' ? 'камере/микрофону' : 'микрофону') + '. Нужен HTTPS.');
+    return;
+  }
 
   pc = newPC();
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  if (type === 'video') document.getElementById('local-video').srcObject = localStream;
+
+  if (type === 'video') {
+    document.getElementById('local-video').srcObject = localStream;
+  }
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-
   wsSend({ type: 'call_offer', to_user_id: callTargetId, from_name: me.username, sdp: offer, call_type: type });
-  showCallUI(activeChat.other_user.username, activeChat.other_user.avatar_color, 'Вызов...', false);
+
+  showCallUI(activeChat.other_user.username, activeChat.other_user.avatar_color, '📞 Вызов...', false);
 }
 
-function showIncomingCall(fromName, type) {
-  const col = '#5288c1';
-  showCallUI(fromName, col, (type === 'video' ? '📹 Входящий видеозвонок' : '📞 Входящий звонок'), true);
+function showIncomingCall(fromName, type, fromColor) {
+  stopRing(); startRing();
+  showCallUI(fromName, fromColor || '#5288c1',
+    type === 'video' ? '📹 Входящий видеозвонок' : '📞 Входящий звонок', true);
+  // Push notification
+  pushNotify(type === 'video' ? '📹 Видеозвонок' : '📞 Входящий звонок', 'от ' + fromName);
 }
 
 function showCallUI(name, color, status, incoming) {
   const av = document.getElementById('call-av');
-  av.style.background = color; av.textContent = (name || '?')[0].toUpperCase();
+  av.style.background = color || '#5288c1';
+  av.textContent = (name || '?')[0].toUpperCase();
+  av.className = 'call-avatar' + (incoming ? '' : ' active');
   document.getElementById('call-name').textContent = name || '';
   document.getElementById('call-status').textContent = status;
   document.getElementById('call-video-wrap').style.display = 'none';
-  renderCallActions(!incoming, incoming);
-  show('call-overlay');
+  document.getElementById('call-audio-ui').style.display = 'flex';
+  renderCallActions(!incoming && !isCaller, incoming);
+  document.getElementById('call-overlay').classList.remove('hidden');
 }
 
 function renderCallActions(active = false, incoming = false) {
   const el = document.getElementById('call-actions');
   if (incoming) {
     el.innerHTML = `
-      <button class="call-btn accept" onclick="acceptIncomingCall()">📞</button>
-      <button class="call-btn end" onclick="rejectCall()">📵</button>`;
+      <div style="text-align:center">
+        <button class="call-btn accept" onclick="acceptIncomingCall()" title="Принять">📞</button>
+        <div style="font-size:11px;color:var(--online);margin-top:6px">Принять</div>
+      </div>
+      <div style="text-align:center">
+        <button class="call-btn end" onclick="rejectCall()" title="Отклонить">📵</button>
+        <div style="font-size:11px;color:var(--danger);margin-top:6px">Отклонить</div>
+      </div>`;
   } else if (active) {
     el.innerHTML = `
-      <button class="call-btn mute" id="mute-btn" onclick="toggleMute()">${isMuted ? '🔇' : '🎤'}</button>
-      <button class="call-btn end" onclick="endCall()">📵</button>`;
+      <div style="text-align:center">
+        <button class="call-btn mute" id="mute-btn" onclick="toggleMute()" title="Микрофон">${isMuted ? '🔇' : '🎤'}</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">${isMuted ? 'Включить' : 'Выкл'}</div>
+      </div>
+      ${callType === 'video' ? `
+      <div style="text-align:center">
+        <button class="call-btn cam" id="cam-btn" onclick="toggleCam()" title="Камера">📷</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Камера</div>
+      </div>` : ''}
+      <div style="text-align:center">
+        <button class="call-btn end" onclick="endCall()" title="Завершить">📵</button>
+        <div style="font-size:11px;color:var(--danger);margin-top:6px">Завершить</div>
+      </div>`;
   } else {
-    el.innerHTML = `<button class="call-btn end" onclick="endCall()">📵</button>`;
+    el.innerHTML = `
+      <div style="text-align:center">
+        <button class="call-btn end" onclick="endCall()" title="Отменить">📵</button>
+        <div style="font-size:11px;color:var(--danger);margin-top:6px">Отменить</div>
+      </div>`;
   }
 }
 
 async function acceptIncomingCall() {
   if (!incomingSdp) return;
+  stopRing();
   isMuted = false;
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
-  } catch { notify('Ошибка', 'Нет доступа к ' + (callType === 'video' ? 'камере' : 'микрофону')); endCallClean(); return; }
+  } catch {
+    notify('Ошибка', 'Нет доступа к ' + (callType === 'video' ? 'камере/микрофону' : 'микрофону'));
+    endCallClean(); return;
+  }
 
   pc = newPC();
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
   if (callType === 'video') {
     document.getElementById('local-video').srcObject = localStream;
     document.getElementById('call-video-wrap').style.display = '';
+    document.getElementById('call-audio-ui').style.display = 'none';
   }
 
   await pc.setRemoteDescription(new RTCSessionDescription(incomingSdp));
@@ -807,6 +927,7 @@ async function acceptIncomingCall() {
   await pc.setLocalDescription(answer);
   wsSend({ type: 'call_answer', to_user_id: callTargetId, sdp: answer });
 
+  document.getElementById('call-av').classList.add('active');
   document.getElementById('call-status').textContent = callType === 'video' ? '📹 Видеозвонок' : '📞 Разговор';
   renderCallActions(true, false);
   incomingSdp = null;
@@ -814,14 +935,31 @@ async function acceptIncomingCall() {
 
 function newPC() {
   const p = new RTCPeerConnection(ICE);
-  p.ontrack = e => { document.getElementById('remote-video').srcObject = e.streams[0]; };
+  p.ontrack = e => {
+    if (callType === 'video') {
+      document.getElementById('remote-video').srcObject = e.streams[0];
+    } else {
+      // Voice call: route to audio element
+      document.getElementById('remote-audio').srcObject = e.streams[0];
+    }
+  };
   p.onicecandidate = e => {
-    if (e.candidate && callTargetId) wsSend({ type: 'call_ice', to_user_id: callTargetId, candidate: e.candidate });
+    if (e.candidate && callTargetId)
+      wsSend({ type: 'call_ice', to_user_id: callTargetId, candidate: e.candidate });
   };
   p.onconnectionstatechange = () => {
-    if (p.connectionState === 'connected') {
+    const st = p.connectionState;
+    if (st === 'connected') {
+      stopRing();
+      document.getElementById('call-av').classList.add('active');
       document.getElementById('call-status').textContent = callType === 'video' ? '📹 Видеозвонок' : '📞 Разговор';
       renderCallActions(true, false);
+      if (callType === 'video') {
+        document.getElementById('call-video-wrap').style.display = '';
+        document.getElementById('call-audio-ui').style.display = 'none';
+      }
+    } else if (st === 'failed' || st === 'disconnected') {
+      document.getElementById('call-status').textContent = '⚠️ Соединение прервано';
     }
   };
   return p;
@@ -835,6 +973,15 @@ function toggleMute() {
   if (btn) btn.textContent = isMuted ? '🔇' : '🎤';
 }
 
+function toggleCam() {
+  if (!localStream) return;
+  const tracks = localStream.getVideoTracks();
+  if (!tracks.length) return;
+  tracks[0].enabled = !tracks[0].enabled;
+  const btn = document.getElementById('cam-btn');
+  if (btn) btn.textContent = tracks[0].enabled ? '📷' : '🚫';
+}
+
 function endCall() {
   if (callTargetId) wsSend({ type: 'call_end', to_user_id: callTargetId });
   endCallClean();
@@ -846,12 +993,15 @@ function rejectCall() {
 }
 
 function endCallClean() {
+  stopRing();
   if (pc) { pc.close(); pc = null; }
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   document.getElementById('remote-video').srcObject = null;
+  document.getElementById('remote-audio').srcObject = null;
   document.getElementById('local-video').srcObject = null;
   document.getElementById('call-video-wrap').style.display = 'none';
-  hide('call-overlay');
+  document.getElementById('call-audio-ui').style.display = 'flex';
+  document.getElementById('call-overlay').classList.add('hidden');
   callTargetId = null; incomingSdp = null;
 }
 
@@ -915,7 +1065,154 @@ async function saveProfile() {
   notify('Профиль', 'Изменения сохранены');
 }
 
+// ── User Profile View ─────────────────────────────────────────────────────────
+async function openUserProfile(userId) {
+  const r = await api(`/api/users/profile/${userId}`);
+  if (!r || !r.ok) { notify('Ошибка', 'Профиль недоступен'); return; }
+  const u = await r.json();
+
+  const av = document.getElementById('up-avatar');
+  av.style.background = u.avatar_color;
+  av.textContent = u.username[0].toUpperCase();
+
+  const nameEl = document.getElementById('up-name');
+  nameEl.innerHTML = x(u.username) +
+    (u.is_verified ? ' <span class="verified" title="Верифицирован">✓</span>' : '') +
+    (u.is_admin ? ' 👑' : '');
+
+  const stEl = document.getElementById('up-status');
+  stEl.innerHTML = u.status === 'online'
+    ? '<span class="up-badge online">● В сети</span>'
+    : '<span class="up-badge offline">Не в сети</span>';
+
+  document.getElementById('up-status-msg').textContent = u.status_message || '';
+  document.getElementById('up-id').textContent = `ID: ${u.id}`;
+  document.getElementById('up-mutual').textContent = u.mutual_friends
+    ? `${u.mutual_friends} общих друга(ей)`
+    : '';
+
+  const act = document.getElementById('up-actions');
+  act.innerHTML = '';
+
+  if (userId !== me.id) {
+    if (u.chat_id) {
+      const btn = document.createElement('button');
+      btn.className = 'btn'; btn.textContent = '💬 Написать';
+      btn.onclick = () => { closeModalById('user-profile-modal'); openChat(u.chat_id); showSide('chats'); };
+      act.appendChild(btn);
+    } else if (!u.is_friend && !u.has_pending) {
+      const btn = document.createElement('button');
+      btn.className = 'btn'; btn.textContent = '➕ Добавить';
+      btn.onclick = async () => {
+        btn.disabled = true; btn.textContent = '...';
+        const res = await api(`/api/users/friend-request/${userId}`, 'POST');
+        btn.textContent = res?.ok ? 'Отправлено ✓' : 'Ошибка';
+      };
+      act.appendChild(btn);
+    } else if (u.has_pending) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-sec'; btn.textContent = 'Запрос отправлен';
+      btn.disabled = true;
+      act.appendChild(btn);
+    }
+  }
+
+  show('user-profile-modal');
+}
+
+// ── Chat Header Click ─────────────────────────────────────────────────────────
+function onChatHeaderClick() {
+  if (!activeChat) return;
+  if (activeChat.type === 'PERSONAL' && activeChat.other_user) {
+    openUserProfile(activeChat.other_user.id);
+  } else {
+    openGroupInfo();
+  }
+}
+
+// ── Group Info / Settings ─────────────────────────────────────────────────────
+let gsColor = null;
+
+async function openGroupInfo() {
+  if (!activeChatId || !activeChat) return;
+  const r = await api(`/api/chats/${activeChatId}/info`);
+  if (!r || !r.ok) return;
+  const info = await r.json();
+
+  const canEdit = info.my_role === 'owner' || info.my_role === 'admin';
+
+  gsColor = info.avatar_color;
+  const av = document.getElementById('gs-avatar');
+  av.style.background = gsColor;
+  av.textContent = (info.name || '?')[0].toUpperCase();
+
+  document.getElementById('gs-name').value = info.name || '';
+  document.getElementById('gs-desc').value = info.description || '';
+  document.getElementById('gs-err').textContent = '';
+
+  // Color grid — only for owner/admin
+  const grid = document.getElementById('gs-colors'); grid.innerHTML = '';
+  if (canEdit) {
+    AVATAR_COLORS.forEach(c => {
+      const dot = document.createElement('div');
+      dot.className = 'color-dot' + (c === gsColor ? ' selected' : '');
+      dot.style.background = c;
+      dot.onclick = () => {
+        gsColor = c;
+        document.querySelectorAll('#gs-colors .color-dot').forEach(d => d.classList.remove('selected'));
+        dot.classList.add('selected');
+        av.style.background = c;
+      };
+      grid.appendChild(dot);
+    });
+    document.getElementById('gs-name').disabled = false;
+    document.getElementById('gs-desc').disabled = false;
+    document.querySelector('#grp-settings-modal .btn').style.display = '';
+  } else {
+    document.getElementById('gs-name').disabled = true;
+    document.getElementById('gs-desc').disabled = true;
+    document.querySelector('#grp-settings-modal .btn').style.display = 'none';
+  }
+
+  show('grp-settings-modal');
+}
+
+async function saveGroupSettings() {
+  const errEl = document.getElementById('gs-err'); errEl.textContent = '';
+  const name = document.getElementById('gs-name').value.trim();
+  const desc = document.getElementById('gs-desc').value;
+  if (!name) { errEl.textContent = 'Введите название'; return; }
+
+  const r = await api(`/api/chats/${activeChatId}/settings`, 'PUT', {
+    name, description: desc, avatar_color: gsColor
+  });
+  if (!r || !r.ok) { errEl.textContent = 'Ошибка сохранения'; return; }
+  const d = await r.json();
+
+  // update local chat
+  if (activeChat) {
+    activeChat.name = d.name;
+    activeChat.description = d.description;
+    activeChat.avatar_color = d.avatar_color;
+  }
+  // update header
+  document.getElementById('ch-av').style.background = d.avatar_color;
+  document.getElementById('ch-av').textContent = d.name[0].toUpperCase();
+
+  closeModalById('grp-settings-modal');
+  await loadChats();
+  notify('Группа', 'Настройки сохранены');
+}
+
 // ── Admin Panel ───────────────────────────────────────────────────────────────
+function showAdminTab(tab) {
+  ['users','chats'].forEach(t => {
+    document.getElementById(`atab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`apanel-${t}`).style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'chats') adminLoadChats('');
+}
+
 async function openAdminPanel() {
   show('admin-modal');
   await adminLoadStats();
@@ -988,6 +1285,40 @@ async function adminBan(uid, btn) {
   const d = await r.json();
   btn.classList.toggle('on', d.is_banned);
   btn.textContent = d.is_banned ? 'Разблокировать' : 'Забанить';
+}
+
+function adminChatSearch() {
+  clearTimeout(searchTimer);
+  const q = document.getElementById('admin-chat-search').value.trim();
+  searchTimer = setTimeout(() => adminLoadChats(q), 300);
+}
+
+async function adminLoadChats(q = '') {
+  const r = await api(`/api/admin/chats?q=${encodeURIComponent(q)}`);
+  if (!r || !r.ok) return;
+  const chats = await r.json();
+  const el = document.getElementById('admin-chats'); el.innerHTML = '';
+  chats.forEach(c => {
+    const row = document.createElement('div'); row.className = 'admin-user-row'; row.id = `ac-${c.id}`;
+    const badge = c.is_channel ? '📢 канал' : '👥 группа';
+    row.innerHTML = `
+      <div class="avatar sq sm" style="background:${c.avatar_color}">${(c.name||'?')[0].toUpperCase()}</div>
+      <div class="admin-user-info">
+        <div class="admin-user-name">${x(c.name)}${c.is_verified ? ' <span class="verified">✓</span>' : ''}</div>
+        <div class="admin-user-sub">${badge} · ${c.member_count} участников · ID: ${c.id}</div>
+      </div>
+      <div class="admin-actions">
+        <button class="adm-btn verify ${c.is_verified ? 'on' : ''}" onclick="adminVerifyChat(${c.id},this)">${c.is_verified ? '✓ Верифицирован' : 'Верифицировать'}</button>
+      </div>`;
+    el.appendChild(row);
+  });
+}
+
+async function adminVerifyChat(chatId, btn) {
+  const r = await api(`/api/admin/chats/${chatId}/verify`, 'POST'); if (!r || !r.ok) return;
+  const d = await r.json();
+  btn.classList.toggle('on', d.is_verified);
+  btn.textContent = d.is_verified ? '✓ Верифицирован' : 'Верифицировать';
 }
 
 async function adminSendStats() {

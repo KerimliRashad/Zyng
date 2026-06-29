@@ -424,42 +424,54 @@ body {
 /* ══ CALL OVERLAY ══════════════════════════════════════ */
 #call-overlay {
   position: fixed; inset: 0;
-  background: linear-gradient(160deg, #1a2a3d, #0e1621);
-  z-index: 300; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 16px;
-  padding: 20px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(160deg, #1a2a3d 0%, #0a0f1a 100%);
+  z-index: 1000; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px;
+  padding: 30px 20px;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px));
 }
+#call-overlay:not(.hidden) { display: flex !important; }
+#call-audio-ui { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .call-avatar {
-  width: 100px; height: 100px; border-radius: 50%;
+  width: 110px; height: 110px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 40px; font-weight: 800; color: #fff;
-  box-shadow: 0 0 0 10px rgba(255,255,255,.06);
+  font-size: 44px; font-weight: 800; color: #fff;
+  box-shadow: 0 0 0 0 rgba(82,136,193,.6);
+  animation: callRing 1.5s ease-in-out infinite;
 }
-.call-name { font-size: 24px; font-weight: 700; }
-.call-status { font-size: 14px; color: var(--muted); }
-.call-actions { display: flex; gap: 24px; margin-top: 16px; }
+@keyframes callRing {
+  0% { box-shadow: 0 0 0 0 rgba(82,136,193,.6); }
+  70% { box-shadow: 0 0 0 24px rgba(82,136,193,0); }
+  100% { box-shadow: 0 0 0 0 rgba(82,136,193,0); }
+}
+.call-avatar.active { animation: none; box-shadow: 0 0 0 6px rgba(79,206,93,.3); }
+.call-name { font-size: 26px; font-weight: 800; text-align: center; }
+.call-status { font-size: 14px; color: var(--muted); letter-spacing: .5px; }
+.call-actions { display: flex; gap: 28px; margin-top: 10px; }
 .call-btn {
-  width: 68px; height: 68px; border-radius: 50%; border: none;
+  width: 72px; height: 72px; border-radius: 50%; border: none;
   cursor: pointer; display: flex; align-items: center;
-  justify-content: center; font-size: 28px;
-  transition: transform .15s;
+  justify-content: center; font-size: 30px;
+  transition: transform .15s, opacity .15s;
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
 }
-.call-btn:active { transform: scale(.9); }
-.call-btn.end { background: #f87171; }
-.call-btn.accept { background: var(--online); }
-.call-btn.mute { background: rgba(255,255,255,.12); }
+.call-btn:active { transform: scale(.88); opacity: .8; }
+.call-btn.end { background: #e74c3c; }
+.call-btn.accept { background: #2ecc71; }
+.call-btn.mute { background: rgba(255,255,255,.14); }
+.call-btn.cam { background: rgba(255,255,255,.14); }
 #call-video-wrap {
-  width: min(500px, 90vw); height: min(320px, 45vh);
-  border-radius: 18px; overflow: hidden; background: #000;
-  position: relative; display: none;
+  width: min(520px, 92vw); height: min(340px, 48vh);
+  border-radius: 20px; overflow: hidden; background: #000;
+  position: relative;
 }
 #remote-video { width: 100%; height: 100%; object-fit: cover; }
 #local-video {
-  position: absolute; bottom: 10px; right: 10px;
-  width: 110px; height: 82px; object-fit: cover;
-  border-radius: 10px; border: 2px solid rgba(255,255,255,.4);
+  position: absolute; bottom: 12px; right: 12px;
+  width: 120px; height: 88px; object-fit: cover;
+  border-radius: 12px; border: 2px solid rgba(255,255,255,.5);
+  background: #111;
 }
 
 /* HTTPS warning */
@@ -586,6 +598,17 @@ body {
 .adm-btn.verify.on { background: var(--acc); color: #fff; }
 .adm-btn.ban { background: rgba(248,113,113,.15); color: var(--danger); }
 .adm-btn.ban.on { background: var(--danger); color: #fff; }
+
+/* ══ USER PROFILE MODAL ════════════════════════════════════ */
+#user-profile-modal .modal-box { position: relative; }
+.up-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; margin: 0 4px;
+}
+.up-badge.online { background: rgba(79,206,93,.15); color: var(--online); }
+.up-badge.offline { background: rgba(255,255,255,.06); color: var(--muted); }
+.up-badge.admin { background: rgba(82,136,193,.2); color: var(--acc); }
+.up-badge.verified { background: rgba(82,136,193,.2); color: var(--acc); }
 
 /* ══ COLOR PICKER ═══════════════════════════════════════════ */
 .color-grid {
