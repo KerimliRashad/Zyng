@@ -43,7 +43,7 @@
     <div class="sbar-head">
       <button class="ico-btn burger" id="burger-btn" onclick="goBack()" style="display:none">☰</button>
       <div class="me-info">
-        <div class="avatar sm" id="me-av"></div>
+        <div class="avatar sm" id="me-av" onclick="openProfileModal()" style="cursor:pointer" title="Редактировать профиль"></div>
         <div style="min-width:0">
           <div class="me-name" id="me-name"></div>
           <div class="me-id" id="me-id"></div>
@@ -52,6 +52,7 @@
       <div style="display:flex;gap:2px;flex-shrink:0">
         <button class="ico-btn" title="Найти пользователя" onclick="openAddModal()">✏️</button>
         <button class="ico-btn" title="Новая группа/канал" onclick="openGroupModal()">👥</button>
+        <button class="ico-btn" id="admin-btn" title="Админ панель" onclick="openAdminPanel()" style="display:none">🛡</button>
         <button class="ico-btn" title="Выйти" onclick="doLogout()">⚙️</button>
       </div>
     </div>
@@ -114,6 +115,17 @@
             <span>📎</span>
             <span id="file-preview-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
             <button onclick="clearFile()">✕</button>
+          </div>
+
+          <!-- Voice recording indicator -->
+          <div id="rec-indicator" class="rec-indicator hidden">
+            <div class="rec-dot"></div>
+            <span id="rec-timer">0:00</span>
+            <div class="rec-waves">
+              <div class="rec-bar"></div><div class="rec-bar"></div><div class="rec-bar"></div>
+              <div class="rec-bar"></div><div class="rec-bar"></div>
+            </div>
+            <span style="font-size:12px;color:var(--muted)">Запись... нажми ⏹ для отправки</span>
           </div>
 
           <div class="inp-area">
@@ -183,6 +195,47 @@
   <div class="call-name" id="call-name"></div>
   <div class="call-status" id="call-status">Вызов...</div>
   <div class="call-actions" id="call-actions"></div>
+</div>
+
+<!-- Profile Edit Modal -->
+<div id="profile-modal" class="overlay hidden" onclick="onOverlayClick(event,'profile-modal')">
+  <div class="modal-box">
+    <h3>✏️ Редактировать профиль</h3>
+    <div style="display:flex;justify-content:center;margin-bottom:16px">
+      <div id="prof-av" class="avatar" style="width:72px;height:72px;font-size:28px;cursor:pointer" onclick="openColorPicker()" title="Нажми чтобы изменить цвет"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">Нажми на аватар чтобы выбрать цвет</div>
+    <div class="color-grid" id="color-grid"></div>
+    <input class="field" id="prof-username" placeholder="Логин">
+    <input class="field" id="prof-status" placeholder="Статус (необязательно)">
+    <div style="font-size:12px;color:var(--muted);margin:8px 0 4px">Сменить пароль (необязательно):</div>
+    <input class="field" type="password" id="prof-cur-pass" placeholder="Текущий пароль">
+    <input class="field" type="password" id="prof-new-pass" placeholder="Новый пароль">
+    <button class="btn" onclick="saveProfile()" style="margin-top:4px">Сохранить</button>
+    <button class="btn-sec" onclick="closeModalById('profile-modal')">Отмена</button>
+    <div class="errmsg" id="prof-err"></div>
+  </div>
+</div>
+
+<!-- Admin Panel Modal -->
+<div id="admin-modal" class="overlay hidden" onclick="onOverlayClick(event,'admin-modal')">
+  <div class="modal-box admin-modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin:0">🛡 Панель администратора</h3>
+      <button class="ico-btn" onclick="closeModalById('admin-modal')">✕</button>
+    </div>
+
+    <!-- Stats card -->
+    <div id="admin-stats" class="admin-stats"></div>
+
+    <div style="display:flex;gap:8px;margin:12px 0 8px">
+      <input class="field" id="admin-search" placeholder="Поиск пользователя..." oninput="adminSearch()" style="margin:0;flex:1">
+      <button class="btn" onclick="adminLoadStats()" style="padding:0 14px;white-space:nowrap">📊 Обновить</button>
+      <button class="btn" onclick="adminSendStats()" style="padding:0 14px;white-space:nowrap;background:var(--online)">📨 Отправить</button>
+    </div>
+
+    <div id="admin-users" class="admin-users"></div>
+  </div>
 </div>
 
 <div id="notif" class="notif hidden"></div>

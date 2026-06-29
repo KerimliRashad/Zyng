@@ -35,6 +35,9 @@ class ConnectionManager:
     def is_online(self, user_id: str) -> bool:
         return user_id in self.active and len(self.active[user_id]) > 0
 
+    def get_online_users(self) -> list:
+        return [uid for uid, sockets in self.active.items() if sockets]
+
     async def send_to_user(self, user_id: str, data: dict):
         if user_id in self.active:
             dead = set()

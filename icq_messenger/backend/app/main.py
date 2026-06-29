@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.database import init_db
-from app.api import auth, users, chats, ws, upload
+from app.api import auth, users, chats, ws, upload, admin
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(users.router)
 app.include_router(chats.router)
 app.include_router(ws.router)
 app.include_router(upload.router)
+app.include_router(admin.router)
 
 # Serve uploaded files
 UPLOAD_DIR = "/app/uploads"

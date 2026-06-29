@@ -23,6 +23,8 @@ class User(Base):
     avatar_color = Column(String(7), default="#5B8DEF")
     status = Column(String(20), default="offline")
     status_message = Column(String(255), default="")
+    is_verified = Column(Boolean, default=False)
+    is_banned = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     @property

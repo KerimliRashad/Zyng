@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
+from pydantic import BaseModel
+from typing import Optional
 from app.database import get_db
 from app.models import User, FriendRequest, Chat, ChatMember, ChatType
-from app.auth import get_current_user
+from app.auth import get_current_user, hash_password, verify_password
 from app.websocket.manager import manager
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -29,6 +31,7 @@ async def search_users(q: str, db: AsyncSession = Depends(get_db), current_user:
             "username": u.username,
             "avatar_color": u.avatar_color,
             "status": "online" if manager.is_online(str(u.id)) else "offline",
+            "is_verified": u.is_verified or False,
         }
         for u in users
     ]
@@ -164,6 +167,65 @@ async def get_friends(db: AsyncSession = Depends(get_db), current_user: User = D
         })
 
     return friends
+
+
+class ProfileUpdate(BaseModel):
+    username: Optional[str] = None
+    avatar_color: Optional[str] = None
+    status_message: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+
+@router.get("/me")
+async def get_me(db: AsyncSession = Depends(get_db), cu: User = Depends(get_current_user)):
+    return {
+        "id": cu.id,
+        "username": cu.username,
+        "avatar_color": cu.avatar_color,
+        "status_message": cu.status_message or "",
+        "is_verified": cu.is_verified or False,
+        "is_admin": cu.is_admin,
+    }
+
+
+@router.put("/me")
+async def update_me(
+    data: ProfileUpdate,
+    db: AsyncSession = Depends(get_db), cu: User = Depends(get_current_user)
+):
+    if data.username and data.username.strip() != cu.username:
+        uname = data.username.strip()
+        if len(uname) < 3:
+            raise HTTPException(status_code=400, detail="Логин минимум 3 символа")
+        existing = (await db.execute(select(User).where(User.username == uname))).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=400, detail="Логин уже занят")
+        cu.username = uname
+
+    if data.avatar_color and data.avatar_color.startswith('#') and len(data.avatar_color) in (4, 7):
+        cu.avatar_color = data.avatar_color
+
+    if data.status_message is not None:
+        cu.status_message = data.status_message[:100]
+
+    if data.new_password:
+        if not data.current_password:
+            raise HTTPException(status_code=400, detail="Введите текущий пароль")
+        if not verify_password(data.current_password, cu.password_hash):
+            raise HTTPException(status_code=400, detail="Неверный текущий пароль")
+        if len(data.new_password) < 4:
+            raise HTTPException(status_code=400, detail="Пароль минимум 4 символа")
+        cu.password_hash = hash_password(data.new_password)
+
+    await db.commit()
+    return {
+        "id": cu.id,
+        "username": cu.username,
+        "avatar_color": cu.avatar_color,
+        "status_message": cu.status_message or "",
+        "is_verified": cu.is_verified or False,
+    }
 
 
 @router.get("/pending-requests")

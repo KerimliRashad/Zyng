@@ -159,8 +159,10 @@ function renderMe() {
   const av = document.getElementById('me-av');
   av.style.background = me.avatar_color;
   av.textContent = me.username[0].toUpperCase();
-  document.getElementById('me-name').textContent = me.username;
+  document.getElementById('me-name').innerHTML = x(me.username) +
+    (me.is_verified ? ' <span class="verified" title="Верифицирован">✓</span>' : '');
   document.getElementById('me-id').textContent = 'ID: ' + me.id + (me.is_admin ? ' 👑' : '');
+  if (me.is_admin) document.getElementById('admin-btn').style.display = '';
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -201,6 +203,27 @@ function onWS(msg) {
     case 'added_to_group':
       loadChats();
       notify(msg.is_channel ? 'Вас добавили в канал' : 'Вас добавили в группу', msg.chat_name);
+      break;
+    case 'system_message':
+      if (activeChatId) {
+        const d = document.createElement('div');
+        d.className = 'msg system';
+        d.innerHTML = `<div class="msg-bubble" style="background:rgba(255,255,255,.06);color:var(--muted);font-size:12px;white-space:pre-wrap;font-family:monospace">${x(msg.text)}</div>`;
+        document.getElementById('msg-list').appendChild(d);
+        scrollBottom();
+      }
+      break;
+    case 'account_update':
+      if (msg.is_verified !== undefined) {
+        me.is_verified = msg.is_verified;
+        localStorage.setItem('jf_me', JSON.stringify(me));
+        renderMe();
+        notify('Jeff', msg.is_verified ? '✅ Ваш аккаунт верифицирован!' : 'Верификация снята');
+      }
+      break;
+    case 'banned':
+      notify('Аккаунт заблокирован', 'Обратитесь к администратору');
+      setTimeout(doLogout, 2000);
       break;
     case 'call_offer':
       incomingSdp = msg.sdp;
@@ -334,7 +357,7 @@ async function doSearch(q, elId) {
     d.innerHTML = `
       <div class="avatar sm" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
       <div class="c-meta">
-        <div class="c-name" style="font-size:13px">${x(u.username)}</div>
+        <div class="c-name" style="font-size:13px">${x(u.username)}${u.is_verified ? ' <span class="verified" title="Верифицирован">✓</span>' : ''}</div>
         <div class="c-sub">ID: ${u.id} · ${u.status === 'online' ? '<span style="color:var(--online)">В сети</span>' : 'Не в сети'}</div>
       </div>
       <button class="add-btn" ${has ? 'disabled' : ''} onclick="sendReq(${u.id},this)">${has ? '✓' : 'Добавить'}</button>`;
@@ -563,8 +586,11 @@ function clearFile() { pendingFile = null; hide('file-preview'); document.getEle
 // ── Voice recording ───────────────────────────────────────────────────────────
 async function toggleVoiceRec() {
   const btn = document.getElementById('voice-rec-btn');
+  const ind = document.getElementById('rec-indicator');
   if (mediaRec && mediaRec.state === 'recording') {
-    mediaRec.stop(); btn.classList.remove('recording'); btn.textContent = '🎤';
+    mediaRec.stop();
+    btn.classList.remove('recording'); btn.textContent = '🎤';
+    ind.classList.add('hidden');
     clearInterval(recTimer); return;
   }
   try {
@@ -574,6 +600,7 @@ async function toggleVoiceRec() {
     mediaRec.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
     mediaRec.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
+      ind.classList.add('hidden');
       const blob = new Blob(recChunks, { type: mediaRec.mimeType || 'audio/webm' });
       const form = new FormData(); form.append('file', blob, 'voice.webm');
       try {
@@ -586,8 +613,13 @@ async function toggleVoiceRec() {
     };
     mediaRec.start(200);
     btn.classList.add('recording'); btn.textContent = '⏹';
-    recTimer = setInterval(() => { recSecs++; btn.title = 'Запись ' + fmtDur(recSecs); }, 1000);
-  } catch { notify('Ошибка', 'Нет доступа к микрофону'); }
+    ind.classList.remove('hidden');
+    document.getElementById('rec-timer').textContent = '0:00';
+    recTimer = setInterval(() => {
+      recSecs++;
+      document.getElementById('rec-timer').textContent = fmtDur(recSecs);
+    }, 1000);
+  } catch { notify('Ошибка', 'Нет доступа к микрофону (нужен HTTPS)'); }
 }
 
 // ── Emoji ─────────────────────────────────────────────────────────────────────
@@ -821,6 +853,146 @@ function endCallClean() {
   document.getElementById('call-video-wrap').style.display = 'none';
   hide('call-overlay');
   callTargetId = null; incomingSdp = null;
+}
+
+// ── Profile Edit ──────────────────────────────────────────────────────────────
+const AVATAR_COLORS = [
+  '#5B8DEF','#9b59b6','#e74c3c','#e67e22','#2ecc71','#1abc9c','#e91e8c',
+  '#3498db','#f39c12','#16a085','#8e44ad','#c0392b','#27ae60','#d35400',
+  '#2980b9','#7f8c8d','#f1c40f','#1a237e','#006064','#4a148c',
+];
+let selectedColor = null;
+
+function openProfileModal() {
+  selectedColor = me.avatar_color || '#5B8DEF';
+  document.getElementById('prof-username').value = me.username || '';
+  document.getElementById('prof-status').value = '';
+  document.getElementById('prof-cur-pass').value = '';
+  document.getElementById('prof-new-pass').value = '';
+  document.getElementById('prof-err').textContent = '';
+  // render avatar
+  const av = document.getElementById('prof-av');
+  av.style.background = selectedColor;
+  av.textContent = (me.username || '?')[0].toUpperCase();
+  // render color grid
+  const grid = document.getElementById('color-grid'); grid.innerHTML = '';
+  AVATAR_COLORS.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'color-dot' + (c === selectedColor ? ' selected' : '');
+    dot.style.background = c;
+    dot.onclick = () => {
+      selectedColor = c;
+      document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+      dot.classList.add('selected');
+      document.getElementById('prof-av').style.background = c;
+    };
+    grid.appendChild(dot);
+  });
+  // load status from server
+  api('/api/users/me').then(r => r?.json()).then(d => {
+    if (d) document.getElementById('prof-status').value = d.status_message || '';
+  });
+  show('profile-modal');
+}
+
+async function saveProfile() {
+  const errEl = document.getElementById('prof-err'); errEl.textContent = '';
+  const uname = document.getElementById('prof-username').value.trim();
+  const status = document.getElementById('prof-status').value;
+  const curPass = document.getElementById('prof-cur-pass').value;
+  const newPass = document.getElementById('prof-new-pass').value;
+
+  const body = { username: uname, avatar_color: selectedColor, status_message: status };
+  if (newPass) { body.current_password = curPass; body.new_password = newPass; }
+
+  const r = await api('/api/users/me', 'PUT', body);
+  if (!r) { errEl.textContent = 'Ошибка соединения'; return; }
+  if (!r.ok) { const d = await r.json(); errEl.textContent = d.detail || 'Ошибка'; return; }
+  const d = await r.json();
+  me.username = d.username; me.avatar_color = d.avatar_color; me.is_verified = d.is_verified;
+  localStorage.setItem('jf_me', JSON.stringify(me));
+  renderMe(); closeModalById('profile-modal');
+  notify('Профиль', 'Изменения сохранены');
+}
+
+// ── Admin Panel ───────────────────────────────────────────────────────────────
+async function openAdminPanel() {
+  show('admin-modal');
+  await adminLoadStats();
+  await adminLoadUsers('');
+}
+
+async function adminLoadStats() {
+  const r = await api('/api/admin/stats'); if (!r || !r.ok) return;
+  const s = await r.json();
+  const el = document.getElementById('admin-stats');
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-val">${s.total_users}</div><div class="stat-lbl">Пользователей</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--online)">${s.online_users}</div><div class="stat-lbl">Онлайн</div></div>
+    <div class="stat-card"><div class="stat-val">${s.new_users_today}</div><div class="stat-lbl">Новых сегодня</div></div>
+    <div class="stat-card"><div class="stat-val">${s.verified_users}</div><div class="stat-lbl">Верифицировано</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--danger)">${s.banned_users}</div><div class="stat-lbl">Заблокировано</div></div>
+    <div class="stat-card"><div class="stat-val">${s.total_messages}</div><div class="stat-lbl">Сообщений</div></div>
+    <div class="stat-card"><div class="stat-val">${s.msgs_today}</div><div class="stat-lbl">Сообщ. сегодня</div></div>
+    <div class="stat-card"><div class="stat-val">${s.total_chats}</div><div class="stat-lbl">Чатов</div></div>
+  `;
+}
+
+function adminSearch() {
+  clearTimeout(searchTimer);
+  const q = document.getElementById('admin-search').value.trim();
+  searchTimer = setTimeout(() => adminLoadUsers(q), 300);
+}
+
+async function adminLoadUsers(q = '') {
+  const r = await api(`/api/admin/users?q=${encodeURIComponent(q)}&limit=100`);
+  if (!r || !r.ok) return;
+  const users = await r.json();
+  const el = document.getElementById('admin-users'); el.innerHTML = '';
+  users.forEach(u => {
+    const row = document.createElement('div'); row.className = 'admin-user-row'; row.id = `au-${u.id}`;
+    const dot = u.status === 'online' ? `<span style="color:var(--online)">●</span>` : `<span style="color:var(--muted)">●</span>`;
+    row.innerHTML = `
+      <div class="avatar sm" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
+      <div class="admin-user-info">
+        <div class="admin-user-name">${x(u.username)}${u.is_verified ? ' <span class="verified">✓</span>' : ''}${u.is_admin ? ' 👑' : ''}</div>
+        <div class="admin-user-sub">${dot} ID: ${u.id} · ${u.created_at ? u.created_at.slice(0,10) : ''}</div>
+      </div>
+      <div class="admin-actions">
+        <button class="adm-btn verify ${u.is_verified ? 'on' : ''}" onclick="adminVerify(${u.id},this)">${u.is_verified ? '✓ Верифицирован' : 'Верифицировать'}</button>
+        ${!u.is_admin ? `<button class="adm-btn ban ${u.is_banned ? 'on' : ''}" onclick="adminBan(${u.id},this)">${u.is_banned ? 'Разблокировать' : 'Забанить'}</button>` : ''}
+      </div>`;
+    el.appendChild(row);
+  });
+}
+
+async function adminVerify(uid, btn) {
+  const r = await api(`/api/admin/users/${uid}/verify`, 'POST'); if (!r || !r.ok) return;
+  const d = await r.json();
+  btn.classList.toggle('on', d.is_verified);
+  btn.textContent = d.is_verified ? '✓ Верифицирован' : 'Верифицировать';
+  // update name badge
+  const row = document.getElementById(`au-${uid}`);
+  if (row) {
+    const nm = row.querySelector('.admin-user-name');
+    if (nm) {
+      nm.innerHTML = nm.innerHTML.replace(/<span class="verified">.*?<\/span>/g, '');
+      if (d.is_verified) nm.insertAdjacentHTML('afterbegin', '<span class="verified">✓</span> ');
+    }
+  }
+}
+
+async function adminBan(uid, btn) {
+  if (!confirm('Заблокировать / разблокировать пользователя?')) return;
+  const r = await api(`/api/admin/users/${uid}/ban`, 'POST'); if (!r || !r.ok) return;
+  const d = await r.json();
+  btn.classList.toggle('on', d.is_banned);
+  btn.textContent = d.is_banned ? 'Разблокировать' : 'Забанить';
+}
+
+async function adminSendStats() {
+  const r = await api('/api/admin/stats/send', 'POST');
+  if (r && r.ok) notify('Статистика', 'Отправлена в чат');
 }
 
 // ── Leave / Delete chat ───────────────────────────────────────────────────────
