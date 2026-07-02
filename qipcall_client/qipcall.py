@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.6"
+APP_VERSION = "2.7"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -556,9 +556,48 @@ class JeffTUN:
             return a != b
 
     def _show_update(self, latest):
-        # Показываем зелёную плашку с кнопкой прямо в окне
+        # Плашка в окне
         self._update_lbl.config(text=f"🎉 Доступно обновление {latest} (у тебя {APP_VERSION})")
         self.update_bar.pack(fill="x", padx=26, pady=(0, 12), before=self.txt.master)
+        # Всплывающее уведомление с версией + кнопка
+        self.toast(f"🎉 Новая версия {latest}!",
+                   f"У тебя v{APP_VERSION}. Обнови в один клик.",
+                   action="Обновить ⬇", action_cmd=self.do_self_update, color=OK)
+
+    # ── Красивое всплывающее уведомление (toast) ──
+    def toast(self, title, msg, action=None, action_cmd=None, color=ACC, ms=9000):
+        t = tk.Toplevel(self.root)
+        t.overrideredirect(True)
+        t.attributes("-topmost", True)
+        try: t.attributes("-alpha", 0.0)
+        except Exception: pass
+        w, h = 320, 92 if action else 74
+        sw = t.winfo_screenwidth(); sh = t.winfo_screenheight()
+        x = sw - w - 24; y = sh - h - 60
+        t.geometry(f"{w}x{h}+{x}+{y}")
+        outer = tk.Frame(t, bg=color)
+        outer.pack(fill="both", expand=True)
+        inner = tk.Frame(outer, bg=CARD)
+        inner.pack(fill="both", expand=True, padx=(3, 0))  # цветная полоса слева
+        top = tk.Frame(inner, bg=CARD); top.pack(fill="x", padx=14, pady=(10, 2))
+        tk.Label(top, text=title, bg=CARD, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(side="left")
+        tk.Button(top, text="✕", command=t.destroy, bg=CARD, fg=MUTED, relief="flat",
+                  bd=0, cursor="hand2", activebackground=CARD,
+                  font=("Segoe UI", 10)).pack(side="right")
+        tk.Label(inner, text=msg, bg=CARD, fg=MUTED, font=("Segoe UI", 9),
+                 anchor="w", justify="left").pack(fill="x", padx=14)
+        if action:
+            tk.Button(inner, text=action, command=lambda: (action_cmd() if action_cmd else None, t.destroy()),
+                      bg=color, fg="#0a0e17", relief="flat", bd=0, cursor="hand2",
+                      font=("Segoe UI", 9, "bold"), padx=12, pady=5).pack(anchor="e", padx=14, pady=(4, 8))
+        # плавное появление
+        def fade(a=0.0):
+            if a < 1.0:
+                try: t.attributes("-alpha", a)
+                except Exception: pass
+                t.after(20, lambda: fade(a + 0.1))
+        fade()
+        t.after(ms, t.destroy)
 
     # ── Окно настроек (полное, как в Happ) ──
     def open_settings(self):
@@ -926,6 +965,8 @@ class JeffTUN:
         self.status.config(text="● Подключено", fg=OK)
         self.btn.config(text="Отключиться", bg=DANGER, activebackground="#c0392b")
         self.info.config(text="VPN активен. Весь трафик идёт через сервер.", fg=OK)
+        nm = unquote(link.split("#", 1)[1]) if "#" in link else "Сервер"
+        self.toast("✅ Подключено", nm, color=OK, ms=3000)
 
     def disconnect(self):
         try: set_system_proxy(False)
