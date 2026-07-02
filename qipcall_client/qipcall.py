@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.8"
+APP_VERSION = "2.9"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -367,9 +367,10 @@ class JeffTUN:
         self.prefs = {}
 
         root.title(APP_NAME)
-        root.geometry("460x680")
+        root.geometry("460x720")
+        root.minsize(440, 560)
         root.configure(bg=BG)
-        root.resizable(False, False)
+        root.resizable(True, True)
 
         # Иконка окна / приложения
         self._logo_img = None
@@ -433,49 +434,55 @@ class JeffTUN:
         self._chip(paste_row, "✖ Очистить", lambda: self.txt.delete("1.0", "end"), "#2a3346").pack(side="left", padx=6)
         self._chip(paste_row, "💾 Сохранить", self.save, "#2a3346").pack(side="left")
 
-        # ── Список серверов (страны с флагами) ──
-        self.selected_idx = 0
-        self.server_rows = []
-        self.server_box = tk.Frame(root, bg=BG)
-        tk.Label(self.server_box, text="СЕРВЕРЫ", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=26, pady=(14, 4))
-        self.server_list = tk.Frame(self.server_box, bg=BG)
-        self.server_list.pack(fill="x", padx=20)
-        # Пока серверов нет — прячем
-        self.server_box.pack(fill="x")
-        self.server_box.pack_forget()
-
-        # ── Пинг ──
-        self.ping_lbl = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 10, "bold"))
-        self.ping_lbl.pack(pady=(12, 2))
-
-        # ── Статус + кнопка ──
-        self.status = tk.Label(root, text="● Отключено", bg=BG, fg=MUTED, font=("Segoe UI", 13, "bold"))
-        self.status.pack(pady=(4, 10))
-
+        # ══ НИЖНИЙ БЛОК — всегда виден (закреплён внизу) ══
+        # логотип + версия
+        tk.Label(root, text=f"JeffTUN v{APP_VERSION}  ·  t.me/jeffvpn", bg=BG, fg="#3a4256",
+                 font=("Segoe UI", 8)).pack(side="bottom", pady=(0, 8))
+        if getattr(self, "_logo_small", None):
+            tk.Label(root, image=self._logo_small, bg=BG).pack(side="bottom", pady=(2, 0))
+        self.info = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9),
+                             wraplength=410, justify="center")
+        self.info.pack(side="bottom", pady=(4, 4))
+        # нижние действия
+        row = tk.Frame(root, bg=BG); row.pack(side="bottom", pady=(4, 6))
+        self._chip(row, "🔄 Подписка", self.load_sub, CARD).pack(side="left", padx=4)
+        self._chip(row, "📶 Пинг", self.do_ping, CARD).pack(side="left", padx=4)
+        self._chip(row, "⬆ Обновить", self.update_sub, CARD).pack(side="left", padx=4)
+        # КНОПКА ПОДКЛЮЧЕНИЯ
         self.btn = tk.Button(root, text="Подключиться", command=self.toggle,
                              bg=ACC, fg="white", relief="flat", cursor="hand2",
                              font=("Segoe UI", 15, "bold"), width=22, height=2,
                              activebackground=ACC2, activeforeground="white", bd=0)
-        self.btn.pack(pady=4)
+        self.btn.pack(side="bottom", pady=6)
         self.btn.bind("<Enter>", lambda e: self.btn.config(bg=(DANGER if self.connected else ACC2)))
         self.btn.bind("<Leave>", lambda e: self.btn.config(bg=(DANGER if self.connected else ACC)))
+        self.status = tk.Label(root, text="● Отключено", bg=BG, fg=MUTED, font=("Segoe UI", 13, "bold"))
+        self.status.pack(side="bottom", pady=(6, 2))
+        self.ping_lbl = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 10, "bold"))
+        self.ping_lbl.pack(side="bottom", pady=(6, 0))
 
-        # ── Нижние действия ──
-        row = tk.Frame(root, bg=BG)
-        row.pack(pady=14)
-        self._chip(row, "🔄 Загрузить подписку", self.load_sub, CARD).pack(side="left", padx=4)
-        self._chip(row, "📶 Пинг", self.do_ping, CARD).pack(side="left", padx=4)
-        self._chip(row, "⬆ Обновить подписку", self.update_sub, CARD).pack(side="left", padx=4)
-
-        self.info = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9),
-                             wraplength=410, justify="center")
-        self.info.pack(pady=(6, 0))
-
-        tk.Label(root, text=f"JeffTUN v{APP_VERSION}", bg=BG, fg="#3a4256",
-                 font=("Segoe UI", 8)).pack(side="bottom", pady=(0, 8))
-        if getattr(self, "_logo_small", None):
-            tk.Label(root, image=self._logo_small, bg=BG).pack(side="bottom", pady=(4, 0))
+        # ══ СПИСОК СЕРВЕРОВ — посередине, с прокруткой ══
+        self.selected_idx = 0
+        self.server_rows = []
+        self.server_box = tk.Frame(root, bg=BG)
+        tk.Label(self.server_box, text="СЕРВЕРЫ", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=26, pady=(10, 4))
+        scroll_wrap = tk.Frame(self.server_box, bg=BG)
+        scroll_wrap.pack(fill="both", expand=True, padx=20)
+        self._srv_canvas = tk.Canvas(scroll_wrap, bg=BG, highlightthickness=0)
+        srv_sb = ttk.Scrollbar(scroll_wrap, orient="vertical", command=self._srv_canvas.yview)
+        self.server_list = tk.Frame(self._srv_canvas, bg=BG)
+        self.server_list.bind("<Configure>",
+            lambda e: self._srv_canvas.configure(scrollregion=self._srv_canvas.bbox("all")))
+        self._srv_win = self._srv_canvas.create_window((0, 0), window=self.server_list, anchor="nw")
+        self._srv_canvas.bind("<Configure>",
+            lambda e: self._srv_canvas.itemconfig(self._srv_win, width=e.width))
+        self._srv_canvas.configure(yscrollcommand=srv_sb.set)
+        self._srv_canvas.pack(side="left", fill="both", expand=True)
+        srv_sb.pack(side="right", fill="y")
+        self._srv_canvas.bind_all("<MouseWheel>",
+            lambda e: self._srv_canvas.yview_scroll(int(-e.delta/120), "units"))
+        self.server_box.pack_forget()
 
         self.load_saved()
         self.refresh_from_box()
@@ -913,7 +920,7 @@ class JeffTUN:
             for w in (row, mid, arrow) + tuple(mid.winfo_children()):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
             self.server_rows.append(row)
-        self.server_box.pack(fill="x", before=self.ping_lbl)
+        self.server_box.pack(fill="both", expand=True)
 
     def select_server(self, idx):
         self.selected_idx = idx
