@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.9"
+APP_VERSION = "3.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -792,20 +792,46 @@ class JeffTUN:
         cur = sys.executable
         new = cur + ".new"
 
-        self._update_lbl.config(text="⏳ Скачиваю обновление...")
+        self._update_lbl.config(text="⏳ Скачиваю обновление... 0%")
         self.root.update()
+
+        def setlbl(txt):
+            self.root.after(0, lambda: self._update_lbl.config(text=txt))
 
         def worker():
             try:
-                import ssl
+                import ssl, shutil
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
                 req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
-                with urllib.request.urlopen(req, timeout=120, context=ctx) as r, open(new, "wb") as f:
-                    f.write(r.read())
+                # чистим прошлый недокачанный файл
+                try:
+                    if os.path.exists(new): os.remove(new)
+                except Exception:
+                    pass
+                with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
+                    total = int(r.headers.get("Content-Length", 0))
+                    done = 0
+                    with open(new, "wb") as f:
+                        while True:
+                            chunk = r.read(65536)
+                            if not chunk:
+                                break
+                            f.write(chunk); done += len(chunk)
+                            if total:
+                                setlbl(f"⏳ Скачиваю обновление... {done*100//total}%")
+                # проверка что файл реально скачался (не пустой/не обрезанный)
+                size = os.path.getsize(new)
+                if size < 1_000_000:
+                    raise Exception("файл повреждён, попробуй ещё раз")
+                setlbl("✅ Скачано, применяю...")
                 self.root.after(0, lambda: self._apply_update(cur, new))
             except Exception as e:
-                self.root.after(0, lambda: self._update_lbl.config(text=f"Ошибка загрузки: {e}"))
+                try:
+                    if os.path.exists(new): os.remove(new)
+                except Exception:
+                    pass
+                setlbl(f"Ошибка: {e}. Нажми «Обновить» ещё раз")
         threading.Thread(target=worker, daemon=True).start()
 
     def _apply_update(self, cur, new):
@@ -813,14 +839,18 @@ class JeffTUN:
             self.disconnect()
         try:
             if os.name == "nt":
-                # bat ждёт выхода приложения, подменяет exe и запускает заново
+                # bat ждёт выхода приложения, с повторами заменяет exe и запускает заново
                 bat = cur + "_upd.bat"
                 with open(bat, "w") as f:
                     f.write(
                         "@echo off\r\n"
-                        "timeout /t 2 /nobreak >nul\r\n"
-                        f'move /y "{new}" "{cur}" >nul\r\n'
+                        "ping 127.0.0.1 -n 3 >nul\r\n"
+                        ":retry\r\n"
+                        f'del /f /q "{cur}" >nul 2>&1\r\n'
+                        f'move /y "{new}" "{cur}" >nul 2>&1\r\n'
+                        f'if not exist "{cur}" (ping 127.0.0.1 -n 2 >nul & goto retry)\r\n'
                         f'start "" "{cur}"\r\n'
+                        f'del /f /q "{new}" >nul 2>&1\r\n'
                         f'del "%~f0"\r\n'
                     )
                 subprocess.Popen(["cmd", "/c", bat],
