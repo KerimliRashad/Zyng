@@ -97,3 +97,49 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── macOS ────────────────────────────────────────────────────────────────
+  macos:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+      - name: Download xray-core (macOS)
+        run: |
+          curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-macos-64.zip
+          mkdir -p xray_bin && unzip -o xray.zip -d xray_bin
+          cp xray_bin/xray qipcall_client/xray
+          chmod +x qipcall_client/xray
+      - name: Build .app
+        working-directory: qipcall_client
+        run: |
+          pyinstaller --noconfirm --onefile --windowed \
+            --name "JeffTON" \
+            --add-binary "xray:." \
+            qipcall.py
+      - name: Package .dmg
+        working-directory: qipcall_client
+        run: |
+          mkdir -p dmg_root
+          cp -R "dist/JeffTON.app" dmg_root/ 2>/dev/null || cp dist/JeffTON dmg_root/
+          ln -s /Applications dmg_root/Applications || true
+          hdiutil create -volname "JeffTON VPN" -srcfolder dmg_root -ov -format UDZO dist/JeffTON.dmg
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JeffTON-macOS
+          path: qipcall_client/dist/JeffTON.dmg
+      - name: Publish release (macOS)
+        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: qipcall-latest
+          name: JeffTON VPN
+          files: qipcall_client/dist/JeffTON.dmg
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

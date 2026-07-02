@@ -176,6 +176,9 @@ def build_xray_config(outbound: dict) -> dict:
 
 # ══ СИСТЕМНЫЙ ПРОКСИ WINDOWS ═════════════════════════════════════════════════
 def set_system_proxy(enable: bool):
+    if sys.platform == "darwin":
+        _set_mac_proxy(enable)
+        return
     if os.name != "nt":
         _set_linux_proxy(enable)
         return
@@ -194,6 +197,29 @@ def set_system_proxy(enable: bool):
     internet = ctypes.windll.Wininet
     internet.InternetSetOptionW(0, 39, 0, 0)
     internet.InternetSetOptionW(0, 37, 0, 0)
+
+
+def _set_mac_proxy(enable: bool):
+    """Системный прокси в macOS через networksetup (Wi-Fi + Ethernet)."""
+    def services():
+        try:
+            out = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode()
+            return [s.strip() for s in out.splitlines()[1:] if s.strip() and not s.startswith("*")]
+        except Exception:
+            return ["Wi-Fi"]
+
+    for svc in services():
+        try:
+            if enable:
+                subprocess.run(["networksetup", "-setwebproxy", svc, "127.0.0.1", str(HTTP_PORT)], check=False)
+                subprocess.run(["networksetup", "-setsecurewebproxy", svc, "127.0.0.1", str(HTTP_PORT)], check=False)
+                subprocess.run(["networksetup", "-setsocksfirewallproxy", svc, "127.0.0.1", str(SOCKS_PORT)], check=False)
+            else:
+                subprocess.run(["networksetup", "-setwebproxystate", svc, "off"], check=False)
+                subprocess.run(["networksetup", "-setsecurewebproxystate", svc, "off"], check=False)
+                subprocess.run(["networksetup", "-setsocksfirewallproxystate", svc, "off"], check=False)
+        except Exception:
+            pass
 
 
 def _set_linux_proxy(enable: bool):
