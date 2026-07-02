@@ -44,6 +44,14 @@ jobs:
           name: JeffTON-Windows
           path: qipcall_client/dist/JeffTON.exe
 
+      - name: Remove old release assets (QipCall etc.)
+        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
+        shell: bash
+        run: |
+          gh release delete-asset qipcall-latest QipCall.exe -y || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish release
         if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
