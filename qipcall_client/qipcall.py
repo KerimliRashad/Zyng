@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.1"
+APP_VERSION = "3.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -360,10 +360,24 @@ class JeffTUN:
         right.grid(row=0, column=2, sticky="nsew")
         right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(3, weight=1)
         right.grid_columnconfigure(0, weight=1)
-        # логотип-заголовок
-        h = ctk.CTkFrame(right, fg_color="transparent"); h.grid(row=0, column=0, pady=(24, 0), sticky="n")
-        ctk.CTkLabel(h, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
-        ctk.CTkLabel(h, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
+        # логотип-заголовок (картинка It's Jeff! + подпись)
+        h = ctk.CTkFrame(right, fg_color="transparent"); h.grid(row=0, column=0, pady=(20, 0), sticky="n")
+        self._logo_ref = None
+        try:
+            from PIL import Image
+            lp = resource_path("logo_white.png")
+            if os.path.exists(lp):
+                im = Image.open(lp)
+                ratio = im.width / im.height
+                img = ctk.CTkImage(im, size=(int(64 * ratio), 64))
+                ctk.CTkLabel(h, image=img, text="").pack()
+                self._logo_ref = img
+        except Exception:
+            pass
+        if self._logo_ref is None:
+            row = ctk.CTkFrame(h, fg_color="transparent"); row.pack()
+            ctk.CTkLabel(row, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
+            ctk.CTkLabel(row, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
         # круглая кнопка
         self.power = ctk.CTkButton(right, text="⏻", width=180, height=180, corner_radius=90,
                                    fg_color=CARD, hover_color=CARD2, text_color=MUTED,
