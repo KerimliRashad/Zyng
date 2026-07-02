@@ -688,7 +688,7 @@ async function toggleVoiceRec() {
       recSecs++;
       document.getElementById('rec-timer').textContent = fmtDur(recSecs);
     }, 1000);
-  } catch { notify('Ошибка', 'Нет доступа к микрофону (нужен HTTPS)'); }
+  } catch (e) { notify('🎤 Нет доступа', getMicError(e, 'voice')); }
 }
 
 // ── Emoji ─────────────────────────────────────────────────────────────────────
@@ -889,6 +889,17 @@ function stopRing() {
   if (navigator.vibrate) navigator.vibrate(0);
 }
 
+function getMicError(e, type) {
+  const dev = type === 'video' ? 'камере/микрофону' : 'микрофону';
+  if (e?.name === 'NotAllowedError' || e?.name === 'PermissionDeniedError')
+    return `Доступ к ${dev} запрещён. Нажми на 🔒 в адресной строке → разреши микрофон/камеру → перезагрузи страницу.`;
+  if (e?.name === 'NotFoundError' || e?.name === 'DevicesNotFoundError')
+    return `${type === 'video' ? 'Камера или микрофон' : 'Микрофон'} не найден. Подключи устройство и повтори.`;
+  if (e?.name === 'NotSupportedError')
+    return 'Нужен HTTPS. Убедись что открываешь через https://';
+  return `Нет доступа к ${dev}. Разреши использование в настройках браузера.`;
+}
+
 async function startCall(type) {
   if (!activeChatId || !activeChat?.other_user) return;
   callTargetId = activeChat.other_user.id;
@@ -897,7 +908,7 @@ async function startCall(type) {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
   } catch (e) {
-    notify('Ошибка', 'Нет доступа к ' + (type === 'video' ? 'камере/микрофону' : 'микрофону') + '. Нужен HTTPS.');
+    notify('🎤 Нет доступа', getMicError(e, type));
     return;
   }
 
@@ -978,8 +989,8 @@ async function acceptIncomingCall() {
   isMuted = false;
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
-  } catch {
-    notify('Ошибка', 'Нет доступа к ' + (callType === 'video' ? 'камере/микрофону' : 'микрофону'));
+  } catch (e) {
+    notify('🎤 Нет доступа', getMicError(e, callType));
     endCallClean(); return;
   }
 
