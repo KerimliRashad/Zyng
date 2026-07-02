@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QipCall VPN — быстрый VPN с обходом блокировок</title>
+<style>
+  :root{--bg:#0a0e17;--card:#131926;--acc:#5b8def;--acc2:#7c5cff;--text:#e8edf5;--muted:#8a97ad;--ok:#3fce6a}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  header{padding:20px 0;display:flex;align-items:center;justify-content:space-between}
+  .logo{font-size:22px;font-weight:900;letter-spacing:-.5px}
+  .logo span{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .nav-btn{padding:9px 18px;border-radius:10px;background:rgba(255,255,255,.06);font-size:14px;font-weight:600;border:1px solid rgba(255,255,255,.08)}
+  .hero{text-align:center;padding:70px 0 50px}
+  .hero h1{font-size:clamp(32px,6vw,56px);font-weight:900;letter-spacing:-1.5px;line-height:1.1;margin-bottom:18px}
+  .hero h1 span{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{font-size:clamp(16px,2.5vw,20px);color:var(--muted);max-width:620px;margin:0 auto 32px}
+  .cta{display:inline-flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .btn{padding:15px 30px;border-radius:14px;font-size:16px;font-weight:700;border:none;cursor:pointer;transition:transform .15s}
+  .btn:active{transform:scale(.96)}
+  .btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 8px 30px rgba(91,141,239,.4)}
+  .btn.ghost{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.12)}
+  .section-title{text-align:center;font-size:clamp(24px,4vw,36px);font-weight:800;margin:60px 0 8px;letter-spacing:-.5px}
+  .section-sub{text-align:center;color:var(--muted);margin-bottom:40px}
+  .protocols{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+  .proto{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:18px;padding:24px}
+  .proto h3{font-size:20px;font-weight:800;margin-bottom:6px}
+  .proto .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .tag{font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;background:rgba(91,141,239,.15);color:var(--acc)}
+  .feats{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+  .feat{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:18px;padding:24px}
+  .feat .ico{font-size:32px;margin-bottom:10px}
+  .feat h4{font-size:17px;font-weight:700;margin-bottom:6px}
+  .feat p{color:var(--muted);font-size:14px}
+  .apps{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:26px}
+  .app{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px 22px;font-weight:700;font-size:15px}
+  footer{text-align:center;color:var(--muted);padding:60px 0 40px;font-size:14px}
+
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modal.show{display:flex}
+  .modal-box{background:var(--card);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;max-width:440px;width:100%}
+  .modal-box h3{font-size:20px;font-weight:800;margin-bottom:16px}
+  .field{width:100%;padding:13px 15px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;color:var(--text);font-size:15px;margin-bottom:12px;outline:none}
+  .sub-link{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px;font-size:12px;word-break:break-all;color:var(--acc);margin-bottom:12px;font-family:monospace}
+  .imp{display:flex;gap:10px;flex-wrap:wrap}
+  .imp a{flex:1;min-width:120px;text-align:center;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-weight:700;font-size:14px}
+  .err{color:#f87171;font-size:13px;min-height:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Qip<span>Call</span> VPN</div>
+    <a class="nav-btn" onclick="openSub()">Моя подписка</a>
+  </header>
+
+  <section class="hero">
+    <h1>Быстрый VPN с <span>обходом блокировок</span></h1>
+    <p>8 протоколов из коробки. Поддержка REALITY и XTLS Vision — работает там, где остальные не проходят.</p>
+    <div class="cta">
+      <button class="btn primary" onclick="openSub()">📲 Подключить</button>
+      <a class="btn ghost" href="#protocols">Протоколы</a>
+    </div>
+  </section>
+
+  <h2 class="section-title" id="protocols">8 протоколов из коробки</h2>
+  <p class="section-sub">С поддержкой REALITY и XTLS Vision для обхода блокировок</p>
+  <div class="protocols">
+    <div class="proto"><h3>VLESS</h3><div class="tags"><span class="tag">reality</span><span class="tag">xtls</span></div></div>
+    <div class="proto"><h3>VMess</h3><div class="tags"><span class="tag">ws</span><span class="tag">grpc</span></div></div>
+    <div class="proto"><h3>Trojan</h3><div class="tags"><span class="tag">tls</span></div></div>
+    <div class="proto"><h3>Shadowsocks</h3><div class="tags"><span class="tag">aead</span></div></div>
+  </div>
+
+  <h2 class="section-title">Почему QipCall</h2>
+  <p class="section-sub">Всё что нужно для стабильного соединения</p>
+  <div class="feats">
+    <div class="feat"><div class="ico">⚡</div><h4>Высокая скорость</h4><p>Прямое подключение к серверу без лишних узлов</p></div>
+    <div class="feat"><div class="ico">🛡</div><h4>REALITY</h4><p>Маскировка под обычный HTTPS — не отличить от посещения сайта</p></div>
+    <div class="feat"><div class="ico">📱</div><h4>Любые устройства</h4><p>Happ, v2RayTun, Streisand, NekoBox — импорт одной ссылкой</p></div>
+    <div class="feat"><div class="ico">🔄</div><h4>Авто-обновление</h4><p>Подписка обновляется сама — новые серверы появляются автоматически</p></div>
+  </div>
+
+  <h2 class="section-title">Приложения</h2>
+  <p class="section-sub">Вставь ссылку-подписку и всё подключится автоматически</p>
+  <div class="apps">
+    <div class="app">📱 Happ (iOS/Android)</div>
+    <div class="app">🚀 v2RayTun</div>
+    <div class="app">🌊 Streisand (iOS)</div>
+    <div class="app">🐱 NekoBox (Android)</div>
+    <div class="app">💻 v2rayN (Windows)</div>
+  </div>
+
+  <footer>© 2026 QipCall VPN · <a onclick="openSub()" style="color:var(--acc)">Моя подписка</a></footer>
+</div>
+
+<!-- Subscription modal -->
+<div class="modal" id="sub-modal">
+  <div class="modal-box">
+    <h3>📲 Моя подписка</h3>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:14px">Введи токен подписки, который тебе выдали:</p>
+    <input class="field" id="sub-token" placeholder="Токен подписки">
+    <button class="btn primary" style="width:100%" onclick="loadSub()">Показать</button>
+    <div class="err" id="sub-err"></div>
+    <div id="sub-result" style="display:none;margin-top:14px">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Ссылка-подписка:</p>
+      <div class="sub-link" id="sub-url"></div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Открыть в приложении:</p>
+      <div class="imp" id="imp-links"></div>
+    </div>
+    <button class="btn ghost" style="width:100%;margin-top:12px" onclick="closeSub()">Закрыть</button>
+  </div>
+</div>
+
+<script>
+function openSub(){document.getElementById('sub-modal').classList.add('show')}
+function closeSub(){document.getElementById('sub-modal').classList.remove('show')}
+function loadSub(){
+  const t=document.getElementById('sub-token').value.trim();
+  const err=document.getElementById('sub-err');err.textContent='';
+  if(!t){err.textContent='Введите токен';return}
+  const url=`https://${location.hostname}:8443/sub/${t}`;
+  document.getElementById('sub-url').textContent=url;
+  const imp=document.getElementById('imp-links');
+  imp.innerHTML=`
+    <a href="happ://add/${encodeURIComponent(url)}">Happ</a>
+    <a href="v2raytun://import/${encodeURIComponent(url)}">v2RayTun</a>
+    <a href="streisand://import/${encodeURIComponent(url)}">Streisand</a>
+    <a href="${url}" target="_blank">Открыть</a>`;
+  document.getElementById('sub-result').style.display='block';
+}
+</script>
+</body>
+</html>
