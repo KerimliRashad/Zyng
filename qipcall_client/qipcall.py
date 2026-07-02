@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.5"
+APP_VERSION = "2.6"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -364,6 +364,7 @@ class JeffTUN:
         self.links = []
         self.sub_url = ""
         self.autoconnect = False
+        self.prefs = {}
 
         root.title(APP_NAME)
         root.geometry("460x640")
@@ -559,65 +560,137 @@ class JeffTUN:
         self._update_lbl.config(text=f"🎉 Доступно обновление {latest} (у тебя {APP_VERSION})")
         self.update_bar.pack(fill="x", padx=26, pady=(0, 12), before=self.txt.master)
 
-    # ── Окно настроек ──
+    # ── Окно настроек (полное, как в Happ) ──
     def open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("Настройки")
         win.configure(bg=BG)
-        win.geometry("420x560")
-        win.resizable(False, False)
+        win.geometry("440x640")
         win.transient(self.root)
 
         tk.Label(win, text="Настройки", bg=BG, fg=TEXT,
-                 font=("Segoe UI", 18, "bold")).pack(pady=(18, 10))
+                 font=("Segoe UI", 18, "bold")).pack(pady=(14, 8))
+
+        # Прокручиваемая область
+        canvas = tk.Canvas(win, bg=BG, highlightthickness=0)
+        sb = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+        body = tk.Frame(canvas, bg=BG)
+        body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=body, anchor="nw", width=420)
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        sb.pack(side="right", fill="y")
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-e.delta/120), "units"))
 
         def section(title):
-            tk.Label(win, text=title, bg=BG, fg=MUTED,
-                     font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=24, pady=(14, 4))
-            card = tk.Frame(win, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
-            card.pack(fill="x", padx=20)
+            tk.Label(body, text=title, bg=BG, fg=MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16, pady=(14, 4))
+            card = tk.Frame(body, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
+            card.pack(fill="x", padx=12)
             return card
 
-        def toggle_row(card, text, var, cmd):
-            row = tk.Frame(card, bg=CARD); row.pack(fill="x", padx=14, pady=10)
+        def toggle_row(card, text, key, default=False, cmd=None):
+            var = tk.BooleanVar(value=self.prefs.get(key, default))
+            row = tk.Frame(card, bg=CARD); row.pack(fill="x", padx=14, pady=9)
             tk.Label(row, text=text, bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
-            b = tk.Checkbutton(row, variable=var, command=cmd, bg=CARD, fg=ACC,
-                               selectcolor=CARD2, activebackground=CARD, bd=0,
-                               highlightthickness=0)
-            b.pack(side="right")
+            def on():
+                self.prefs[key] = var.get(); self.save(silent=True)
+                if cmd: cmd(var.get())
+            tk.Checkbutton(row, variable=var, command=on, bg=CARD, selectcolor=CARD2,
+                           activebackground=CARD, bd=0, highlightthickness=0).pack(side="right")
+
+        def choice_row(card, text, key, options, default):
+            val = self.prefs.get(key, default)
+            row = tk.Frame(card, bg=CARD, cursor="hand2"); row.pack(fill="x", padx=14, pady=9)
+            tk.Label(row, text=text, bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
+            vlbl = tk.Label(row, text=val, bg=CARD, fg=ACC, font=("Segoe UI", 11, "bold"))
+            vlbl.pack(side="right")
+            def cycle(e=None):
+                cur = options.index(self.prefs.get(key, default)) if self.prefs.get(key, default) in options else 0
+                nv = options[(cur + 1) % len(options)]
+                self.prefs[key] = nv; self.save(silent=True); vlbl.config(text=nv)
+            for w in (row, vlbl): w.bind("<Button-1>", cycle)
 
         def link_row(card, text, value, cmd, color=TEXT):
-            row = tk.Frame(card, bg=CARD, cursor="hand2"); row.pack(fill="x", padx=14, pady=10)
+            row = tk.Frame(card, bg=CARD, cursor="hand2"); row.pack(fill="x", padx=14, pady=9)
             tk.Label(row, text=text, bg=CARD, fg=color, font=("Segoe UI", 11)).pack(side="left")
             tk.Label(row, text=value, bg=CARD, fg=MUTED, font=("Segoe UI", 10)).pack(side="right")
             for w in (row,) + tuple(row.winfo_children()):
                 w.bind("<Button-1>", lambda e: cmd())
 
-        # ИНТЕРФЕЙС
-        c1 = section("ИНТЕРФЕЙС")
+        # ── ИНТЕРФЕЙС ──
+        c = section("ИНТЕРФЕЙС")
+        choice_row(c, "Язык", "lang", ["Русский", "English"], "Русский")
+        choice_row(c, "Тема оформления", "theme", ["Тёмная", "Системная"], "Тёмная")
+        choice_row(c, "Размер текста", "text_size", ["Нормальный", "Крупный"], "Нормальный")
+        choice_row(c, "Размер кнопки", "btn_size", ["Нормальный", "Большой"], "Нормальный")
+        choice_row(c, "Действие отключения", "disc_action", ["Остановить", "Свернуть"], "Остановить")
+        toggle_row(c, "Индикатор скорости", "speed_ind", False)
+
+        # ── ЗАПУСК ──
+        c = section("ЗАПУСК")
         self._autostart_var = tk.BooleanVar(value=get_autostart())
-        toggle_row(c1, "Автозапуск с Windows", self._autostart_var,
-                   lambda: set_autostart(self._autostart_var.get()))
+        row = tk.Frame(c, bg=CARD); row.pack(fill="x", padx=14, pady=9)
+        tk.Label(row, text="Автозапуск с Windows", bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
+        tk.Checkbutton(row, variable=self._autostart_var,
+                       command=lambda: set_autostart(self._autostart_var.get()),
+                       bg=CARD, selectcolor=CARD2, activebackground=CARD, bd=0,
+                       highlightthickness=0).pack(side="right")
         self._autoconnect_var = tk.BooleanVar(value=self.autoconnect)
-        def save_ac():
+        row2 = tk.Frame(c, bg=CARD); row2.pack(fill="x", padx=14, pady=9)
+        tk.Label(row2, text="Автоподключение при запуске", bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
+        def _sac():
             self.autoconnect = self._autoconnect_var.get(); self.save(silent=True)
-        toggle_row(c1, "Автоподключение при запуске", self._autoconnect_var, save_ac)
+        tk.Checkbutton(row2, variable=self._autoconnect_var, command=_sac,
+                       bg=CARD, selectcolor=CARD2, activebackground=CARD, bd=0,
+                       highlightthickness=0).pack(side="right")
 
-        # ТУННЕЛЬ / ДАННЫЕ
-        c2 = section("ДАННЫЕ")
-        link_row(c2, "Пинг выбранного сервера", "▶", lambda: (self.do_ping()))
-        link_row(c2, "Обновить подписку", "⬆", lambda: self.update_sub())
-        link_row(c2, "Сбросить ключ", "", self._reset_key, color=DANGER)
+        # ── ТУННЕЛЬ ──
+        c = section("ТУННЕЛЬ")
+        choice_row(c, "Предпочитаемый тип IP", "ip_type", ["IPv4", "IPv6", "Авто"], "IPv4")
+        toggle_row(c, "Использовать фрагментирование", "fragment", False)
+        toggle_row(c, "Использовать Mux", "mux", False)
+        toggle_row(c, "Разрешить LAN подключения", "lan", False)
 
-        # ПОДРОБНЕЕ
-        c3 = section("ПОДРОБНЕЕ")
-        link_row(c3, "Проверить обновление", f"v{APP_VERSION}", self.do_self_update)
-        link_row(c3, "Telegram-канал", "@jeffvpn",
+        # ── ДАННЫЕ ──
+        c = section("ДАННЫЕ")
+        link_row(c, "Подписки — обновить", "⬆", lambda: self.update_sub())
+        link_row(c, "Пинг выбранного сервера", "▶", lambda: self.do_ping())
+        link_row(c, "Статистика", "", lambda: self._stats())
+        link_row(c, "Логи", "", lambda: self._logs())
+        link_row(c, "Сброс (удалить ключ)", "", self._reset_key, color=DANGER)
+
+        # ── ПОДРОБНЕЕ ──
+        c = section("ПОДРОБНЕЕ")
+        link_row(c, "Проверить обновление", f"v{APP_VERSION}", self.do_self_update)
+        link_row(c, "FAQ", "", lambda: self._faq())
+        link_row(c, "Telegram-канал", "@jeffvpn",
                  lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
-        link_row(c3, "О приложении", "", lambda: self._about())
+        link_row(c, "О приложении", "", lambda: self._about())
 
-        tk.Label(win, text=f"JeffTUN VPN v{APP_VERSION}", bg=BG, fg="#3a4256",
-                 font=("Segoe UI", 8)).pack(side="bottom", pady=10)
+        tk.Label(body, text=f"JeffTUN VPN v{APP_VERSION}  ·  t.me/jeffvpn",
+                 bg=BG, fg="#3a4256", font=("Segoe UI", 8)).pack(pady=14)
+
+    def _stats(self):
+        st = "Подключено" if self.connected else "Отключено"
+        srv = self.links[self.selected_idx].split("#", 1)[-1] if self.links else "—"
+        messagebox.showinfo("Статистика",
+            f"Статус: {st}\nСерверов в списке: {len(self.links)}\n"
+            f"Текущий: {unquote(srv)}\nSOCKS: 127.0.0.1:{SOCKS_PORT}\nHTTP: 127.0.0.1:{HTTP_PORT}")
+
+    def _logs(self):
+        p = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
+        messagebox.showinfo("Логи",
+            f"Конфиг ядра:\n{p}\n\nЯдро xray работает в фоне.\n"
+            "Если VPN не подключается — проверь ключ и интернет.")
+
+    def _faq(self):
+        messagebox.showinfo("FAQ",
+            "• Вставь ключ или подписку → выбери страну → Подключиться.\n"
+            "• Не подключается? Смени сервер или обнови подписку.\n"
+            "• Красный пинг — сервер далеко/занят, выбери другой.\n"
+            "• Обновление приходит само — жми «Обновить».\n\n"
+            "Поддержка: t.me/jeffvpn")
 
     def _reset_key(self):
         if not messagebox.askyesno(APP_NAME, "Удалить сохранённый ключ и серверы?"):
@@ -700,7 +773,8 @@ class JeffTUN:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump({"key": self.txt.get("1.0", "end").strip(),
                            "sub_url": self.sub_url,
-                           "autoconnect": self.autoconnect}, f)
+                           "autoconnect": self.autoconnect,
+                           "prefs": self.prefs}, f)
             if not silent:
                 self.info.config(text="Сохранено ✓", fg=OK)
         except Exception as e:
@@ -715,6 +789,7 @@ class JeffTUN:
                     self.txt.insert("1.0", d["key"])
                 self.sub_url = d.get("sub_url", "")
                 self.autoconnect = bool(d.get("autoconnect", False))
+                self.prefs = d.get("prefs", {}) or {}
         except Exception:
             pass
 
