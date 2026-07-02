@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 SOCKS_PORT = 10808
@@ -300,6 +300,15 @@ class JeffTUN:
         tk.Label(root, text="Вставь ключ или ссылку-подписку и подключись",
                  bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(padx=26, anchor="w", pady=(0, 12))
 
+        # ── Плашка обновления (скрыта пока нет апдейта) ──
+        self.update_bar = tk.Frame(root, bg="#1a2c1e", highlightthickness=1, highlightbackground=OK)
+        self._update_lbl = tk.Label(self.update_bar, text="", bg="#1a2c1e", fg=OK,
+                                    font=("Segoe UI", 10, "bold"))
+        self._update_lbl.pack(side="left", padx=14, pady=9)
+        tk.Button(self.update_bar, text="Обновить ⬇", command=lambda: __import__("webbrowser").open(RELEASES_URL),
+                  bg=OK, fg="#0a0e17", relief="flat", cursor="hand2", bd=0,
+                  font=("Segoe UI", 9, "bold"), padx=14, pady=7).pack(side="right", padx=10)
+
         # ── Карта ключа ──
         card = tk.Frame(root, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
         card.pack(fill="x", padx=26)
@@ -337,6 +346,8 @@ class JeffTUN:
                              font=("Segoe UI", 15, "bold"), width=22, height=2,
                              activebackground=ACC2, activeforeground="white", bd=0)
         self.btn.pack(pady=4)
+        self.btn.bind("<Enter>", lambda e: self.btn.config(bg=(DANGER if self.connected else ACC2)))
+        self.btn.bind("<Leave>", lambda e: self.btn.config(bg=(DANGER if self.connected else ACC)))
 
         # ── Нижние действия ──
         row = tk.Frame(root, bg=BG)
@@ -428,10 +439,9 @@ class JeffTUN:
             return a != b
 
     def _show_update(self, latest):
-        if messagebox.askyesno(APP_NAME,
-                f"Доступна новая версия JeffTUN {latest}!\nУ тебя {APP_VERSION}.\n\nСкачать обновление?"):
-            import webbrowser
-            webbrowser.open(RELEASES_URL)
+        # Показываем зелёную плашку с кнопкой прямо в окне
+        self._update_lbl.config(text=f"🎉 Доступно обновление {latest} (у тебя {APP_VERSION})")
+        self.update_bar.pack(fill="x", padx=26, pady=(0, 12), before=self.txt.master)
 
     # ── Сохранение / загрузка ──
     def save(self):
