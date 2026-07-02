@@ -1,4 +1,4 @@
-# QipCall VPN — клиент для Windows
+# JeffTON VPN — клиент для Windows
 
 Простое приложение для компьютера/ноутбука: вставляешь ключ и подключаешься.
 Как Happ, только для Windows. Внутри — официальное ядро **xray-core**.
@@ -7,14 +7,14 @@
 
 После пуша GitHub сам собирает программу:
 
-1. Открой репозиторий → вкладка **Actions** → workflow **Build QipCall Windows**
+1. Открой репозиторий → вкладка **Actions** → workflow **Build JeffTON Windows**
 2. Дождись зелёной галочки (~2–3 мин)
-3. Скачай **QipCall.exe** из раздела **Artifacts** внизу страницы
-   (или со страницы **Releases** → `QipCall VPN (Windows)`)
+3. Скачай **JeffTON.exe** из раздела **Artifacts** внизу страницы
+   (или со страницы **Releases** → `JeffTON VPN (Windows)`)
 
 ## Как пользоваться
 
-1. Запусти **QipCall.exe**
+1. Запусти **JeffTON.exe**
 2. Вставь свой ключ в поле:
    - `vless://...` (в т.ч. REALITY)
    - `vmess://...`
@@ -33,4 +33,4 @@
 - При отключении/закрытии прокси автоматически снимается
 
 ## Собрать самому (нужен Python)
-Двойной клик по `build.bat` → готовый файл появится в `dist\QipCall.exe`.
+Двойной клик по `build.bat` → готовый файл появится в `dist\JeffTON.exe`.

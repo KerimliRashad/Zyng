@@ -1,4 +1,4 @@
-name: Build QipCall Windows
+name: Build JeffTON Windows
 
 on:
   push:
@@ -34,25 +34,25 @@ jobs:
         working-directory: qipcall_client
         run: |
           pyinstaller --noconfirm --onefile --windowed `
-            --name "QipCall" `
+            --name "JeffTON" `
             --add-binary "xray.exe;." `
             qipcall.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QipCall-Windows
-          path: qipcall_client/dist/QipCall.exe
+          name: JeffTON-Windows
+          path: qipcall_client/dist/JeffTON.exe
 
       - name: Publish release
         if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
-          name: QipCall VPN (Windows)
-          files: qipcall_client/dist/QipCall.exe
+          name: JeffTON VPN (Windows)
+          files: qipcall_client/dist/JeffTON.exe
           body: |
-            QipCall VPN для Windows — вставь ключ vless:// / vmess:// / trojan:// / ss://
+            JeffTON VPN для Windows — вставь ключ vless:// / vmess:// / trojan:// / ss://
             или ссылку-подписку и нажми «Подключиться».
           fail_on_unmatched_files: false
         env:

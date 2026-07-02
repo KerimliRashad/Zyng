@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# QipCall VPN — первичная настройка. Запускать один раз в папке qipcall_vpn.
+# JeffTON VPN — первичная настройка. Запускать один раз в папке qipcall_vpn.
 set -e
 
 DOMAIN="${1:-qipcall.duckdns.org}"

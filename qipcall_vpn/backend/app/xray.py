@@ -103,12 +103,12 @@ def vless_link(u) -> str:
         f"&fp=chrome&sni={config.REALITY_SNI}&sid={config.REALITY_SHORT_ID}"
         f"&flow=xtls-rprx-vision"
     )
-    return f"vless://{u.uuid}@{config.SERVER_IP}:{config.PORT_REALITY}?{params}#{quote('QipCall VLESS ' + u.name)}"
+    return f"vless://{u.uuid}@{config.SERVER_IP}:{config.PORT_REALITY}?{params}#{quote('JeffTON VLESS ' + u.name)}"
 
 
 def vmess_link(u) -> str:
     obj = {
-        "v": "2", "ps": f"QipCall VMess {u.name}", "add": config.SERVER_IP,
+        "v": "2", "ps": f"JeffTON VMess {u.name}", "add": config.SERVER_IP,
         "port": str(config.PORT_VMESS_WS), "id": u.uuid, "aid": "0",
         "net": "ws", "type": "none", "host": "", "path": "/vm", "tls": "",
     }
@@ -116,12 +116,12 @@ def vmess_link(u) -> str:
 
 
 def trojan_link(u) -> str:
-    return f"trojan://{u.secret}@{config.SERVER_IP}:{config.PORT_TROJAN}?security=none&type=tcp#{quote('QipCall Trojan ' + u.name)}"
+    return f"trojan://{u.secret}@{config.SERVER_IP}:{config.PORT_TROJAN}?security=none&type=tcp#{quote('JeffTON Trojan ' + u.name)}"
 
 
 def ss_link(u) -> str:
     userinfo = base64.b64encode(f"aes-128-gcm:{u.secret}".encode()).decode()
-    return f"ss://{userinfo}@{config.SERVER_IP}:{config.PORT_SHADOWSOCKS}#{quote('QipCall SS ' + u.name)}"
+    return f"ss://{userinfo}@{config.SERVER_IP}:{config.PORT_SHADOWSOCKS}#{quote('JeffTON SS ' + u.name)}"
 
 
 def subscription_body(u) -> str:

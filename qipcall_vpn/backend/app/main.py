@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="QipCall VPN", lifespan=lifespan)
+app = FastAPI(title="JeffTON VPN", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -47,13 +47,13 @@ async def get_subscription(token: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Подписка не найдена")
     if not u.enabled:
         # Возвращаем пустую подписку для отключённых
-        return PlainTextResponse("", headers={"Profile-Title": "QipCall (истёк)"})
+        return PlainTextResponse("", headers={"Profile-Title": "JeffTON (истёк)"})
     body = xray.subscription_body(u)
     days_left = ""
     if u.expires_at:
         days_left = f" · до {u.expires_at.strftime('%d.%m.%Y')}"
     return PlainTextResponse(body, headers={
-        "Profile-Title": f"QipCall VPN{days_left}",
+        "Profile-Title": f"JeffTON VPN{days_left}",
         "Profile-Update-Interval": "12",
         "Subscription-Userinfo": _userinfo_header(u),
     })

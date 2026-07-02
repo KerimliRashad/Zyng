@@ -1,12 +1,14 @@
 """
-QipCall VPN — десктопный клиент для Windows.
+JeffTON VPN — десктопный клиент для Windows.
 Вставь ключ (vless:// / vmess:// / trojan:// / ss://) или ссылку-подписку,
 нажми «Подключиться» — трафик пойдёт через VPN (системный прокси + xray-core).
 """
 import os
 import sys
 import json
+import time
 import base64
+import socket
 import threading
 import subprocess
 import urllib.request
@@ -15,23 +17,26 @@ from urllib.parse import urlparse, parse_qs, unquote
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-APP_NAME = "QipCall VPN"
-APP_VERSION = "1.1"
+APP_NAME = "JeffTON VPN"
+APP_VERSION = "2.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".qipcall_config.json")
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
 # ── Тёмная тема ───────────────────────────────────────────────────────────────
 BG = "#0a0e17"
-CARD = "#131926"
+CARD = "#141b2b"
+CARD2 = "#0d121d"
 ACC = "#5b8def"
 ACC2 = "#7c5cff"
-TEXT = "#e8edf5"
+TEXT = "#eef2f9"
 MUTED = "#8a97ad"
 OK = "#3fce6a"
+WARN = "#f5b942"
 DANGER = "#f87171"
+BORDER = "#242c3d"
 
 
 def resource_path(name):
@@ -58,7 +63,21 @@ def parse_link(link: str) -> dict:
         return _parse_trojan(link)
     if link.startswith("ss://"):
         return _parse_ss(link)
-    raise ValueError("Неизвестный формат ключа. Поддерживаются vless / vmess / trojan / ss.")
+    raise ValueError("Неизвестный формат. Нужен vless / vmess / trojan / ss.")
+
+
+def link_host_port(link: str):
+    """Возвращает (host, port) из ключа — для пинга."""
+    link = link.strip()
+    try:
+        if link.startswith("vmess://"):
+            raw = link[len("vmess://"):]; raw += "=" * (-len(raw) % 4)
+            obj = json.loads(base64.b64decode(raw).decode())
+            return obj.get("add"), int(obj.get("port", 443))
+        u = urlparse(link)
+        return u.hostname, u.port or 443
+    except Exception:
+        return None, None
 
 
 def _stream(params, net, security):
@@ -90,94 +109,57 @@ def _stream(params, net, security):
 
 
 def _parse_vless(link):
-    u = urlparse(link)
-    p = parse_qs(u.query)
-    net = p.get("type", ["tcp"])[0]
-    security = p.get("security", ["none"])[0]
-    vnext = {
-        "address": u.hostname,
-        "port": u.port or 443,
-        "users": [{
-            "id": unquote(u.username or ""),
-            "encryption": "none",
-            "flow": p.get("flow", [""])[0],
-        }],
-    }
-    return {
-        "protocol": "vless",
-        "settings": {"vnext": [vnext]},
-        "streamSettings": _stream(p, net, security),
-        "tag": "proxy",
-    }
+    u = urlparse(link); p = parse_qs(u.query)
+    net = p.get("type", ["tcp"])[0]; security = p.get("security", ["none"])[0]
+    vnext = {"address": u.hostname, "port": u.port or 443,
+             "users": [{"id": unquote(u.username or ""), "encryption": "none",
+                        "flow": p.get("flow", [""])[0]}]}
+    return {"protocol": "vless", "settings": {"vnext": [vnext]},
+            "streamSettings": _stream(p, net, security), "tag": "proxy"}
 
 
 def _parse_vmess(link):
-    raw = link[len("vmess://"):]
-    raw += "=" * (-len(raw) % 4)
+    raw = link[len("vmess://"):]; raw += "=" * (-len(raw) % 4)
     obj = json.loads(base64.b64decode(raw).decode())
     net = obj.get("net", "tcp")
     security = "tls" if obj.get("tls") in ("tls", True, "true") else "none"
-    p = {
-        "path": [obj.get("path", "/")],
-        "host": [obj.get("host", "")],
-        "sni": [obj.get("sni", obj.get("host", ""))],
-        "serviceName": [obj.get("path", "")],
-    }
-    vnext = {
-        "address": obj.get("add"),
-        "port": int(obj.get("port", 443)),
-        "users": [{"id": obj.get("id"), "alterId": int(obj.get("aid", 0)), "security": "auto"}],
-    }
-    return {
-        "protocol": "vmess",
-        "settings": {"vnext": [vnext]},
-        "streamSettings": _stream(p, net, security),
-        "tag": "proxy",
-    }
+    p = {"path": [obj.get("path", "/")], "host": [obj.get("host", "")],
+         "sni": [obj.get("sni", obj.get("host", ""))], "serviceName": [obj.get("path", "")]}
+    vnext = {"address": obj.get("add"), "port": int(obj.get("port", 443)),
+             "users": [{"id": obj.get("id"), "alterId": int(obj.get("aid", 0)), "security": "auto"}]}
+    return {"protocol": "vmess", "settings": {"vnext": [vnext]},
+            "streamSettings": _stream(p, net, security), "tag": "proxy"}
 
 
 def _parse_trojan(link):
-    u = urlparse(link)
-    p = parse_qs(u.query)
-    net = p.get("type", ["tcp"])[0]
-    security = p.get("security", ["tls"])[0]
-    return {
-        "protocol": "trojan",
-        "settings": {"servers": [{
-            "address": u.hostname, "port": u.port or 443,
-            "password": unquote(u.username or ""),
-        }]},
-        "streamSettings": _stream(p, net, security),
-        "tag": "proxy",
-    }
+    u = urlparse(link); p = parse_qs(u.query)
+    net = p.get("type", ["tcp"])[0]; security = p.get("security", ["tls"])[0]
+    return {"protocol": "trojan", "settings": {"servers": [{
+                "address": u.hostname, "port": u.port or 443,
+                "password": unquote(u.username or "")}]},
+            "streamSettings": _stream(p, net, security), "tag": "proxy"}
 
 
 def _parse_ss(link):
     body = link[len("ss://"):]
-    name = ""
     if "#" in body:
-        body, name = body.split("#", 1)
+        body = body.split("#", 1)[0]
     if "@" in body:
         userinfo, server = body.split("@", 1)
         userinfo += "=" * (-len(userinfo) % 4)
         try:
             method, password = base64.b64decode(userinfo).decode().split(":", 1)
         except Exception:
-            method, password = userinfo.split(":", 1)
+            method, password = unquote(userinfo).split(":", 1)
     else:
         body += "=" * (-len(body) % 4)
-        decoded = base64.b64decode(body).decode()
-        creds, server = decoded.split("@", 1)
+        creds, server = base64.b64decode(body).decode().split("@", 1)
         method, password = creds.split(":", 1)
     host, port = server.split(":")
     port = int(port.split("/")[0].split("?")[0])
-    return {
-        "protocol": "shadowsocks",
-        "settings": {"servers": [{
-            "address": host, "port": port, "method": method, "password": password,
-        }]},
-        "tag": "proxy",
-    }
+    return {"protocol": "shadowsocks", "settings": {"servers": [{
+                "address": host, "port": port, "method": method, "password": password}]},
+            "tag": "proxy"}
 
 
 def build_xray_config(outbound: dict) -> dict:
@@ -186,8 +168,7 @@ def build_xray_config(outbound: dict) -> dict:
         "inbounds": [
             {"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1",
              "protocol": "socks", "settings": {"udp": True}},
-            {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1",
-             "protocol": "http"},
+            {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"},
         ],
         "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}],
     }
@@ -197,26 +178,21 @@ def build_xray_config(outbound: dict) -> dict:
 def set_system_proxy(enable: bool):
     if os.name != "nt":
         return
-    import winreg
-    import ctypes
-    key = winreg.OpenKey(
-        winreg.HKEY_CURRENT_USER,
+    import winreg, ctypes
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
         r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-        0, winreg.KEY_ALL_ACCESS,
-    )
+        0, winreg.KEY_ALL_ACCESS)
     if enable:
         winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1)
         winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, f"127.0.0.1:{HTTP_PORT}")
-        winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ, "localhost;127.*;10.*;172.16.*;192.168.*;<local>")
+        winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ,
+                          "localhost;127.*;10.*;172.16.*;192.168.*;<local>")
     else:
         winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
     winreg.CloseKey(key)
-    # Уведомить систему об изменении настроек
-    INTERNET_OPTION_SETTINGS_CHANGED = 39
-    INTERNET_OPTION_REFRESH = 37
     internet = ctypes.windll.Wininet
-    internet.InternetSetOptionW(0, INTERNET_OPTION_SETTINGS_CHANGED, 0, 0)
-    internet.InternetSetOptionW(0, INTERNET_OPTION_REFRESH, 0, 0)
+    internet.InternetSetOptionW(0, 39, 0, 0)
+    internet.InternetSetOptionW(0, 37, 0, 0)
 
 
 # ══ ЗАГРУЗКА ПОДПИСКИ ════════════════════════════════════════════════════════
@@ -229,10 +205,9 @@ def fetch_subscription(url: str) -> list:
         ctx.verify_mode = ssl.CERT_NONE
     except Exception:
         pass
-    req = urllib.request.Request(url, headers={"User-Agent": "QipCall"})
+    req = urllib.request.Request(url, headers={"User-Agent": "JeffTON"})
     with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
         data = r.read().decode().strip()
-    # подписка обычно base64
     try:
         decoded = base64.b64decode(data + "=" * (-len(data) % 4)).decode()
         if "://" in decoded:
@@ -242,93 +217,107 @@ def fetch_subscription(url: str) -> list:
     return [ln.strip() for ln in data.splitlines() if "://" in ln]
 
 
+def tcp_ping(host, port, timeout=3.0):
+    """Возвращает пинг в мс или None."""
+    try:
+        start = time.time()
+        s = socket.create_connection((host, port), timeout=timeout)
+        s.close()
+        return int((time.time() - start) * 1000)
+    except Exception:
+        return None
+
+
 # ══ GUI ══════════════════════════════════════════════════════════════════════
-class QipCallApp:
+class JeffTON:
     def __init__(self, root):
         self.root = root
         self.proc = None
         self.connected = False
         self.links = []
+        self.sub_url = ""
 
         root.title(APP_NAME)
-        root.geometry("440x560")
+        root.geometry("460x640")
         root.configure(bg=BG)
         root.resizable(False, False)
 
-        # Заголовок
+        # ── Заголовок ──
         header = tk.Frame(root, bg=BG)
-        header.pack(fill="x", padx=24, pady=(22, 6))
-        tk.Label(header, text="QipCall", bg=BG, fg=ACC,
-                 font=("Segoe UI", 24, "bold")).pack(side="left")
-        tk.Label(header, text=" VPN", bg=BG, fg=TEXT,
-                 font=("Segoe UI", 24, "bold")).pack(side="left")
+        header.pack(fill="x", padx=26, pady=(24, 2))
+        logo = tk.Frame(header, bg=BG)
+        logo.pack(side="left")
+        tk.Label(logo, text="Jeff", bg=BG, fg=TEXT, font=("Segoe UI", 26, "bold")).pack(side="left")
+        tk.Label(logo, text="TON", bg=BG, fg=ACC, font=("Segoe UI", 26, "bold")).pack(side="left")
+        tk.Label(header, text="VPN", bg=BG, fg=MUTED, font=("Segoe UI", 11, "bold")).pack(side="left", padx=(6, 0), pady=(12, 0))
 
         tk.Label(root, text="Вставь ключ или ссылку-подписку и подключись",
-                 bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(padx=24, anchor="w")
+                 bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(padx=26, anchor="w", pady=(0, 12))
 
-        # Поле ввода ключа
-        card = tk.Frame(root, bg=CARD)
-        card.pack(fill="x", padx=24, pady=16)
-        tk.Label(card, text="Ключ / подписка", bg=CARD, fg=MUTED,
-                 font=("Segoe UI", 9)).pack(anchor="w", padx=14, pady=(12, 4))
-        self.txt = tk.Text(card, height=5, bg="#0d121d", fg=TEXT, insertbackground=TEXT,
+        # ── Карта ключа ──
+        card = tk.Frame(root, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
+        card.pack(fill="x", padx=26)
+        tk.Label(card, text="КЛЮЧ / ПОДПИСКА", bg=CARD, fg=MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16, pady=(14, 6))
+        self.txt = tk.Text(card, height=4, bg=CARD2, fg=TEXT, insertbackground=ACC,
                            relief="flat", font=("Consolas", 9), wrap="word",
-                           highlightthickness=1, highlightbackground="#242c3d")
-        self.txt.pack(fill="x", padx=14, pady=(0, 6))
+                           highlightthickness=1, highlightbackground=BORDER, padx=10, pady=8)
+        self.txt.pack(fill="x", padx=16, pady=(0, 8))
         self._setup_paste(self.txt)
 
-        # Кнопка «Вставить» — на случай если Ctrl+V не работает (рус. раскладка)
         paste_row = tk.Frame(card, bg=CARD)
-        paste_row.pack(fill="x", padx=14, pady=(0, 12))
-        tk.Button(paste_row, text="📋 Вставить из буфера", command=self.paste_clipboard,
-                  bg="#1c2333", fg=TEXT, relief="flat", font=("Segoe UI", 9), cursor="hand2",
-                  activebackground=ACC).pack(side="left")
-        tk.Button(paste_row, text="✖ Очистить", command=lambda: self.txt.delete("1.0", "end"),
-                  bg="#1c2333", fg=MUTED, relief="flat", font=("Segoe UI", 9), cursor="hand2",
-                  activebackground="#2a3346").pack(side="left", padx=6)
+        paste_row.pack(fill="x", padx=16, pady=(0, 14))
+        self._chip(paste_row, "📋 Вставить", self.paste_clipboard, ACC).pack(side="left")
+        self._chip(paste_row, "✖ Очистить", lambda: self.txt.delete("1.0", "end"), "#2a3346").pack(side="left", padx=6)
+        self._chip(paste_row, "💾 Сохранить", self.save, "#2a3346").pack(side="left")
 
-        # Выбор сервера (для подписок)
+        # ── Выбор сервера ──
         self.server_var = tk.StringVar()
-        self.server_menu = ttk.Combobox(root, textvariable=self.server_var, state="readonly")
-        self.server_menu.pack(fill="x", padx=24)
+        self.server_menu = ttk.Combobox(root, textvariable=self.server_var, state="readonly", font=("Segoe UI", 10))
+        self.server_menu.pack(fill="x", padx=26, pady=(14, 0))
+        self.server_menu.bind("<<ComboboxSelected>>", lambda e: self.do_ping())
         self.server_menu.pack_forget()
 
-        # Большая круглая кнопка подключения
-        self.status = tk.Label(root, text="Отключено", bg=BG, fg=MUTED,
-                               font=("Segoe UI", 12, "bold"))
-        self.status.pack(pady=(18, 8))
+        # ── Пинг ──
+        self.ping_lbl = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 10, "bold"))
+        self.ping_lbl.pack(pady=(14, 2))
+
+        # ── Статус + кнопка ──
+        self.status = tk.Label(root, text="● Отключено", bg=BG, fg=MUTED, font=("Segoe UI", 13, "bold"))
+        self.status.pack(pady=(4, 10))
 
         self.btn = tk.Button(root, text="Подключиться", command=self.toggle,
                              bg=ACC, fg="white", relief="flat", cursor="hand2",
-                             font=("Segoe UI", 14, "bold"), width=20, height=2,
-                             activebackground=ACC2, activeforeground="white")
-        self.btn.pack(pady=6)
+                             font=("Segoe UI", 15, "bold"), width=22, height=2,
+                             activebackground=ACC2, activeforeground="white", bd=0)
+        self.btn.pack(pady=4)
 
-        # Кнопки под ней
+        # ── Нижние действия ──
         row = tk.Frame(root, bg=BG)
-        row.pack(pady=10)
-        tk.Button(row, text="💾 Сохранить ключ", command=self.save, bg=CARD, fg=TEXT,
-                  relief="flat", font=("Segoe UI", 9), cursor="hand2",
-                  activebackground="#1c2333").pack(side="left", padx=4)
-        tk.Button(row, text="🔄 Загрузить подписку", command=self.load_sub, bg=CARD, fg=TEXT,
-                  relief="flat", font=("Segoe UI", 9), cursor="hand2",
-                  activebackground="#1c2333").pack(side="left", padx=4)
+        row.pack(pady=14)
+        self._chip(row, "🔄 Загрузить подписку", self.load_sub, CARD).pack(side="left", padx=4)
+        self._chip(row, "📶 Пинг", self.do_ping, CARD).pack(side="left", padx=4)
+        self._chip(row, "⬆ Обновить подписку", self.update_sub, CARD).pack(side="left", padx=4)
 
         self.info = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9),
-                             wraplength=390, justify="center")
+                             wraplength=410, justify="center")
         self.info.pack(pady=(6, 0))
 
-        # Версия внизу окна
-        tk.Label(root, text=f"QipCall v{APP_VERSION}", bg=BG, fg="#3a4256",
-                 font=("Segoe UI", 8)).pack(side="bottom", pady=4)
+        tk.Label(root, text=f"JeffTON v{APP_VERSION}", bg=BG, fg="#3a4256",
+                 font=("Segoe UI", 8)).pack(side="bottom", pady=6)
 
         self.load_saved()
         self.check_update()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    # ── UI helpers ──
+    def _chip(self, parent, text, cmd, color):
+        return tk.Button(parent, text=text, command=cmd, bg=color, fg=TEXT, relief="flat",
+                         font=("Segoe UI", 9), cursor="hand2", activebackground=ACC,
+                         activeforeground="white", bd=0, padx=12, pady=7)
+
     # ── Фикс вставки (Ctrl+V не работает на рус. раскладке в tkinter) ──
     def _setup_paste(self, widget):
-        # Контекстное меню по правому клику
         menu = tk.Menu(widget, tearoff=0, bg=CARD, fg=TEXT,
                        activebackground=ACC, activeforeground="white")
         menu.add_command(label="Вставить", command=self.paste_clipboard)
@@ -341,17 +330,11 @@ class QipCallApp:
             finally: menu.grab_release()
         widget.bind("<Button-3>", popup)
 
-        # Горячие клавиши по keycode — работают при любой раскладке
         def on_key(e):
-            # 86=V, 67=C, 88=X, 65=A (Windows virtual key codes)
-            if e.keycode == 86:  # Ctrl+V
-                self.paste_clipboard(); return "break"
-            if e.keycode == 67:  # Ctrl+C
-                self._copy(widget); return "break"
-            if e.keycode == 88:  # Ctrl+X
-                self._copy(widget); widget.delete("sel.first", "sel.last"); return "break"
-            if e.keycode == 65:  # Ctrl+A
-                self._select_all(widget); return "break"
+            if e.keycode == 86: self.paste_clipboard(); return "break"
+            if e.keycode == 67: self._copy(widget); return "break"
+            if e.keycode == 88: self._copy(widget);
+            if e.keycode == 65: self._select_all(widget); return "break"
         widget.bind("<Control-KeyPress>", on_key)
 
     def paste_clipboard(self):
@@ -376,17 +359,16 @@ class QipCallApp:
         widget.tag_add("sel", "1.0", "end-1c")
         return "break"
 
-    # ── Проверка обновлений ──
+    # ── Обновление приложения ──
     def check_update(self):
         def worker():
             try:
                 import ssl
                 ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "QipCall"})
+                ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+                req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "JeffTON"})
                 latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
-                if latest and latest != APP_VERSION and self._newer(latest, APP_VERSION):
+                if latest and self._newer(latest, APP_VERSION):
                     self.root.after(0, lambda: self._show_update(latest))
             except Exception:
                 pass
@@ -395,106 +377,125 @@ class QipCallApp:
     @staticmethod
     def _newer(a, b):
         try:
-            pa = [int(x) for x in a.split(".")]
-            pb = [int(x) for x in b.split(".")]
-            return pa > pb
+            return [int(x) for x in a.split(".")] > [int(x) for x in b.split(".")]
         except Exception:
             return a != b
 
     def _show_update(self, latest):
         if messagebox.askyesno(APP_NAME,
-                f"Доступна новая версия QipCall {latest}!\n"
-                f"У тебя {APP_VERSION}.\n\nСкачать обновление?"):
+                f"Доступна новая версия JeffTON {latest}!\nУ тебя {APP_VERSION}.\n\nСкачать обновление?"):
             import webbrowser
             webbrowser.open(RELEASES_URL)
 
-    # ── Сохранение / загрузка ключа ──
+    # ── Сохранение / загрузка ──
     def save(self):
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump({"key": self.txt.get("1.0", "end").strip()}, f)
-            self.info.config(text="Ключ сохранён ✓", fg=OK)
+                json.dump({"key": self.txt.get("1.0", "end").strip(), "sub_url": self.sub_url}, f)
+            self.info.config(text="Сохранено ✓", fg=OK)
         except Exception as e:
             self.info.config(text=f"Ошибка сохранения: {e}", fg=DANGER)
 
     def load_saved(self):
         try:
             with open(CONFIG_FILE, encoding="utf-8") as f:
-                key = json.load(f).get("key", "")
-                if key:
-                    self.txt.insert("1.0", key)
+                d = json.load(f)
+                if d.get("key"):
+                    self.txt.insert("1.0", d["key"])
+                self.sub_url = d.get("sub_url", "")
         except Exception:
             pass
 
     def load_sub(self):
-        url = self.txt.get("1.0", "end").strip()
+        url = self.txt.get("1.0", "end").strip().splitlines()[0] if self.txt.get("1.0", "end").strip() else ""
         if not url.startswith("http"):
             messagebox.showinfo(APP_NAME, "Вставь ссылку-подписку (https://...) в поле, затем нажми эту кнопку.")
             return
-        self.info.config(text="Загрузка подписки...", fg=MUTED)
-        self.root.update()
+        self.sub_url = url
+        self._pull_sub()
+
+    def update_sub(self):
+        if not self.sub_url:
+            messagebox.showinfo(APP_NAME, "Сначала загрузи подписку — вставь ссылку https://... и нажми «Загрузить подписку».")
+            return
+        self._pull_sub(reconnect=True)
+
+    def _pull_sub(self, reconnect=False):
+        self.info.config(text="Обновление подписки...", fg=MUTED); self.root.update()
         try:
-            self.links = fetch_subscription(url)
+            self.links = fetch_subscription(self.sub_url)
             if not self.links:
-                self.info.config(text="Подписка пустая", fg=DANGER)
-                return
+                self.info.config(text="Подписка пустая", fg=DANGER); return
             names = []
             for i, ln in enumerate(self.links):
                 nm = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
                 names.append(nm)
             self.server_menu["values"] = names
             self.server_menu.current(0)
-            self.server_menu.pack(fill="x", padx=24, pady=(0, 4))
-            self.info.config(text=f"Загружено серверов: {len(self.links)} — выбери и подключись", fg=OK)
+            self.server_menu.pack(fill="x", padx=26, pady=(14, 0))
+            self.info.config(text=f"Серверов: {len(self.links)} ✓", fg=OK)
+            self.do_ping()
+            if reconnect and self.connected:
+                self.disconnect(); self.connect()
         except Exception as e:
-            self.info.config(text=f"Ошибка загрузки: {e}", fg=DANGER)
+            self.info.config(text=f"Ошибка: {e}", fg=DANGER)
+
+    # ── Пинг ──
+    def do_ping(self):
+        link = self._current_link()
+        if not link or link.startswith("http"):
+            self.ping_lbl.config(text="")
+            return
+        host, port = link_host_port(link)
+        if not host:
+            return
+        self.ping_lbl.config(text="Пинг...", fg=MUTED); self.root.update()
+        def worker():
+            ms = tcp_ping(host, port)
+            def show():
+                if ms is None:
+                    self.ping_lbl.config(text="📶 Сервер недоступен", fg=DANGER)
+                else:
+                    col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
+                    self.ping_lbl.config(text=f"📶 {ms} мс", fg=col)
+            self.root.after(0, show)
+        threading.Thread(target=worker, daemon=True).start()
 
     # ── Подключение ──
     def toggle(self):
-        if self.connected:
-            self.disconnect()
-        else:
-            self.connect()
+        self.disconnect() if self.connected else self.connect()
 
     def _current_link(self):
         if self.links and self.server_menu.get():
             return self.links[self.server_menu.current()]
-        return self.txt.get("1.0", "end").strip().splitlines()[0] if self.txt.get("1.0", "end").strip() else ""
+        t = self.txt.get("1.0", "end").strip()
+        return t.splitlines()[0] if t else ""
 
     def connect(self):
         link = self._current_link()
         if not link:
-            self.info.config(text="Вставь ключ", fg=DANGER)
-            return
+            self.info.config(text="Вставь ключ", fg=DANGER); return
         if link.startswith("http"):
-            self.info.config(text="Это подписка — нажми «Загрузить подписку», потом выбери сервер", fg=DANGER)
-            return
+            self.info.config(text="Это подписка — нажми «Загрузить подписку» и выбери сервер", fg=DANGER); return
         try:
             outbound = parse_link(link)
         except Exception as e:
-            self.info.config(text=f"Неверный ключ: {e}", fg=DANGER)
-            return
+            self.info.config(text=f"Неверный ключ: {e}", fg=DANGER); return
 
         xray = resource_path("xray.exe" if os.name == "nt" else "xray")
         if not os.path.exists(xray):
-            self.info.config(text="Не найден xray.exe рядом с программой", fg=DANGER)
-            return
+            self.info.config(text="Не найден xray.exe рядом с программой", fg=DANGER); return
 
-        cfg = build_xray_config(outbound)
-        cfg_path = os.path.join(os.path.dirname(CONFIG_FILE), ".qipcall_xray.json")
+        cfg_path = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
         with open(cfg_path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f)
+            json.dump(build_xray_config(outbound), f)
 
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-            self.proc = subprocess.Popen(
-                [xray, "run", "-config", cfg_path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=flags,
-            )
+            self.proc = subprocess.Popen([xray, "run", "-config", cfg_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         except Exception as e:
-            self.info.config(text=f"Не удалось запустить ядро: {e}", fg=DANGER)
-            return
+            self.info.config(text=f"Не удалось запустить ядро: {e}", fg=DANGER); return
 
         try:
             set_system_proxy(True)
@@ -503,23 +504,19 @@ class QipCallApp:
 
         self.connected = True
         self.status.config(text="● Подключено", fg=OK)
-        self.btn.config(text="Отключиться", bg=DANGER)
+        self.btn.config(text="Отключиться", bg=DANGER, activebackground="#c0392b")
         self.info.config(text="VPN активен. Весь трафик идёт через сервер.", fg=OK)
 
     def disconnect(self):
-        try:
-            set_system_proxy(False)
-        except Exception:
-            pass
+        try: set_system_proxy(False)
+        except Exception: pass
         if self.proc:
-            try:
-                self.proc.terminate()
-            except Exception:
-                pass
+            try: self.proc.terminate()
+            except Exception: pass
             self.proc = None
         self.connected = False
-        self.status.config(text="Отключено", fg=MUTED)
-        self.btn.config(text="Подключиться", bg=ACC)
+        self.status.config(text="● Отключено", fg=MUTED)
+        self.btn.config(text="Подключиться", bg=ACC, activebackground=ACC2)
         self.info.config(text="VPN выключен.", fg=MUTED)
 
     def on_close(self):
@@ -531,13 +528,13 @@ class QipCallApp:
 def main():
     root = tk.Tk()
     try:
-        style = ttk.Style()
-        style.theme_use("clam")
+        style = ttk.Style(); style.theme_use("clam")
         style.configure("TCombobox", fieldbackground=CARD, background=CARD,
-                        foreground=TEXT, arrowcolor=TEXT)
+                        foreground=TEXT, arrowcolor=TEXT, bordercolor=BORDER,
+                        selectbackground=ACC, padding=8)
     except Exception:
         pass
-    QipCallApp(root)
+    JeffTON(root)
     root.mainloop()
 
 
