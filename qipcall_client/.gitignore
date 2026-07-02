@@ -4,3 +4,4 @@ xray_bin/
 dist/
 build/
 *.spec
+flags/

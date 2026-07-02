@@ -26,6 +26,13 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile xray.zip
           Expand-Archive -Path xray.zip -DestinationPath xray_bin -Force
           Copy-Item xray_bin/xray.exe qipcall_client/xray.exe
+      - name: Download flags
+        shell: bash
+        run: |
+          mkdir -p qipcall_client/flags
+          for cc in fr de fi us my nl ru gb pl se tr jp sg ca es it ua lv ee lt ch at hk kr in ae kz ge; do
+            curl -sL "https://flagcdn.com/w80/$cc.png" -o "qipcall_client/flags/$cc.png" || true
+          done
       - name: Build EXE
         shell: pwsh
         working-directory: qipcall_client
@@ -37,6 +44,7 @@ jobs:
             --add-binary "xray.exe;." `
             --add-data "logo_white.png;." `
             --add-data "icon.ico;." `
+            --add-data "flags;flags" `
             qipcall.py
       - name: Clean old release assets
         shell: bash
@@ -81,6 +89,12 @@ jobs:
           mkdir -p xray_bin && unzip -o xray.zip -d xray_bin
           cp xray_bin/xray qipcall_client/xray
           chmod +x qipcall_client/xray
+      - name: Download flags
+        run: |
+          mkdir -p qipcall_client/flags
+          for cc in fr de fi us my nl ru gb pl se tr jp sg ca es it ua lv ee lt ch at hk kr in ae kz ge; do
+            curl -sL "https://flagcdn.com/w80/$cc.png" -o "qipcall_client/flags/$cc.png" || true
+          done
       - name: Build Linux binary
         working-directory: qipcall_client
         run: |
@@ -89,6 +103,7 @@ jobs:
             --collect-all customtkinter \
             --add-binary "xray:." \
             --add-data "logo_white.png:." \
+            --add-data "flags:flags" \
             qipcall.py
       - name: Publish release (Linux)
         uses: softprops/action-gh-release@v2

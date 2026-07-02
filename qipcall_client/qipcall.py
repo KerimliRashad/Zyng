@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -278,6 +278,7 @@ def get_autostart():
 
 
 def fetch_subscription(url):
+    """Возвращает (список_ключей, инфо_подписки)."""
     ctx = None
     try:
         import ssl
@@ -287,12 +288,46 @@ def fetch_subscription(url):
     req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
     with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
         data = r.read().decode().strip()
+        title = r.headers.get("Profile-Title", "")
+        userinfo = r.headers.get("Subscription-Userinfo", "")
     try:
         dec = base64.b64decode(data + "=" * (-len(data) % 4)).decode()
         if "://" in dec: data = dec
     except Exception:
         pass
-    return [ln.strip() for ln in data.splitlines() if "://" in ln]
+    links = [ln.strip() for ln in data.splitlines() if "://" in ln]
+    info = _parse_userinfo(userinfo, title)
+    return links, info
+
+
+def _parse_userinfo(userinfo, title):
+    """Разбирает 'upload=..; download=..; total=..; expire=..' в понятный вид."""
+    d = {"title": title.strip() or "JeffTUN VPN"}
+    parts = {}
+    for kv in userinfo.replace(",", ";").split(";"):
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            try: parts[k.strip()] = int(v.strip())
+            except Exception: pass
+    used = parts.get("upload", 0) + parts.get("download", 0)
+    total = parts.get("total", 0)
+    exp = parts.get("expire", 0)
+    def gb(b): return b / (1024**3)
+    if total:
+        d["traffic"] = f"{gb(used):.1f} / {gb(total):.0f} ГБ"
+        d["left_gb"] = f"осталось {gb(total-used):.1f} ГБ"
+    elif used:
+        d["traffic"] = f"{gb(used):.1f} ГБ / ∞"
+        d["left_gb"] = "безлимит"
+    else:
+        d["traffic"] = "∞"
+        d["left_gb"] = "безлимит"
+    if exp:
+        days = int((exp - time.time()) / 86400)
+        d["expire"] = f"осталось {days} дн." if days >= 0 else "истекла"
+    else:
+        d["expire"] = "бессрочно"
+    return d
 
 
 def tcp_ping(host, port, timeout=3.0):
@@ -317,6 +352,8 @@ class JeffTUN:
         self.autoconnect = False
         self.prefs = {}
         self.selected_idx = 0
+        self.sub_info = {}
+        self._flag_cache = {}
 
         root.title(APP_NAME); root.geometry("900x600"); root.minsize(820, 540)
         try:
@@ -459,11 +496,36 @@ class JeffTUN:
             text=("Подключено" if self.connected else "Отключено"),
             text_color=(OK if self.connected else MUTED)))
 
+    def _flag_image(self, code):
+        if code in self._flag_cache:
+            return self._flag_cache[code]
+        img = None
+        try:
+            path = resource_path(os.path.join("flags", code.lower() + ".png"))
+            if os.path.exists(path):
+                from PIL import Image
+                img = ctk.CTkImage(Image.open(path), size=(38, 28))
+        except Exception:
+            img = None
+        self._flag_cache[code] = img
+        return img
+
     # ── Список серверов ──
     def render_servers(self):
         for w in self.server_list.winfo_children():
             w.destroy()
         q = (self.search.get() if hasattr(self, "search") else "").lower().strip()
+        # Карточка подписки (тариф/остаток/дни)
+        if self.sub_info:
+            si = self.sub_info
+            card = ctk.CTkFrame(self.server_list, fg_color=CARD, corner_radius=14)
+            card.pack(fill="x", pady=(0, 8))
+            ctk.CTkLabel(card, text="🦈 " + si.get("title", "JeffTUN VPN"),
+                         font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w", padx=14, pady=(10, 2))
+            ctk.CTkLabel(card, text=f"📊 {si.get('traffic','')} · {si.get('left_gb','')}",
+                         font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w").pack(anchor="w", padx=14)
+            ctk.CTkLabel(card, text=f"⏳ {si.get('expire','')}",
+                         font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w").pack(anchor="w", padx=14, pady=(0, 10))
         if not self.links:
             self.empty_lbl = ctk.CTkLabel(self.server_list,
                 text="Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
@@ -479,8 +541,12 @@ class JeffTUN:
             row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
                                corner_radius=14, border_width=2 if sel else 0, border_color=ACC)
             row.pack(fill="x", pady=4)
-            badge = ctk.CTkLabel(row, text=code, width=46, height=46, corner_radius=13,
-                                 fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 14, "bold"))
+            flag = self._flag_image(code)
+            if flag:
+                badge = ctk.CTkLabel(row, image=flag, text="", width=46, height=46)
+            else:
+                badge = ctk.CTkLabel(row, text=code, width=46, height=46, corner_radius=13,
+                                     fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 14, "bold"))
             badge.pack(side="left", padx=10, pady=8)
             m = ctk.CTkFrame(row, fg_color="transparent"); m.pack(side="left", fill="x", expand=True)
             ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
@@ -594,7 +660,7 @@ class JeffTUN:
     def _pull_sub(self, reconnect=False):
         self._flash("Обновление подписки…", MUTED); self.root.update()
         try:
-            self.links = fetch_subscription(self.sub_url)
+            self.links, self.sub_info = fetch_subscription(self.sub_url)
             if not self.links:
                 self._flash("Подписка пустая", DANGER); return
             self.selected_idx = 0; self.render_servers(); self.save(silent=True); self.do_ping()
@@ -659,8 +725,18 @@ class JeffTUN:
                             if not chunk: break
                             f.write(chunk); done += len(chunk)
                             if total: setl(f"⏳ Скачиваю… {done*100//total}%")
-                if os.path.getsize(new) < 1_000_000:
-                    raise Exception("файл повреждён")
+                size = os.path.getsize(new)
+                # СТРОГАЯ проверка целостности — иначе будет битый exe
+                if size < 1_000_000:
+                    raise Exception("файл слишком мал")
+                if total and size != total:
+                    raise Exception("скачан не полностью")
+                with open(new, "rb") as f:
+                    head = f.read(2)
+                if os.name == "nt" and head != b"MZ":
+                    raise Exception("не Windows-программа")
+                if os.name != "nt" and head != b"\x7fE":
+                    raise Exception("не Linux-программа")
                 setl("✅ Применяю…")
                 self.root.after(0, lambda: self._apply_update(cur, new))
             except Exception as e:
@@ -674,14 +750,20 @@ class JeffTUN:
         if self.connected: self.disconnect()
         try:
             if os.name == "nt":
+                old = cur + ".old"
                 bat = cur + "_upd.bat"
+                # Работающий exe нельзя удалить, но МОЖНО переименовать → так безопасно
                 with open(bat, "w") as f:
-                    f.write("@echo off\r\nping 127.0.0.1 -n 3 >nul\r\n:retry\r\n"
-                            f'del /f /q "{cur}" >nul 2>&1\r\n'
+                    f.write("@echo off\r\nping 127.0.0.1 -n 3 >nul\r\n"
+                            ":retry\r\n"
+                            f'if exist "{cur}" (move /y "{cur}" "{old}" >nul 2>&1)\r\n'
                             f'move /y "{new}" "{cur}" >nul 2>&1\r\n'
                             f'if not exist "{cur}" (ping 127.0.0.1 -n 2 >nul & goto retry)\r\n'
                             f'start "" "{cur}"\r\n'
-                            f'del /f /q "{new}" >nul 2>&1\r\ndel "%~f0"\r\n')
+                            f'ping 127.0.0.1 -n 2 >nul\r\n'
+                            f'del /f /q "{old}" >nul 2>&1\r\n'
+                            f'del /f /q "{new}" >nul 2>&1\r\n'
+                            f'del "%~f0"\r\n')
                 subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
             else:
                 os.chmod(new, 0o755); sh = cur + "_upd.sh"
