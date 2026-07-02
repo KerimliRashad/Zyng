@@ -858,3 +858,25 @@ body.qip .rec-indicator { background: #ffe8e0; border-top: 1px solid #e0a090; }
   }
   .call-btn { width: 68px; height: 68px; font-size: 28px; }
 }
+
+/* ══ INSTALL ROW + MSG ACTIONS ══════════════════════════════════════════════ */
+.install-row {
+  margin: 4px 8px; padding: 9px 12px;
+  background: rgba(91,141,239,.1); border: 1px dashed rgba(91,141,239,.4);
+  border-radius: 10px; color: var(--acc); font-size: 13px; font-weight: 600;
+  cursor: pointer; text-align: center; flex-shrink: 0;
+  transition: background .15s;
+}
+.install-row:hover { background: rgba(91,141,239,.2); }
+body.qip .install-row { background: #fff8e0; border: 1px dashed #f08000; color: #c06800; border-radius: 4px; }
+
+.msg-act {
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; opacity: 0; transition: opacity .15s;
+  padding: 0 2px; vertical-align: middle;
+}
+.msg:hover .msg-act { opacity: .7; }
+.msg-act:hover { opacity: 1 !important; }
+@media (max-width: 680px) {
+  .msg-act { opacity: .5; } /* на телефоне всегда видны */
+}

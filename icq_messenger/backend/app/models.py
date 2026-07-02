@@ -83,6 +83,7 @@ class Message(Base):
     reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)
 
     chat = relationship("Chat", back_populates="messages")
     sender = relationship("User", back_populates="sent_messages")

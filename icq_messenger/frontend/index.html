@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="icon" type="image/png" href="/icon-192.png">
 <title>Jeff Messenger</title>
-<link rel="stylesheet" href="/css/style.css?v=11">
+<link rel="stylesheet" href="/css/style.css?v=12">
 </head>
 <body>
 
@@ -76,6 +76,8 @@
       <button class="stab active" id="stab-contacts" onclick="showSide('contacts')">Контакты</button>
       <button class="stab" id="stab-chats" onclick="showSide('chats')">Чаты</button>
     </div>
+
+    <button class="install-row" onclick="installApp()">📲 Скачать приложение</button>
 
     <div id="panel-contacts" class="panel">
       <div id="search-res"></div>
@@ -312,7 +314,7 @@
 
 <div id="notif" class="notif hidden"></div>
 
-<script src="/js/app.js?v=11"></script>
+<script src="/js/app.js?v=12"></script>
 <script>
 // Регистрация PWA — можно установить как приложение с сайта
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

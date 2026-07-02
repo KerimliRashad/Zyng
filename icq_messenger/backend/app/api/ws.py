@@ -135,6 +135,42 @@ async def handle(uid: str, data: dict):
         if chat_id:
             manager.join_chat(str(chat_id), uid)
 
+    elif t == "edit_message":
+        mid = data.get("message_id")
+        text = (data.get("text") or "").strip()
+        if not mid or not text:
+            return
+        async with AsyncSessionLocal() as db:
+            m = await db.get(Message, int(mid))
+            if not m or m.sender_id != int(uid):
+                return
+            m.text = text
+            m.is_edited = True
+            await db.commit()
+            chat_id = m.chat_id
+        await manager.broadcast_to_chat(str(chat_id), {
+            "type": "message_edited", "id": int(mid), "chat_id": chat_id, "text": text,
+        })
+
+    elif t == "delete_message":
+        mid = data.get("message_id")
+        if not mid:
+            return
+        async with AsyncSessionLocal() as db:
+            m = await db.get(Message, int(mid))
+            if not m or m.sender_id != int(uid):
+                return
+            chat_id = m.chat_id
+            # убрать ссылки reply_to на удаляемое сообщение
+            refs = await db.execute(select(Message).where(Message.reply_to_id == int(mid)))
+            for r in refs.scalars().all():
+                r.reply_to_id = None
+            await db.delete(m)
+            await db.commit()
+        await manager.broadcast_to_chat(str(chat_id), {
+            "type": "message_deleted", "id": int(mid), "chat_id": chat_id,
+        })
+
     # WebRTC signaling for voice/video calls
     elif t == "call_offer":
         target_uid = str(data.get("to_user_id"))

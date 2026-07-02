@@ -27,6 +27,7 @@ def msg_dict(msg: Message, sender: User, is_mine: bool) -> dict:
         "reply_to_id": msg.reply_to_id,
         "created_at": msg.created_at.isoformat(),
         "is_read": msg.is_read,
+        "is_edited": msg.is_edited or False,
         "is_mine": is_mine,
     }
 

@@ -98,6 +98,23 @@ function dismissInstall() {
   document.getElementById('install-banner')?.remove();
 }
 
+// Кнопка «Скачать приложение» — работает всегда
+function installApp() {
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+    notify('📲 Приложение', 'Уже установлено — ты в нём!');
+    return;
+  }
+  if (deferredInstall) { doInstallApp(); return; }
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    alert('Установка на iPhone:\n\n1. Открой сайт в Safari\n2. Нажми кнопку «Поделиться» (квадрат со стрелкой ⬆️ внизу)\n3. Выбери «На экран “Домой”»\n4. Нажми «Добавить»\n\nИконка Jeff появится на рабочем столе! 🎉');
+  } else if (/Android/i.test(ua)) {
+    alert('Установка на Android:\n\n1. Открой сайт в Chrome\n2. Нажми меню ⋮ (три точки вверху справа)\n3. Выбери «Установить приложение» или «Добавить на главный экран»\n\nИконка Jeff появится на рабочем столе! 🎉');
+  } else {
+    alert('Установка на компьютер:\n\nВ Chrome/Edge: нажми значок установки ⊕ в адресной строке справа, либо меню → «Установить Jeff Messenger».');
+  }
+}
+
 function openColorPicker() {
   document.getElementById('color-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -117,22 +134,44 @@ function isMobile() { return window.innerWidth <= 680; }
 let notifAudioCtx = null;
 
 function requestNotifPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'default') return;
+  // Браузер требует клика пользователя — показываем баннер с кнопкой
+  if (document.getElementById('notif-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'notif-banner';
+  b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:500;background:var(--sb2);border:1px solid var(--acc);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-size:13px;max-width:92vw';
+  b.innerHTML = `🔔 Включить уведомления о сообщениях?
+    <button onclick="enableNotifs()" style="background:var(--acc);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;cursor:pointer;white-space:nowrap">Включить</button>
+    <button onclick="document.getElementById('notif-banner').remove()" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer">✕</button>`;
+  document.body.appendChild(b);
 }
 
-function pushNotify(title, body) {
-  // Browser push notification
-  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-    try {
-      const n = new Notification(title, { body, icon: '/favicon.ico', badge: '/favicon.ico' });
-      setTimeout(() => n.close(), 5000);
-      n.onclick = () => { window.focus(); n.close(); };
-    } catch {}
-  }
-  // Notification sound (short beep)
+async function enableNotifs() {
+  document.getElementById('notif-banner')?.remove();
+  try {
+    const p = await Notification.requestPermission();
+    if (p === 'granted') {
+      notify('🔔 Уведомления', 'Включены! Теперь не пропустишь сообщения');
+      pushNotify('Jeff Messenger', 'Уведомления работают! 🎉');
+    }
+  } catch {}
+}
+
+async function pushNotify(title, body) {
   playNotifSound();
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, icon: '/icon-192.png', badge: '/icon-192.png', vibrate: [200, 100, 200], tag: 'jeff-msg' };
+  // Через service worker — работает и на телефоне в свёрнутом виде
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg && reg.showNotification) { reg.showNotification(title, opts); return; }
+  } catch {}
+  try {
+    const n = new Notification(title, opts);
+    setTimeout(() => n.close(), 6000);
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch {}
 }
 
 function playNotifSound() {
@@ -291,11 +330,28 @@ function onWS(msg) {
       if (!msg.is_mine) {
         const preview = msg.file_type?.startsWith('audio/') ? '🎤 Голосовое' :
                         msg.file_name ? '📎 ' + msg.file_name : (msg.text || 'Сообщение');
-        notify(msg.sender_name, preview, true);
+        // Системный пуш — если вкладка свёрнута или открыт другой чат
+        notify(msg.sender_name, preview, document.hidden || msg.chat_id !== activeChatId);
       }
       break;
     case 'typing':
       if (msg.chat_id === activeChatId) showTyping();
+      break;
+    case 'message_edited': {
+      const el = document.getElementById('m-' + msg.id);
+      if (el) {
+        el.dataset.text = msg.text;
+        const b = el.querySelector('.msg-bubble');
+        if (b) b.textContent = msg.text;
+        const em = el.querySelector('.edited-mark');
+        if (em) em.textContent = 'изм. · ';
+      }
+      loadChats();
+      break;
+    }
+    case 'message_deleted':
+      document.getElementById('m-' + msg.id)?.remove();
+      loadChats();
       break;
     case 'user_status':
       const f = friends.find(u => u.id === msg.user_id);
@@ -615,6 +671,8 @@ function appendMsg(m) {
   const list = document.getElementById('msg-list');
   const d = document.createElement('div');
   d.className = 'msg ' + (m.is_mine ? 'me' : 'other');
+  d.id = 'm-' + m.id;
+  d.dataset.text = m.text || '';
 
   const ft = m.file_type || '';
   let content = '';
@@ -648,11 +706,30 @@ function appendMsg(m) {
     content = `<div class="msg-bubble">${x(m.text)}</div>`;
   }
 
+  const acts = m.is_mine
+    ? ` <button class="msg-act" onclick="editMsg(${m.id})" title="Редактировать">✏️</button><button class="msg-act" onclick="delMsg(${m.id})" title="Удалить">🗑</button>`
+    : '';
   d.innerHTML = `
     ${!m.is_mine ? `<div class="msg-who">${x(m.sender_name)}</div>` : ''}
     ${content}
-    <div class="msg-time">${fmtTime(m.created_at)}</div>`;
+    <div class="msg-time"><span class="edited-mark">${m.is_edited ? 'изм. · ' : ''}</span>${fmtTime(m.created_at)}${acts}</div>`;
   list.appendChild(d);
+}
+
+// ── Edit / delete own messages ────────────────────────────────────────────────
+function editMsg(id) {
+  const el = document.getElementById('m-' + id);
+  const cur = el?.dataset.text || '';
+  const t = prompt('Изменить сообщение:', cur);
+  if (t === null) return;
+  const text = t.trim();
+  if (!text) { delMsg(id); return; }
+  wsSend({ type: 'edit_message', message_id: id, text });
+}
+
+function delMsg(id) {
+  if (!confirm('Удалить сообщение?')) return;
+  wsSend({ type: 'delete_message', message_id: id });
 }
 
 // ── Audio helpers ─────────────────────────────────────────────────────────────
@@ -1042,7 +1119,11 @@ function renderCallActions(active = false, incoming = false) {
     el.innerHTML = `
       <div style="text-align:center">
         <button class="call-btn mute" id="mute-btn" onclick="toggleMute()" title="Микрофон">${isMuted ? '🔇' : '🎤'}</button>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">${isMuted ? 'Включить' : 'Выкл'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">${isMuted ? 'Включить' : 'Микрофон'}</div>
+      </div>
+      <div style="text-align:center">
+        <button class="call-btn mute" id="spk-btn" onclick="toggleSpeaker()" title="Громкая связь">${speakerOn ? '🔊' : '🔈'}</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Динамик</div>
       </div>
       ${callType === 'video' ? `
       <div style="text-align:center">
@@ -1121,8 +1202,13 @@ function newPC() {
         document.getElementById('call-video-wrap').style.display = '';
         document.getElementById('call-audio-ui').style.display = 'none';
       }
-    } else if (st === 'failed' || st === 'disconnected') {
-      document.getElementById('call-status').textContent = '⚠️ Соединение прервано';
+    } else if (st === 'failed') {
+      document.getElementById('call-status').textContent = '❌ Не удалось соединиться — проверь интернет';
+      setTimeout(endCall, 3000);
+    } else if (st === 'disconnected') {
+      document.getElementById('call-status').textContent = '⚠️ Переподключение...';
+    } else if (st === 'connecting') {
+      document.getElementById('call-status').textContent = '🔄 Соединение...';
     }
   };
   return p;
@@ -1134,6 +1220,29 @@ function toggleMute() {
   localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
   const btn = document.getElementById('mute-btn');
   if (btn) btn.textContent = isMuted ? '🔇' : '🎤';
+}
+
+// Громкая связь: переключение динамика (setSinkId где поддерживается, иначе громкость)
+let speakerOn = true;
+async function toggleSpeaker() {
+  speakerOn = !speakerOn;
+  const els = [document.getElementById('remote-audio'), document.getElementById('remote-video')];
+  for (const el of els) {
+    if (!el) continue;
+    el.volume = speakerOn ? 1.0 : 0.3;
+    if (typeof el.setSinkId === 'function') {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const outs = devs.filter(d => d.kind === 'audiooutput');
+        const spk = outs.find(d => /speaker|громк/i.test(d.label));
+        const ear = outs.find(d => /earpiece|телефон/i.test(d.label));
+        if (speakerOn && spk) await el.setSinkId(spk.deviceId);
+        else if (!speakerOn && ear) await el.setSinkId(ear.deviceId);
+      } catch {}
+    }
+  }
+  const btn = document.getElementById('spk-btn');
+  if (btn) btn.textContent = speakerOn ? '🔊' : '🔈';
 }
 
 function toggleCam() {
@@ -1165,7 +1274,7 @@ function endCallClean() {
   document.getElementById('call-video-wrap').style.display = 'none';
   document.getElementById('call-audio-ui').style.display = 'flex';
   document.getElementById('call-overlay').classList.add('hidden');
-  callTargetId = null; incomingSdp = null; pendingIce = [];
+  callTargetId = null; incomingSdp = null; pendingIce = []; speakerOn = true;
 }
 
 // ── Profile Edit ──────────────────────────────────────────────────────────────
