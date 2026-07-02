@@ -680,3 +680,157 @@ textarea.field { resize: none; }
   border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #d29922;
   margin-bottom: 10px; line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ══ QIP RETRO THEME (body.qip) — стиль QIP/ICQ 2005 ═══════
+   ═══════════════════════════════════════════════════════════ */
+body.qip {
+  --acc: #3a6ea5;
+  --acc2: #2a5a8f;
+  --bg: #ffffff;
+  --sb: #f0f4fa;
+  --sb2: #e3ecf7;
+  --hover: #d8e6f5;
+  --active: #bcd4ee;
+  --border: #9db8d2;
+  --inp: #ffffff;
+  --text: #1a1a2e;
+  --muted: #5a7a9a;
+  --bme: #d9eaff;
+  --bother: #f0f0e8;
+  --online: #3cb043;
+  --danger: #cc3333;
+  --head: linear-gradient(180deg, #6ca6e8 0%, #3a6ea5 100%);
+  font-family: Tahoma, 'Segoe UI', Verdana, sans-serif;
+}
+
+body.qip .sbar-head,
+body.qip .chat-head {
+  background: linear-gradient(180deg, #6ca6e8 0%, #3a6ea5 100%);
+  border-bottom: 1px solid #2a5a8f;
+  color: #fff;
+}
+body.qip .sbar-head .me-name, body.qip .chat-head .ch-name { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+body.qip .sbar-head .me-id, body.qip .chat-head .ch-status { color: #d5e6fa; }
+body.qip .chat-head .ch-status.online { color: #a8ffb0; }
+body.qip .ico-btn { color: #e8f2ff; }
+body.qip .ico-btn:hover, body.qip .ico-btn:active { background: rgba(255,255,255,.2); color: #fff; }
+body.qip .back-btn { color: #fff; }
+
+body.qip .sidebar {
+  background: #f0f4fa;
+  border-right: 2px solid #9db8d2;
+}
+body.qip .sb-search { background: #e3ecf7; border-bottom: 1px solid #b8cde4; }
+body.qip .search-field {
+  background: #fff; border: 1px solid #9db8d2; border-radius: 4px;
+  color: #1a1a2e;
+}
+body.qip .stab { border-radius: 4px 4px 0 0; border: 1px solid transparent; }
+body.qip .stab.active {
+  background: #fff; color: #3a6ea5;
+  border: 1px solid #9db8d2; border-bottom-color: #fff;
+}
+
+body.qip .c-item { border-bottom: 1px dotted #c8d8ea; }
+body.qip .c-item:hover { background: #d8e6f5; }
+body.qip .c-item.active { background: #bcd4ee; }
+body.qip .sec-label {
+  background: linear-gradient(180deg, #dce9f8, #c4d9ef);
+  color: #2a5a8f; border: 1px solid #a8c4e0;
+  border-radius: 3px; margin: 4px 6px 2px;
+  padding: 3px 10px; font-size: 11px;
+}
+
+body.qip .avatar { border-radius: 4px; border: 1px solid rgba(0,0,0,.15); }
+body.qip .avatar.sq { border-radius: 4px; }
+
+body.qip .chat-area { background: #ffffff; }
+body.qip .msgs {
+  background: #fdfdf8;
+  background-image: linear-gradient(rgba(58,110,165,.04) 1px, transparent 1px);
+  background-size: 100% 26px;
+}
+body.qip .msg-bubble {
+  border-radius: 6px; border: 1px solid #c8d8ea;
+  font-size: 13px; font-family: Tahoma, Verdana, sans-serif;
+}
+body.qip .msg.me .msg-bubble { background: #d9eaff; border-color: #a8c8e8; color: #1a1a2e; }
+body.qip .msg.other .msg-bubble { background: #f5f5ec; border-color: #d5d5c5; color: #1a1a2e; }
+body.qip .msg-who { color: #cc3333; font-size: 11px; }
+body.qip .msg.me .msg-time, body.qip .msg-time { color: #8aa5c0; }
+
+body.qip .inp-wrap, body.qip .inp-area {
+  background: #f0f4fa; border-top: 2px solid #9db8d2;
+}
+body.qip #msg-inp {
+  background: #fff; border: 1px solid #9db8d2; border-radius: 4px;
+  color: #1a1a2e; font-family: Tahoma, Verdana, sans-serif;
+}
+body.qip .send-btn { border-radius: 4px; background: linear-gradient(180deg, #6ca6e8, #3a6ea5); box-shadow: none; border: 1px solid #2a5a8f; }
+body.qip .tool-btn { color: #3a6ea5; }
+body.qip .tool-btn:hover { background: #d8e6f5; }
+
+body.qip .modal-box {
+  background: #f0f4fa; border: 2px solid #3a6ea5; border-radius: 8px;
+  color: #1a1a2e;
+  box-shadow: 4px 4px 0 rgba(58,110,165,.25);
+}
+body.qip .modal-box h3 {
+  background: linear-gradient(180deg, #6ca6e8, #3a6ea5);
+  color: #fff; margin: -20px -20px 14px; padding: 10px 16px;
+  border-radius: 6px 6px 0 0; font-size: 14px;
+}
+body.qip .field {
+  background: #fff; border: 1px solid #9db8d2; border-radius: 4px; color: #1a1a2e;
+}
+body.qip .btn {
+  background: linear-gradient(180deg, #6ca6e8, #3a6ea5);
+  border: 1px solid #2a5a8f; border-radius: 4px;
+}
+body.qip .btn-sec { border: 1px solid #9db8d2; border-radius: 4px; color: #3a6ea5; }
+
+body.qip .notif {
+  background: #fffbe6; border: 1px solid #e6c84a; border-radius: 6px;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.15);
+}
+body.qip .notif-t { color: #8a6d00; }
+body.qip .notif-b { color: #5a5a3a; }
+
+body.qip #auth-screen { background: linear-gradient(160deg, #b8d4f0 0%, #e8f2fc 100%); }
+body.qip .auth-box {
+  background: #f0f4fa; border: 2px solid #3a6ea5; border-radius: 8px;
+  box-shadow: 6px 6px 0 rgba(58,110,165,.25);
+}
+body.qip .brand-icon { background: linear-gradient(145deg, #ffb340, #f08000); border-radius: 12px; }
+body.qip .brand-name { color: #3a6ea5; }
+body.qip .tabs { background: #dce9f8; }
+body.qip .tab { color: #5a7a9a; }
+body.qip .tab.active { background: #3a6ea5; }
+
+body.qip .dot.online { background: #3cb043; box-shadow: 0 0 0 2px #f0f4fa; }
+body.qip .badge { background: #f08000; border-radius: 3px; }
+body.qip .group-badge { background: #dce9f8; color: #3a6ea5; border: 1px solid #a8c4e0; border-radius: 3px; }
+body.qip .channel-badge { background: #f3e6fa; color: #8040a0; border: 1px solid #d0a8e0; border-radius: 3px; }
+body.qip .verified { background: #3cb043; border-radius: 3px; }
+
+body.qip .fab {
+  border-radius: 6px; background: linear-gradient(180deg, #ffb340, #f08000);
+  border: 1px solid #c06800; box-shadow: 3px 3px 0 rgba(0,0,0,.2);
+}
+body.qip #members-panel { background: #f0f4fa; border-left: 2px solid #9db8d2; }
+body.qip .mp-head { color: #2a5a8f; }
+body.qip .stat-card { background: #fff; border: 1px solid #b8cde4; }
+body.qip .admin-user-row { background: #fff; border: 1px solid #d5e2f0; }
+body.qip .emoji-picker { background: #f0f4fa; border-top: 2px solid #9db8d2; }
+body.qip ::-webkit-scrollbar { width: 12px; }
+body.qip ::-webkit-scrollbar-thumb { background: #b8cde4; border-radius: 0; border: 2px solid #f0f4fa; }
+body.qip ::-webkit-scrollbar-track { background: #e3ecf7; }
+
+body.qip #call-overlay { background: linear-gradient(160deg, #b8d4f0 0%, #e8f2fc 100%); }
+body.qip .call-name { color: #1a1a2e; }
+body.qip .call-status { color: #5a7a9a; }
+body.qip .typing { background: #f5f5ec; border: 1px solid #d5d5c5; }
+body.qip .voice-msg, body.qip .file-msg { background: #fff; border: 1px solid #c8d8ea; }
+body.qip .file-nm { color: #1a1a2e; }
+body.qip .rec-indicator { background: #ffe8e0; border-top: 1px solid #e0a090; }

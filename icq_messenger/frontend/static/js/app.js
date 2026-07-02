@@ -52,6 +52,7 @@ const EMOJIS = [
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  applyTheme();
   buildEmojiPicker();
   document.getElementById('notif').onclick = () => hide('notif');
   document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -63,6 +64,20 @@ window.addEventListener('DOMContentLoaded', () => {
     show('auth-screen');
   }
 });
+
+// ── Theme (QIP retro / dark) ──────────────────────────────────────────────────
+function applyTheme() {
+  const t = localStorage.getItem('jf_theme') || 'dark';
+  document.body.classList.toggle('qip', t === 'qip');
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = t === 'qip' ? '🌙' : '🌼';
+}
+function toggleTheme() {
+  const cur = localStorage.getItem('jf_theme') || 'dark';
+  localStorage.setItem('jf_theme', cur === 'qip' ? 'dark' : 'qip');
+  applyTheme();
+  notify('Тема', cur === 'qip' ? 'Тёмная тема' : 'Ретро QIP 🌼');
+}
 
 function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
 function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
@@ -93,15 +108,34 @@ function pushNotify(title, body) {
 function playNotifSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.setValueAtTime(1200, ctx.currentTime);
-    o.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.12);
-    g.gain.setValueAtTime(0.2, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    o.start(); o.stop(ctx.currentTime + 0.15);
-    setTimeout(() => ctx.close(), 300);
+    if (document.body.classList.contains('qip')) {
+      // Классическое ICQ «о-оу» — два тона голосоподобной формы
+      const mk = (freq1, freq2, start, dur) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'triangle';
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.setValueAtTime(freq1, ctx.currentTime + start);
+        o.frequency.exponentialRampToValueAtTime(freq2, ctx.currentTime + start + dur);
+        g.gain.setValueAtTime(0, ctx.currentTime + start);
+        g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + start + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+        o.start(ctx.currentTime + start); o.stop(ctx.currentTime + start + dur);
+      };
+      mk(620, 520, 0, 0.16);      // «о»
+      mk(470, 330, 0.18, 0.22);   // «оу»
+      setTimeout(() => ctx.close(), 600);
+    } else {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.setValueAtTime(1200, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.12);
+      g.gain.setValueAtTime(0.2, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      o.start(); o.stop(ctx.currentTime + 0.15);
+      setTimeout(() => ctx.close(), 300);
+    }
   } catch {}
 }
 
