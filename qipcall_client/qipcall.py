@@ -18,10 +18,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.4"
+APP_VERSION = "2.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
+TELEGRAM_URL = "https://t.me/jeffvpn"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
@@ -292,6 +293,35 @@ def _set_linux_proxy(enable: bool):
         g("set", "org.gnome.system.proxy", "mode", "none")
 
 
+# ══ АВТОЗАПУСК С СИСТЕМОЙ (Windows) ══════════════════════════════════════════
+def set_autostart(enable: bool):
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return
+    import winreg
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+        r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+    if enable:
+        winreg.SetValueEx(key, "JeffTUN", 0, winreg.REG_SZ, f'"{sys.executable}"')
+    else:
+        try: winreg.DeleteValue(key, "JeffTUN")
+        except Exception: pass
+    winreg.CloseKey(key)
+
+
+def get_autostart() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run")
+        winreg.QueryValueEx(key, "JeffTUN")
+        winreg.CloseKey(key)
+        return True
+    except Exception:
+        return False
+
+
 # ══ ЗАГРУЗКА ПОДПИСКИ ════════════════════════════════════════════════════════
 def fetch_subscription(url: str) -> list:
     ctx = None
@@ -333,6 +363,7 @@ class JeffTUN:
         self.connected = False
         self.links = []
         self.sub_url = ""
+        self.autoconnect = False
 
         root.title(APP_NAME)
         root.geometry("460x640")
@@ -347,6 +378,9 @@ class JeffTUN:
         tk.Label(logo, text="Jeff", bg=BG, fg=TEXT, font=("Segoe UI", 26, "bold")).pack(side="left")
         tk.Label(logo, text="TUN", bg=BG, fg=ACC, font=("Segoe UI", 26, "bold")).pack(side="left")
         tk.Label(header, text="VPN", bg=BG, fg=MUTED, font=("Segoe UI", 11, "bold")).pack(side="left", padx=(6, 0), pady=(12, 0))
+        tk.Button(header, text="⚙", command=self.open_settings, bg=BG, fg=MUTED,
+                  relief="flat", font=("Segoe UI", 18), cursor="hand2", bd=0,
+                  activebackground=BG, activeforeground=TEXT).pack(side="right", pady=(6, 0))
 
         tk.Label(root, text="Вставь ключ или ссылку-подписку и подключись",
                  bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(padx=26, anchor="w", pady=(0, 12))
@@ -423,6 +457,8 @@ class JeffTUN:
         self.refresh_from_box()
         self.txt.bind("<KeyRelease>", lambda e: self._debounce_refresh())
         self.check_update()
+        if self.autoconnect and self.links:
+            self.root.after(800, self.connect)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     _refresh_timer = None
@@ -523,6 +559,83 @@ class JeffTUN:
         self._update_lbl.config(text=f"🎉 Доступно обновление {latest} (у тебя {APP_VERSION})")
         self.update_bar.pack(fill="x", padx=26, pady=(0, 12), before=self.txt.master)
 
+    # ── Окно настроек ──
+    def open_settings(self):
+        win = tk.Toplevel(self.root)
+        win.title("Настройки")
+        win.configure(bg=BG)
+        win.geometry("420x560")
+        win.resizable(False, False)
+        win.transient(self.root)
+
+        tk.Label(win, text="Настройки", bg=BG, fg=TEXT,
+                 font=("Segoe UI", 18, "bold")).pack(pady=(18, 10))
+
+        def section(title):
+            tk.Label(win, text=title, bg=BG, fg=MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=24, pady=(14, 4))
+            card = tk.Frame(win, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
+            card.pack(fill="x", padx=20)
+            return card
+
+        def toggle_row(card, text, var, cmd):
+            row = tk.Frame(card, bg=CARD); row.pack(fill="x", padx=14, pady=10)
+            tk.Label(row, text=text, bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
+            b = tk.Checkbutton(row, variable=var, command=cmd, bg=CARD, fg=ACC,
+                               selectcolor=CARD2, activebackground=CARD, bd=0,
+                               highlightthickness=0)
+            b.pack(side="right")
+
+        def link_row(card, text, value, cmd, color=TEXT):
+            row = tk.Frame(card, bg=CARD, cursor="hand2"); row.pack(fill="x", padx=14, pady=10)
+            tk.Label(row, text=text, bg=CARD, fg=color, font=("Segoe UI", 11)).pack(side="left")
+            tk.Label(row, text=value, bg=CARD, fg=MUTED, font=("Segoe UI", 10)).pack(side="right")
+            for w in (row,) + tuple(row.winfo_children()):
+                w.bind("<Button-1>", lambda e: cmd())
+
+        # ИНТЕРФЕЙС
+        c1 = section("ИНТЕРФЕЙС")
+        self._autostart_var = tk.BooleanVar(value=get_autostart())
+        toggle_row(c1, "Автозапуск с Windows", self._autostart_var,
+                   lambda: set_autostart(self._autostart_var.get()))
+        self._autoconnect_var = tk.BooleanVar(value=self.autoconnect)
+        def save_ac():
+            self.autoconnect = self._autoconnect_var.get(); self.save(silent=True)
+        toggle_row(c1, "Автоподключение при запуске", self._autoconnect_var, save_ac)
+
+        # ТУННЕЛЬ / ДАННЫЕ
+        c2 = section("ДАННЫЕ")
+        link_row(c2, "Пинг выбранного сервера", "▶", lambda: (self.do_ping()))
+        link_row(c2, "Обновить подписку", "⬆", lambda: self.update_sub())
+        link_row(c2, "Сбросить ключ", "", self._reset_key, color=DANGER)
+
+        # ПОДРОБНЕЕ
+        c3 = section("ПОДРОБНЕЕ")
+        link_row(c3, "Проверить обновление", f"v{APP_VERSION}", self.do_self_update)
+        link_row(c3, "Telegram-канал", "@jeffvpn",
+                 lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
+        link_row(c3, "О приложении", "", lambda: self._about())
+
+        tk.Label(win, text=f"JeffTUN VPN v{APP_VERSION}", bg=BG, fg="#3a4256",
+                 font=("Segoe UI", 8)).pack(side="bottom", pady=10)
+
+    def _reset_key(self):
+        if not messagebox.askyesno(APP_NAME, "Удалить сохранённый ключ и серверы?"):
+            return
+        self.txt.delete("1.0", "end")
+        self.links = []; self.sub_url = ""; self.selected_idx = 0
+        self.server_box.pack_forget()
+        try: os.remove(CONFIG_FILE)
+        except Exception: pass
+        self.info.config(text="Ключ сброшен", fg=MUTED)
+
+    def _about(self):
+        messagebox.showinfo("О приложении",
+            f"JeffTUN VPN v{APP_VERSION}\n\n"
+            "Быстрый VPN с обходом блокировок.\n"
+            "Протоколы: VLESS (Reality), VMess, Trojan, Shadowsocks.\n\n"
+            "Telegram: t.me/jeffvpn")
+
     def do_self_update(self):
         """Скачивает новую версию и заменяет программу автоматически."""
         # На macOS .dmg заменить на лету нельзя — открываем страницу
@@ -582,13 +695,17 @@ class JeffTUN:
             self._update_lbl.config(text=f"Не удалось обновить: {e}")
 
     # ── Сохранение / загрузка ──
-    def save(self):
+    def save(self, silent=False):
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump({"key": self.txt.get("1.0", "end").strip(), "sub_url": self.sub_url}, f)
-            self.info.config(text="Сохранено ✓", fg=OK)
+                json.dump({"key": self.txt.get("1.0", "end").strip(),
+                           "sub_url": self.sub_url,
+                           "autoconnect": self.autoconnect}, f)
+            if not silent:
+                self.info.config(text="Сохранено ✓", fg=OK)
         except Exception as e:
-            self.info.config(text=f"Ошибка сохранения: {e}", fg=DANGER)
+            if not silent:
+                self.info.config(text=f"Ошибка сохранения: {e}", fg=DANGER)
 
     def load_saved(self):
         try:
@@ -597,6 +714,7 @@ class JeffTUN:
                 if d.get("key"):
                     self.txt.insert("1.0", d["key"])
                 self.sub_url = d.get("sub_url", "")
+                self.autoconnect = bool(d.get("autoconnect", False))
         except Exception:
             pass
 
