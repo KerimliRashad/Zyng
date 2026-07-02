@@ -28,6 +28,8 @@ class VpnUser(Base):
 
     is_active = Column(Boolean, default=True)
     telegram_id = Column(BigInteger, nullable=True)
+    # Список id серверов через запятую, к которым есть доступ. Пусто/NULL = все.
+    server_ids = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     @property
@@ -37,3 +39,27 @@ class VpnUser(Base):
     @property
     def enabled(self):
         return self.is_active and not self.is_expired
+
+    def allowed_server_ids(self):
+        if not self.server_ids:
+            return None  # None = доступны все серверы
+        return {int(x) for x in self.server_ids.split(",") if x.strip().isdigit()}
+
+
+class Server(Base):
+    """Сервер-страна. Каждый = отдельная точка (VPS) со своими параметрами."""
+    __tablename__ = "servers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)          # "France - быстрый"
+    country_code = Column(String(4), default="")        # FR, DE, FI...
+    host = Column(String(255), nullable=False)          # ip или домен
+    port = Column(Integer, default=443)
+    # REALITY параметры этого узла
+    public_key = Column(String(120), default="")
+    short_id = Column(String(32), default="")
+    sni = Column(String(255), default="www.microsoft.com")
+    flow = Column(String(32), default="xtls-rprx-vision")
+    is_active = Column(Boolean, default=True)
+    sort = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)

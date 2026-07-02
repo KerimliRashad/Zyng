@@ -124,7 +124,20 @@ def ss_link(u) -> str:
     return f"ss://{userinfo}@{config.SERVER_IP}:{config.PORT_SHADOWSOCKS}#{quote('JeffTUN SS ' + u.name)}"
 
 
-def subscription_body(u) -> str:
-    """Возвращает подписку (base64 список ссылок) для Happ / v2RayTun."""
-    links = [vless_link(u), vmess_link(u), trojan_link(u), ss_link(u)]
+def server_vless_link(u, s) -> str:
+    """VLESS-REALITY ссылка на конкретный сервер-страну s для юзера u."""
+    params = (
+        f"type=tcp&security=reality&pbk={s.public_key}"
+        f"&fp=chrome&sni={s.sni}&sid={s.short_id}&flow={s.flow}"
+    )
+    return f"vless://{u.uuid}@{s.host}:{s.port}?{params}#{quote(s.name)}"
+
+
+def subscription_body(u, servers=None) -> str:
+    """Подписка (base64). Если переданы серверы — по ссылке на каждую страну.
+    Иначе — 4 протокола локального узла (обратная совместимость)."""
+    if servers:
+        links = [server_vless_link(u, s) for s in servers]
+    else:
+        links = [vless_link(u), vmess_link(u), trojan_link(u), ss_link(u)]
     return base64.b64encode("\n".join(links).encode()).decode()

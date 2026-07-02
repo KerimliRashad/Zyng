@@ -13,7 +13,7 @@ from typing import Optional
 
 from app import config, xray
 from app.database import init_db, get_db, AsyncSessionLocal
-from app.models import VpnUser
+from app.models import VpnUser, Server
 from app.auth import make_admin_token, require_admin
 
 
@@ -24,9 +24,41 @@ async def resync_xray():
         xray.apply(list(users))
 
 
+async def seed_default_server():
+    """Если серверов нет — создаём текущий VPS как первый сервер-страну."""
+    async with AsyncSessionLocal() as db:
+        existing = (await db.execute(select(Server))).scalars().first()
+        if existing:
+            return
+        db.add(Server(
+            name="Server 1 - быстрый",
+            country_code="",
+            host=config.SERVER_IP,
+            port=config.PORT_REALITY,
+            public_key=config.REALITY_PUBLIC_KEY,
+            short_id=config.REALITY_SHORT_ID,
+            sni=config.REALITY_SNI,
+            flow="xtls-rprx-vision",
+            is_active=True, sort=0,
+        ))
+        await db.commit()
+
+
+async def servers_for(u, db):
+    """Серверы, доступные конкретному юзеру (с учётом его набора стран)."""
+    all_servers = (await db.execute(
+        select(Server).where(Server.is_active == True).order_by(Server.sort, Server.id)
+    )).scalars().all()
+    allowed = u.allowed_server_ids()
+    if allowed is None:
+        return all_servers
+    return [s for s in all_servers if s.id in allowed]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await seed_default_server()
     await resync_xray()
     yield
 
@@ -48,7 +80,8 @@ async def get_subscription(token: str, db: AsyncSession = Depends(get_db)):
     if not u.enabled:
         # Возвращаем пустую подписку для отключённых
         return PlainTextResponse("", headers={"Profile-Title": "JeffTUN (истёк)"})
-    body = xray.subscription_body(u)
+    servers = await servers_for(u, db)
+    body = xray.subscription_body(u, servers)
     days_left = ""
     if u.expires_at:
         days_left = f" · до {u.expires_at.strftime('%d.%m.%Y')}"
@@ -84,7 +117,7 @@ def user_dict(u: VpnUser) -> dict:
         "expires_at": u.expires_at.isoformat() if u.expires_at else None,
         "traffic_limit": u.traffic_limit, "traffic_used": u.traffic_used,
         "is_active": u.is_active, "enabled": u.enabled, "is_expired": u.is_expired,
-        "telegram_id": u.telegram_id,
+        "telegram_id": u.telegram_id, "server_ids": u.server_ids,
         "created_at": u.created_at.isoformat() if u.created_at else None,
     }
 
@@ -180,6 +213,78 @@ async def delete_user(uid: int, _: bool = Depends(require_admin), db: AsyncSessi
     await db.commit()
     await resync_xray()
     return {"status": "ok"}
+
+
+# ══ АДМИН: серверы-страны ════════════════════════════════════════════════════
+def server_dict(s: Server) -> dict:
+    return {
+        "id": s.id, "name": s.name, "country_code": s.country_code,
+        "host": s.host, "port": s.port, "public_key": s.public_key,
+        "short_id": s.short_id, "sni": s.sni, "flow": s.flow,
+        "is_active": s.is_active, "sort": s.sort,
+    }
+
+
+@app.get("/api/admin/servers")
+async def list_servers(_: bool = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    servers = (await db.execute(select(Server).order_by(Server.sort, Server.id))).scalars().all()
+    return [server_dict(s) for s in servers]
+
+
+class ServerIn(BaseModel):
+    name: str
+    country_code: str = ""
+    host: str
+    port: int = 443
+    public_key: str = ""
+    short_id: str = ""
+    sni: str = "www.microsoft.com"
+    flow: str = "xtls-rprx-vision"
+    is_active: bool = True
+    sort: int = 0
+
+
+@app.post("/api/admin/servers")
+async def create_server(data: ServerIn, _: bool = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    s = Server(**data.model_dump())
+    db.add(s)
+    await db.commit()
+    await db.refresh(s)
+    return server_dict(s)
+
+
+@app.put("/api/admin/servers/{sid}")
+async def update_server(sid: int, data: ServerIn, _: bool = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    s = await db.get(Server, sid)
+    if not s:
+        raise HTTPException(status_code=404, detail="Сервер не найден")
+    for k, v in data.model_dump().items():
+        setattr(s, k, v)
+    await db.commit()
+    return server_dict(s)
+
+
+@app.delete("/api/admin/servers/{sid}")
+async def delete_server(sid: int, _: bool = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    s = await db.get(Server, sid)
+    if s:
+        await db.delete(s)
+        await db.commit()
+    return {"status": "ok"}
+
+
+class SetUserServers(BaseModel):
+    server_ids: Optional[str] = None  # "1,3,5" или пусто = все
+
+
+@app.put("/api/admin/users/{uid}/servers")
+async def set_user_servers(uid: int, data: SetUserServers, _: bool = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    u = await db.get(VpnUser, uid)
+    if not u:
+        raise HTTPException(status_code=404, detail="Не найден")
+    u.server_ids = (data.server_ids or "").strip() or None
+    await db.commit()
+    return {"status": "ok", "server_ids": u.server_ids}
 
 
 @app.get("/api/config")

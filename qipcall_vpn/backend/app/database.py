@@ -12,5 +12,11 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
+    from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # доп. колонка для существующих БД
+        try:
+            await conn.execute(text("ALTER TABLE vpn_users ADD COLUMN IF NOT EXISTS server_ids VARCHAR(255)"))
+        except Exception:
+            pass
