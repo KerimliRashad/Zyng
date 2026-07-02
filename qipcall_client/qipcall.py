@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.7"
+APP_VERSION = "2.8"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -367,9 +367,30 @@ class JeffTUN:
         self.prefs = {}
 
         root.title(APP_NAME)
-        root.geometry("460x640")
+        root.geometry("460x680")
         root.configure(bg=BG)
         root.resizable(False, False)
+
+        # Иконка окна / приложения
+        self._logo_img = None
+        try:
+            if os.name == "nt":
+                ico = resource_path("icon.ico")
+                if os.path.exists(ico):
+                    root.iconbitmap(ico)
+        except Exception:
+            pass
+        try:
+            logo_png = resource_path("logo_white.png")
+            if os.path.exists(logo_png):
+                img = tk.PhotoImage(file=logo_png)
+                # уменьшаем до ~40px высоты
+                factor = max(1, img.height() // 40)
+                self._logo_small = img.subsample(factor, factor)
+                self._logo_img = img
+                root.iconphoto(True, img)
+        except Exception:
+            pass
 
         # ── Заголовок ──
         header = tk.Frame(root, bg=BG)
@@ -452,7 +473,9 @@ class JeffTUN:
         self.info.pack(pady=(6, 0))
 
         tk.Label(root, text=f"JeffTUN v{APP_VERSION}", bg=BG, fg="#3a4256",
-                 font=("Segoe UI", 8)).pack(side="bottom", pady=6)
+                 font=("Segoe UI", 8)).pack(side="bottom", pady=(0, 8))
+        if getattr(self, "_logo_small", None):
+            tk.Label(root, image=self._logo_small, bg=BG).pack(side="bottom", pady=(4, 0))
 
         self.load_saved()
         self.refresh_from_box()

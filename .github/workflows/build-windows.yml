@@ -32,7 +32,10 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile --windowed `
             --name "JeffTUN" `
+            --icon "icon.ico" `
             --add-binary "xray.exe;." `
+            --add-data "logo_white.png;." `
+            --add-data "icon.ico;." `
             qipcall.py
       - name: Clean old release assets
         shell: bash
@@ -83,6 +86,7 @@ jobs:
           pyinstaller --noconfirm --onefile \
             --name "JeffTUN-linux" \
             --add-binary "xray:." \
+            --add-data "logo_white.png:." \
             qipcall.py
       - name: Publish release (Linux)
         uses: softprops/action-gh-release@v2
