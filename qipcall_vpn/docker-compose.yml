@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: vpn
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-vpnpass2026}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: vpndb
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -27,11 +27,11 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://vpn:${DB_PASSWORD:-vpnpass2026}@db:5432/vpndb
-      SECRET_KEY: ${SECRET_KEY:-qipcall-vpn-secret-2026}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-a1523415}
-      PANEL_DOMAIN: ${PANEL_DOMAIN:-qipcall.duckdns.org}
-      SERVER_IP: ${SERVER_IP:-2.26.18.209}
+      DATABASE_URL: postgresql+asyncpg://vpn:${DB_PASSWORD}@db:5432/vpndb
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PANEL_DOMAIN: ${PANEL_DOMAIN:-localhost}
+      SERVER_IP: ${SERVER_IP:-127.0.0.1}
       REALITY_PRIVATE_KEY: ${REALITY_PRIVATE_KEY}
       REALITY_PUBLIC_KEY: ${REALITY_PUBLIC_KEY}
       REALITY_SHORT_ID: ${REALITY_SHORT_ID}
@@ -60,9 +60,9 @@ services:
     command: >-
       sh -c "apk add --no-cache openssl &&
       mkdir -p /etc/nginx/ssl /var/www/certbot &&
-      if [ -f /etc/letsencrypt/live/${PANEL_DOMAIN:-qipcall.duckdns.org}/fullchain.pem ]; then
-      cp -fL /etc/letsencrypt/live/${PANEL_DOMAIN:-qipcall.duckdns.org}/fullchain.pem /etc/nginx/ssl/cert.pem &&
-      cp -fL /etc/letsencrypt/live/${PANEL_DOMAIN:-qipcall.duckdns.org}/privkey.pem /etc/nginx/ssl/key.pem;
+      if [ -f /etc/letsencrypt/live/${PANEL_DOMAIN:-localhost}/fullchain.pem ]; then
+      cp -fL /etc/letsencrypt/live/${PANEL_DOMAIN:-localhost}/fullchain.pem /etc/nginx/ssl/cert.pem &&
+      cp -fL /etc/letsencrypt/live/${PANEL_DOMAIN:-localhost}/privkey.pem /etc/nginx/ssl/key.pem;
       else
       [ -f /etc/nginx/ssl/cert.pem ] || openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /etc/nginx/ssl/key.pem -out /etc/nginx/ssl/cert.pem -subj '/CN=qipcall/O=JeffTUN/C=RU';
       fi &&

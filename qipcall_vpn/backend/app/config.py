@@ -1,11 +1,16 @@
 import os
+import secrets as _secrets
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://vpn:vpnpass2026@db:5432/vpndb")
-SECRET_KEY = os.getenv("SECRET_KEY", "qipcall-vpn-secret-2026")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "a1523415")
+# Секреты берутся ТОЛЬКО из переменных окружения (.env), в коде их нет.
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://vpn:vpnpass@db:5432/vpndb")
+# Если не задан — генерируется случайный при старте (токены станут невалидны при перезапуске)
+SECRET_KEY = os.getenv("SECRET_KEY") or _secrets.token_hex(32)
+# Пароль админки: обязателен через окружение. Если не задан — случайный (в логах),
+# чтобы никто не мог войти со «стандартным» паролем.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or _secrets.token_urlsafe(12)
 
-PANEL_DOMAIN = os.getenv("PANEL_DOMAIN", "qipcall.duckdns.org")
-SERVER_IP = os.getenv("SERVER_IP", "2.26.18.209")
+PANEL_DOMAIN = os.getenv("PANEL_DOMAIN", "localhost")
+SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 
 # REALITY параметры (генерируются скриптом setup.sh)
 REALITY_PRIVATE_KEY = os.getenv("REALITY_PRIVATE_KEY", "")

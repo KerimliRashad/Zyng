@@ -2,9 +2,13 @@
 # JeffTUN VPN — первичная настройка. Запускать один раз в папке qipcall_vpn.
 set -e
 
-DOMAIN="${1:-qipcall.duckdns.org}"
-SERVER_IP="${2:-$(curl -s https://api.ipify.org || echo 2.26.18.209)}"
+DOMAIN="${1:-localhost}"
+SERVER_IP="${2:-$(curl -s https://api.ipify.org || echo 127.0.0.1)}"
 SNI="${3:-www.microsoft.com}"
+
+# Пароль админки: берётся из окружения ADMIN_PASSWORD, иначе генерируется случайно
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 12 | tr -dc 'A-Za-z0-9' | head -c 14)}"
+DB_PASSWORD="$(openssl rand -hex 12)"
 
 echo "==> Генерация ключей REALITY через xray..."
 KEYS=$(docker run --rm teddysun/xray:latest xray x25519)
@@ -23,10 +27,11 @@ REALITY_SNI=$SNI
 REALITY_PRIVATE_KEY=$PRIV
 REALITY_PUBLIC_KEY=$PUB
 REALITY_SHORT_ID=$SHORT_ID
-DB_PASSWORD=vpnpass2026
-ADMIN_PASSWORD=a1523415
-SECRET_KEY=$(openssl rand -hex 16)
+DB_PASSWORD=$DB_PASSWORD
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+SECRET_KEY=$(openssl rand -hex 32)
 EOF
+chmod 600 .env 2>/dev/null || true
 
 echo "==> Открываю порты в firewall (если ufw включён)..."
 if command -v ufw >/dev/null 2>&1; then
@@ -50,4 +55,9 @@ echo "  Short ID:     $SHORT_ID"
 echo "════════════════════════════════════════════"
 echo ""
 echo "Дальше:  docker compose up --build -d"
-echo "Панель:  https://$DOMAIN:8443/admin   (пароль: a1523415)"
+echo "Панель:  https://$DOMAIN:8443/admin"
+echo ""
+echo "  🔑 ПАРОЛЬ АДМИНКИ (сохрани, показывается один раз):"
+echo "      $ADMIN_PASSWORD"
+echo "  (хранится только в .env на сервере, в коде его нет)"
+echo "════════════════════════════════════════════"

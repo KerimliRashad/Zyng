@@ -30,7 +30,7 @@ docker compose restart nginx
 
 ## Использование
 - **Сайт:**   https://qipcall.duckdns.org:8443/
-- **Панель:** https://qipcall.duckdns.org:8443/admin  (пароль: `a1523415`)
+- **Панель:** https://ТВОЙ_ДОМЕН:8443/admin  (пароль показывается один раз при запуске setup.sh)
 - **Подписка:** каждому юзеру выдаётся ссылка `/sub/{token}` — вставляешь в Happ/v2RayTun.
 
 ## Порты
