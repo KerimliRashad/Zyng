@@ -16,6 +16,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "QipCall VPN"
+APP_VERSION = "1.1"
+VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
+RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".qipcall_config.json")
@@ -271,7 +274,18 @@ class QipCallApp:
         self.txt = tk.Text(card, height=5, bg="#0d121d", fg=TEXT, insertbackground=TEXT,
                            relief="flat", font=("Consolas", 9), wrap="word",
                            highlightthickness=1, highlightbackground="#242c3d")
-        self.txt.pack(fill="x", padx=14, pady=(0, 12))
+        self.txt.pack(fill="x", padx=14, pady=(0, 6))
+        self._setup_paste(self.txt)
+
+        # Кнопка «Вставить» — на случай если Ctrl+V не работает (рус. раскладка)
+        paste_row = tk.Frame(card, bg=CARD)
+        paste_row.pack(fill="x", padx=14, pady=(0, 12))
+        tk.Button(paste_row, text="📋 Вставить из буфера", command=self.paste_clipboard,
+                  bg="#1c2333", fg=TEXT, relief="flat", font=("Segoe UI", 9), cursor="hand2",
+                  activebackground=ACC).pack(side="left")
+        tk.Button(paste_row, text="✖ Очистить", command=lambda: self.txt.delete("1.0", "end"),
+                  bg="#1c2333", fg=MUTED, relief="flat", font=("Segoe UI", 9), cursor="hand2",
+                  activebackground="#2a3346").pack(side="left", padx=6)
 
         # Выбор сервера (для подписок)
         self.server_var = tk.StringVar()
@@ -304,8 +318,95 @@ class QipCallApp:
                              wraplength=390, justify="center")
         self.info.pack(pady=(6, 0))
 
+        # Версия внизу окна
+        tk.Label(root, text=f"QipCall v{APP_VERSION}", bg=BG, fg="#3a4256",
+                 font=("Segoe UI", 8)).pack(side="bottom", pady=4)
+
         self.load_saved()
+        self.check_update()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    # ── Фикс вставки (Ctrl+V не работает на рус. раскладке в tkinter) ──
+    def _setup_paste(self, widget):
+        # Контекстное меню по правому клику
+        menu = tk.Menu(widget, tearoff=0, bg=CARD, fg=TEXT,
+                       activebackground=ACC, activeforeground="white")
+        menu.add_command(label="Вставить", command=self.paste_clipboard)
+        menu.add_command(label="Копировать", command=lambda: self._copy(widget))
+        menu.add_command(label="Выделить всё", command=lambda: self._select_all(widget))
+        menu.add_command(label="Очистить", command=lambda: widget.delete("1.0", "end"))
+
+        def popup(e):
+            try: menu.tk_popup(e.x_root, e.y_root)
+            finally: menu.grab_release()
+        widget.bind("<Button-3>", popup)
+
+        # Горячие клавиши по keycode — работают при любой раскладке
+        def on_key(e):
+            # 86=V, 67=C, 88=X, 65=A (Windows virtual key codes)
+            if e.keycode == 86:  # Ctrl+V
+                self.paste_clipboard(); return "break"
+            if e.keycode == 67:  # Ctrl+C
+                self._copy(widget); return "break"
+            if e.keycode == 88:  # Ctrl+X
+                self._copy(widget); widget.delete("sel.first", "sel.last"); return "break"
+            if e.keycode == 65:  # Ctrl+A
+                self._select_all(widget); return "break"
+        widget.bind("<Control-KeyPress>", on_key)
+
+    def paste_clipboard(self):
+        try:
+            data = self.root.clipboard_get()
+        except Exception:
+            self.info.config(text="Буфер пуст", fg=DANGER); return
+        try:
+            self.txt.delete("sel.first", "sel.last")
+        except Exception:
+            pass
+        self.txt.insert("insert", data)
+
+    def _copy(self, widget):
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(widget.get("sel.first", "sel.last"))
+        except Exception:
+            pass
+
+    def _select_all(self, widget):
+        widget.tag_add("sel", "1.0", "end-1c")
+        return "break"
+
+    # ── Проверка обновлений ──
+    def check_update(self):
+        def worker():
+            try:
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "QipCall"})
+                latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
+                if latest and latest != APP_VERSION and self._newer(latest, APP_VERSION):
+                    self.root.after(0, lambda: self._show_update(latest))
+            except Exception:
+                pass
+        threading.Thread(target=worker, daemon=True).start()
+
+    @staticmethod
+    def _newer(a, b):
+        try:
+            pa = [int(x) for x in a.split(".")]
+            pb = [int(x) for x in b.split(".")]
+            return pa > pb
+        except Exception:
+            return a != b
+
+    def _show_update(self, latest):
+        if messagebox.askyesno(APP_NAME,
+                f"Доступна новая версия QipCall {latest}!\n"
+                f"У тебя {APP_VERSION}.\n\nСкачать обновление?"):
+            import webbrowser
+            webbrowser.open(RELEASES_URL)
 
     # ── Сохранение / загрузка ключа ──
     def save(self):
