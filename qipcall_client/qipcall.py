@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -420,8 +420,16 @@ class JeffTUN:
                  font=("Segoe UI", 8)).pack(side="bottom", pady=6)
 
         self.load_saved()
+        self.refresh_from_box()
+        self.txt.bind("<KeyRelease>", lambda e: self._debounce_refresh())
         self.check_update()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    _refresh_timer = None
+    def _debounce_refresh(self):
+        if self._refresh_timer:
+            self.root.after_cancel(self._refresh_timer)
+        self._refresh_timer = self.root.after(600, self.refresh_from_box)
 
     # ── UI helpers ──
     def _chip(self, parent, text, cmd, color):
@@ -460,6 +468,22 @@ class JeffTUN:
         except Exception:
             pass
         self.txt.insert("insert", data)
+        self.refresh_from_box()
+
+    def refresh_from_box(self):
+        """Всегда строим список серверов из вставленных ключей (страны + пинг)."""
+        t = self.txt.get("1.0", "end").strip()
+        lines = [l.strip() for l in t.splitlines()
+                 if "://" in l and not l.strip().startswith("http")]
+        if lines:
+            self.links = lines
+            if self.selected_idx >= len(self.links):
+                self.selected_idx = 0
+            self.render_servers()
+            self.do_ping()
+        else:
+            self.links = []
+            self.server_box.pack_forget()
 
     def _copy(self, widget):
         try:
