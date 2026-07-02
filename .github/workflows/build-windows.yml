@@ -34,13 +34,15 @@ jobs:
             --name "JeffTUN" `
             --add-binary "xray.exe;." `
             qipcall.py
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: JeffTUN-Windows
-          path: qipcall_client/dist/JeffTUN.exe
+      - name: Clean old release assets
+        shell: bash
+        run: |
+          for a in JeffTON.exe JeffTON-linux JeffTUN.dmg; do
+            gh release delete-asset qipcall-latest "$a" -y || true
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish release (Windows)
-        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
@@ -82,64 +84,12 @@ jobs:
             --name "JeffTUN-linux" \
             --add-binary "xray:." \
             qipcall.py
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: JeffTUN-Linux
-          path: qipcall_client/dist/JeffTUN-linux
       - name: Publish release (Linux)
-        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
           name: JeffTUN VPN
           files: qipcall_client/dist/JeffTUN-linux
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── macOS ────────────────────────────────────────────────────────────────
-  macos:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install PyInstaller
-        run: pip install pyinstaller
-      - name: Download xray-core (macOS)
-        run: |
-          curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-macos-64.zip
-          mkdir -p xray_bin && unzip -o xray.zip -d xray_bin
-          cp xray_bin/xray qipcall_client/xray
-          chmod +x qipcall_client/xray
-      - name: Build .app
-        working-directory: qipcall_client
-        run: |
-          pyinstaller --noconfirm --onefile --windowed \
-            --name "JeffTUN" \
-            --add-binary "xray:." \
-            qipcall.py
-      - name: Package .dmg
-        working-directory: qipcall_client
-        run: |
-          mkdir -p dmg_root
-          cp -R "dist/JeffTUN.app" dmg_root/ 2>/dev/null || cp dist/JeffTUN dmg_root/
-          ln -s /Applications dmg_root/Applications || true
-          hdiutil create -volname "JeffTUN VPN" -srcfolder dmg_root -ov -format UDZO dist/JeffTUN.dmg
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: JeffTUN-macOS
-          path: qipcall_client/dist/JeffTUN.dmg
-      - name: Publish release (macOS)
-        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: qipcall-latest
-          name: JeffTUN VPN
-          files: qipcall_client/dist/JeffTUN.dmg
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
