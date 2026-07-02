@@ -64,7 +64,7 @@ services:
       cp -fL /etc/letsencrypt/live/${PANEL_DOMAIN:-qipcall.duckdns.org}/fullchain.pem /etc/nginx/ssl/cert.pem &&
       cp -fL /etc/letsencrypt/live/${PANEL_DOMAIN:-qipcall.duckdns.org}/privkey.pem /etc/nginx/ssl/key.pem;
       else
-      [ -f /etc/nginx/ssl/cert.pem ] || openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /etc/nginx/ssl/key.pem -out /etc/nginx/ssl/cert.pem -subj '/CN=qipcall/O=JeffTON/C=RU';
+      [ -f /etc/nginx/ssl/cert.pem ] || openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /etc/nginx/ssl/key.pem -out /etc/nginx/ssl/cert.pem -subj '/CN=qipcall/O=JeffTUN/C=RU';
       fi &&
       nginx -g 'daemon off;'"
 

@@ -1,5 +1,5 @@
 """
-JeffTON VPN — десктопный клиент для Windows.
+JeffTUN VPN — десктопный клиент для Windows.
 Вставь ключ (vless:// / vmess:// / trojan:// / ss://) или ссылку-подписку,
 нажми «Подключиться» — трафик пойдёт через VPN (системный прокси + xray-core).
 """
@@ -17,7 +17,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-APP_NAME = "JeffTON VPN"
+APP_NAME = "JeffTUN VPN"
 APP_VERSION = "2.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
@@ -251,7 +251,7 @@ def fetch_subscription(url: str) -> list:
         ctx.verify_mode = ssl.CERT_NONE
     except Exception:
         pass
-    req = urllib.request.Request(url, headers={"User-Agent": "JeffTON"})
+    req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
     with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
         data = r.read().decode().strip()
     try:
@@ -275,7 +275,7 @@ def tcp_ping(host, port, timeout=3.0):
 
 
 # ══ GUI ══════════════════════════════════════════════════════════════════════
-class JeffTON:
+class JeffTUN:
     def __init__(self, root):
         self.root = root
         self.proc = None
@@ -294,7 +294,7 @@ class JeffTON:
         logo = tk.Frame(header, bg=BG)
         logo.pack(side="left")
         tk.Label(logo, text="Jeff", bg=BG, fg=TEXT, font=("Segoe UI", 26, "bold")).pack(side="left")
-        tk.Label(logo, text="TON", bg=BG, fg=ACC, font=("Segoe UI", 26, "bold")).pack(side="left")
+        tk.Label(logo, text="TUN", bg=BG, fg=ACC, font=("Segoe UI", 26, "bold")).pack(side="left")
         tk.Label(header, text="VPN", bg=BG, fg=MUTED, font=("Segoe UI", 11, "bold")).pack(side="left", padx=(6, 0), pady=(12, 0))
 
         tk.Label(root, text="Вставь ключ или ссылку-подписку и подключись",
@@ -349,7 +349,7 @@ class JeffTON:
                              wraplength=410, justify="center")
         self.info.pack(pady=(6, 0))
 
-        tk.Label(root, text=f"JeffTON v{APP_VERSION}", bg=BG, fg="#3a4256",
+        tk.Label(root, text=f"JeffTUN v{APP_VERSION}", bg=BG, fg="#3a4256",
                  font=("Segoe UI", 8)).pack(side="bottom", pady=6)
 
         self.load_saved()
@@ -412,7 +412,7 @@ class JeffTON:
                 import ssl
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-                req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "JeffTON"})
+                req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "JeffTUN"})
                 latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
                 if latest and self._newer(latest, APP_VERSION):
                     self.root.after(0, lambda: self._show_update(latest))
@@ -429,7 +429,7 @@ class JeffTON:
 
     def _show_update(self, latest):
         if messagebox.askyesno(APP_NAME,
-                f"Доступна новая версия JeffTON {latest}!\nУ тебя {APP_VERSION}.\n\nСкачать обновление?"):
+                f"Доступна новая версия JeffTUN {latest}!\nУ тебя {APP_VERSION}.\n\nСкачать обновление?"):
             import webbrowser
             webbrowser.open(RELEASES_URL)
 
@@ -580,7 +580,7 @@ def main():
                         selectbackground=ACC, padding=8)
     except Exception:
         pass
-    JeffTON(root)
+    JeffTUN(root)
     root.mainloop()
 
 

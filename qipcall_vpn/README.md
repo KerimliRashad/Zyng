@@ -1,4 +1,4 @@
-# JeffTON VPN
+# JeffTUN VPN
 
 VPN-платформа на xray-core: VLESS REALITY + XTLS Vision, VMess (ws), Trojan, Shadowsocks.
 Выдаёт ссылки-подписки для Happ, v2RayTun, Streisand, NekoBox, v2rayN.

@@ -1,4 +1,4 @@
-name: Build JeffTON Clients
+name: Build JeffTUN Clients
 
 on:
   push:
@@ -31,27 +31,27 @@ jobs:
         working-directory: qipcall_client
         run: |
           pyinstaller --noconfirm --onefile --windowed `
-            --name "JeffTON" `
+            --name "JeffTUN" `
             --add-binary "xray.exe;." `
             qipcall.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JeffTON-Windows
-          path: qipcall_client/dist/JeffTON.exe
+          name: JeffTUN-Windows
+          path: qipcall_client/dist/JeffTUN.exe
       - name: Publish release (Windows)
         if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
-          name: JeffTON VPN
-          files: qipcall_client/dist/JeffTON.exe
+          name: JeffTUN VPN
+          files: qipcall_client/dist/JeffTUN.exe
           body: |
-            JeffTON VPN — вставь ключ vless:// / vmess:// / trojan:// / ss://
+            JeffTUN VPN — вставь ключ vless:// / vmess:// / trojan:// / ss://
             или ссылку-подписку и нажми «Подключиться».
 
-            • Windows: JeffTON.exe
-            • Linux: JeffTON-linux (chmod +x, затем запуск)
+            • Windows: JeffTUN.exe
+            • Linux: JeffTUN-linux (chmod +x, затем запуск)
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,21 +79,21 @@ jobs:
         working-directory: qipcall_client
         run: |
           pyinstaller --noconfirm --onefile \
-            --name "JeffTON-linux" \
+            --name "JeffTUN-linux" \
             --add-binary "xray:." \
             qipcall.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JeffTON-Linux
-          path: qipcall_client/dist/JeffTON-linux
+          name: JeffTUN-Linux
+          path: qipcall_client/dist/JeffTUN-linux
       - name: Publish release (Linux)
         if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
-          name: JeffTON VPN
-          files: qipcall_client/dist/JeffTON-linux
+          name: JeffTUN VPN
+          files: qipcall_client/dist/JeffTUN-linux
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,28 +118,28 @@ jobs:
         working-directory: qipcall_client
         run: |
           pyinstaller --noconfirm --onefile --windowed \
-            --name "JeffTON" \
+            --name "JeffTUN" \
             --add-binary "xray:." \
             qipcall.py
       - name: Package .dmg
         working-directory: qipcall_client
         run: |
           mkdir -p dmg_root
-          cp -R "dist/JeffTON.app" dmg_root/ 2>/dev/null || cp dist/JeffTON dmg_root/
+          cp -R "dist/JeffTUN.app" dmg_root/ 2>/dev/null || cp dist/JeffTUN dmg_root/
           ln -s /Applications dmg_root/Applications || true
-          hdiutil create -volname "JeffTON VPN" -srcfolder dmg_root -ov -format UDZO dist/JeffTON.dmg
+          hdiutil create -volname "JeffTUN VPN" -srcfolder dmg_root -ov -format UDZO dist/JeffTUN.dmg
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JeffTON-macOS
-          path: qipcall_client/dist/JeffTON.dmg
+          name: JeffTUN-macOS
+          path: qipcall_client/dist/JeffTUN.dmg
       - name: Publish release (macOS)
         if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
-          name: JeffTON VPN
-          files: qipcall_client/dist/JeffTON.dmg
+          name: JeffTUN VPN
+          files: qipcall_client/dist/JeffTUN.dmg
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
