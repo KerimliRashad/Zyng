@@ -59,6 +59,8 @@
   .imp{display:flex;gap:10px;flex-wrap:wrap}
   .imp a{flex:1;min-width:120px;text-align:center;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-weight:700;font-size:14px}
   .err{color:#f87171;font-size:13px;min-height:18px}
+  .dlcount{margin-top:22px;font-size:16px;color:var(--muted)}
+  .dlcount b{color:var(--acc);font-size:22px;font-weight:900}
 </style>
 </head>
 <body>
@@ -78,6 +80,7 @@
       <button class="btn primary" onclick="openSub()">📲 Подключить</button>
       <a class="btn ghost" href="#protocols">Протоколы</a>
     </div>
+    <div id="dlcount" class="dlcount">📥 <b id="dlnum">…</b> человек уже скачали</div>
   </section>
 
   <h2 class="section-title" id="protocols">8 протоколов из коробки</h2>
@@ -181,6 +184,16 @@ function openDonate(t){
   document.getElementById('donate-body').innerHTML=DONATE[t]||'';
   document.getElementById('donate-modal').classList.add('show');
 }
+// Счётчик скачиваний напрямую с GitHub (открытый API)
+(async function(){
+  try{
+    const r=await fetch('https://api.github.com/repos/kerimlirashad/kerimlirashad/releases/tags/qipcall-latest');
+    const d=await r.json();
+    const total=(d.assets||[]).reduce((s,a)=>s+(a.download_count||0),0);
+    document.getElementById('dlnum').textContent=total.toLocaleString('ru');
+  }catch{ document.getElementById('dlcount').style.display='none'; }
+})();
+
 function openSub(){document.getElementById('sub-modal').classList.add('show')}
 function closeSub(){document.getElementById('sub-modal').classList.remove('show')}
 function loadSub(){
