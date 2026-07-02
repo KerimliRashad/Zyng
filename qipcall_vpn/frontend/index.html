@@ -36,7 +36,18 @@
   .feat h4{font-size:17px;font-weight:700;margin-bottom:6px}
   .feat p{color:var(--muted);font-size:14px}
   .apps{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:26px}
-  .app{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px 22px;font-weight:700;font-size:15px}
+  .app{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px 22px;font-weight:700;font-size:15px;cursor:pointer;transition:transform .15s}
+  .app:active{transform:scale(.96)}
+  .dl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+  .dl-card{background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:20px}
+  .dl-card.highlight{border-color:var(--acc);box-shadow:0 0 40px rgba(91,141,239,.15)}
+  .dl-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .dl-ico{font-size:26px}
+  .dl-head h3{font-size:19px;font-weight:800}
+  .dl-btn{display:block;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-radius:12px;padding:12px 14px;font-weight:700;font-size:14px;margin-bottom:8px;text-align:center;transition:transform .12s}
+  .dl-btn:active{transform:scale(.97)}
+  .dl-btn.ghost{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
+  .dl-btn span{display:block;font-size:11px;font-weight:500;opacity:.8;margin-top:1px}
   footer{text-align:center;color:var(--muted);padding:60px 0 40px;font-size:14px}
 
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
@@ -54,7 +65,10 @@
 <div class="wrap">
   <header>
     <div class="logo">Qip<span>Call</span> VPN</div>
-    <a class="nav-btn" onclick="openSub()">Моя подписка</a>
+    <div style="display:flex;gap:8px">
+      <a class="nav-btn" href="#download">Скачать</a>
+      <a class="nav-btn" onclick="openSub()">Моя подписка</a>
+    </div>
   </header>
 
   <section class="hero">
@@ -84,17 +98,59 @@
     <div class="feat"><div class="ico">🔄</div><h4>Авто-обновление</h4><p>Подписка обновляется сама — новые серверы появляются автоматически</p></div>
   </div>
 
-  <h2 class="section-title">Приложения</h2>
-  <p class="section-sub">Вставь ссылку-подписку и всё подключится автоматически</p>
+  <h2 class="section-title" id="download">Скачать приложение</h2>
+  <p class="section-sub">Выбери своё устройство — вставь ключ и подключись</p>
+
+  <div class="dl-grid">
+    <!-- iOS -->
+    <div class="dl-card">
+      <div class="dl-head"><span class="dl-ico">🍏</span><h3>iOS</h3></div>
+      <a class="dl-btn" href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank">App Store <span>Global</span></a>
+      <a class="dl-btn" href="https://apps.apple.com/ru/app/streisand/id6450534064" target="_blank">App Store <span>Rus</span></a>
+      <a class="dl-btn ghost" href="https://testflight.apple.com/join/gGCydjbY" target="_blank">TestFlight <span>Global · Rus</span></a>
+    </div>
+
+    <!-- Android -->
+    <div class="dl-card">
+      <div class="dl-head"><span class="dl-ico">🤖</span><h3>Android</h3></div>
+      <a class="dl-btn" href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank">Google Play</a>
+      <a class="dl-btn" href="https://github.com/Happ-proxy/happ-android/releases/latest" target="_blank">Download APK</a>
+      <a class="dl-btn ghost" href="https://github.com/Happ-proxy/happ-android/releases" target="_blank">Beta APK</a>
+    </div>
+
+    <!-- Desktop -->
+    <div class="dl-card highlight">
+      <div class="dl-head"><span class="dl-ico">💻</span><h3>Desktop</h3></div>
+      <a class="dl-btn" href="https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest" target="_blank">QipCall Windows x64 ⭐</a>
+      <a class="dl-btn" href="https://github.com/Happ-proxy/happ-desktop/releases/latest" target="_blank">macOS <span>Global · Rus (dmg)</span></a>
+      <a class="dl-btn ghost" href="https://github.com/Happ-proxy/happ-desktop/releases/latest" target="_blank">Linux <span>deb · rpm · pkg</span></a>
+    </div>
+
+    <!-- TV -->
+    <div class="dl-card">
+      <div class="dl-head"><span class="dl-ico">📺</span><h3>TV</h3></div>
+      <a class="dl-btn" href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank">Android TV</a>
+      <a class="dl-btn ghost" href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank">Apple TV</a>
+    </div>
+  </div>
+
+  <h2 class="section-title">Поддержать приложение ❤️</h2>
+  <p class="section-sub">Помоги оплачивать серверы — спасибо, что ты с нами</p>
   <div class="apps">
-    <div class="app">📱 Happ (iOS/Android)</div>
-    <div class="app">🚀 v2RayTun</div>
-    <div class="app">🌊 Streisand (iOS)</div>
-    <div class="app">🐱 NekoBox (Android)</div>
-    <div class="app">💻 v2rayN (Windows)</div>
+    <a class="app" onclick="openDonate('card')">💳 Карты МИР / Visa</a>
+    <a class="app" onclick="openDonate('crypto')">₿ Crypto</a>
   </div>
 
   <footer>© 2026 QipCall VPN · <a onclick="openSub()" style="color:var(--acc)">Моя подписка</a></footer>
+</div>
+
+<!-- Donate modal -->
+<div class="modal" id="donate-modal">
+  <div class="modal-box">
+    <h3>Поддержать QipCall ❤️</h3>
+    <div id="donate-body" style="font-size:14px;color:var(--text)"></div>
+    <button class="btn ghost" style="width:100%;margin-top:14px" onclick="document.getElementById('donate-modal').classList.remove('show')">Закрыть</button>
+  </div>
 </div>
 
 <!-- Subscription modal -->
@@ -116,6 +172,15 @@
 </div>
 
 <script>
+// Реквизиты для доната — ЗАМЕНИ на свои!
+const DONATE={
+  card:'Карта МИР / Visa:<br><b style="font-size:18px;color:var(--acc)">2200 0000 0000 0000</b><br><span style="color:var(--muted)">Получатель: Рашад К.</span>',
+  crypto:'USDT (TRC20):<br><b style="font-size:14px;color:var(--acc);word-break:break-all">TXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</b><br><br>BTC:<br><b style="font-size:14px;color:var(--acc);word-break:break-all">bc1qxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</b>',
+};
+function openDonate(t){
+  document.getElementById('donate-body').innerHTML=DONATE[t]||'';
+  document.getElementById('donate-modal').classList.add('show');
+}
 function openSub(){document.getElementById('sub-modal').classList.add('show')}
 function closeSub(){document.getElementById('sub-modal').classList.remove('show')}
 function loadSub(){
