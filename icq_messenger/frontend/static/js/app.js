@@ -72,6 +72,32 @@ function applyTheme() {
   const btn = document.getElementById('theme-btn');
   if (btn) btn.textContent = t === 'qip' ? '🌙' : '🌼';
 }
+// ── PWA install prompt («скачать приложение» как в старые времена) ───────────
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  if (localStorage.getItem('jf_install_dismissed')) return;
+  const b = document.createElement('div');
+  b.id = 'install-banner';
+  b.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:500;background:var(--sb2);border:1px solid var(--acc);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-size:14px';
+  b.innerHTML = `📲 Установить Jeff как приложение
+    <button onclick="doInstallApp()" style="background:var(--acc);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;cursor:pointer">Установить</button>
+    <button onclick="dismissInstall()" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer">✕</button>`;
+  document.body.appendChild(b);
+});
+async function doInstallApp() {
+  document.getElementById('install-banner')?.remove();
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall = null;
+}
+function dismissInstall() {
+  localStorage.setItem('jf_install_dismissed', '1');
+  document.getElementById('install-banner')?.remove();
+}
+
 function openColorPicker() {
   document.getElementById('color-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -328,13 +354,20 @@ function onWS(msg) {
       showIncomingCall(msg.from_name, msg.call_type || 'voice', msg.from_color);
       break;
     case 'call_answer':
-      if (pc) pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(console.error);
+      if (pc) pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+        .then(flushPendingIce).catch(console.error);
       document.getElementById('call-status').textContent = callType === 'video' ? '📹 Видеозвонок' : '📞 Разговор';
       renderCallActions(true);
       if (callType === 'video') document.getElementById('call-video-wrap').style.display = '';
       break;
     case 'call_ice':
-      if (pc && msg.candidate) pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+      if (msg.candidate) {
+        if (pc && pc.remoteDescription) {
+          pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+        } else {
+          pendingIce.push(msg.candidate); // сохраняем до принятия звонка
+        }
+      }
       break;
     case 'call_end':
     case 'call_reject':
@@ -892,13 +925,21 @@ async function uploadGroupAvatar(e) {
 const ICE = { iceServers: [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun.services.mozilla.com' },
-  // Free TURN relay (openrelay.metered.ca)
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  // Собственный TURN-сервер (coturn на VPS) — надёжный relay для любых сетей
+  { urls: 'turn:qipcall.duckdns.org:3478?transport=udp', username: 'jeff', credential: 'qipcall2026turn' },
+  { urls: 'turn:qipcall.duckdns.org:3478?transport=tcp', username: 'jeff', credential: 'qipcall2026turn' },
 ] };
+
+// Очередь ICE-кандидатов, пришедших до setRemoteDescription (иначе они теряются!)
+let pendingIce = [];
+
+async function flushPendingIce() {
+  if (!pc || !pc.remoteDescription) return;
+  const q = pendingIce; pendingIce = [];
+  for (const c of q) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+  }
+}
 
 // Ringtone (generated via Web Audio)
 let ringCtx = null, ringNode = null;
@@ -1042,6 +1083,7 @@ async function acceptIncomingCall() {
   }
 
   await pc.setRemoteDescription(new RTCSessionDescription(incomingSdp));
+  await flushPendingIce(); // применяем кандидаты, накопившиеся пока звонок ждал ответа
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   wsSend({ type: 'call_answer', to_user_id: callTargetId, sdp: answer });
@@ -1055,11 +1097,13 @@ async function acceptIncomingCall() {
 function newPC() {
   const p = new RTCPeerConnection(ICE);
   p.ontrack = e => {
+    const stream = e.streams[0];
     if (callType === 'video') {
-      document.getElementById('remote-video').srcObject = e.streams[0];
+      const rv = document.getElementById('remote-video');
+      if (rv.srcObject !== stream) { rv.srcObject = stream; rv.play().catch(() => {}); }
     } else {
-      // Voice call: route to audio element
-      document.getElementById('remote-audio').srcObject = e.streams[0];
+      const ra = document.getElementById('remote-audio');
+      if (ra.srcObject !== stream) { ra.srcObject = stream; ra.play().catch(() => {}); }
     }
   };
   p.onicecandidate = e => {
@@ -1121,7 +1165,7 @@ function endCallClean() {
   document.getElementById('call-video-wrap').style.display = 'none';
   document.getElementById('call-audio-ui').style.display = 'flex';
   document.getElementById('call-overlay').classList.add('hidden');
-  callTargetId = null; incomingSdp = null;
+  callTargetId = null; incomingSdp = null; pendingIce = [];
 }
 
 // ── Profile Edit ──────────────────────────────────────────────────────────────

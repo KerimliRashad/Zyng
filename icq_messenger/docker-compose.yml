@@ -28,6 +28,20 @@ services:
       db:
         condition: service_healthy
 
+  coturn:
+    image: coturn/coturn:alpine
+    restart: unless-stopped
+    network_mode: host
+    command: >-
+      -n --log-file=stdout
+      --listening-port=3478
+      --fingerprint --lt-cred-mech
+      --user=jeff:qipcall2026turn
+      --realm=qipcall.duckdns.org
+      --external-ip=2.26.18.209
+      --min-port=49160 --max-port=49250
+      --no-multicast-peers --no-cli
+
   nginx:
     image: nginx:1.25-alpine
     restart: unless-stopped

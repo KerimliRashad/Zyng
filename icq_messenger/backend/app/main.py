@@ -46,6 +46,27 @@ if os.path.exists(STATIC):
 
     NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
 
+    # PWA files
+    @app.get("/manifest.json")
+    async def manifest():
+        return FileResponse(os.path.join(STATIC, "manifest.json"), media_type="application/manifest+json")
+
+    @app.get("/sw.js")
+    async def sw():
+        return FileResponse(os.path.join(STATIC, "sw.js"), media_type="application/javascript", headers=NO_CACHE)
+
+    @app.get("/icon-192.png")
+    async def icon192():
+        return FileResponse(os.path.join(STATIC, "icon-192.png"), media_type="image/png")
+
+    @app.get("/icon-512.png")
+    async def icon512():
+        return FileResponse(os.path.join(STATIC, "icon-512.png"), media_type="image/png")
+
+    @app.get("/favicon.ico")
+    async def favicon():
+        return FileResponse(os.path.join(STATIC, "icon-192.png"), media_type="image/png")
+
     @app.get("/")
     async def index():
         return FileResponse(os.path.join(STATIC, "index.html"), headers=NO_CACHE)
