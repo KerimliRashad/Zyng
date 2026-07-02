@@ -177,6 +177,7 @@ def build_xray_config(outbound: dict) -> dict:
 # ══ СИСТЕМНЫЙ ПРОКСИ WINDOWS ═════════════════════════════════════════════════
 def set_system_proxy(enable: bool):
     if os.name != "nt":
+        _set_linux_proxy(enable)
         return
     import winreg, ctypes
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
@@ -193,6 +194,25 @@ def set_system_proxy(enable: bool):
     internet = ctypes.windll.Wininet
     internet.InternetSetOptionW(0, 39, 0, 0)
     internet.InternetSetOptionW(0, 37, 0, 0)
+
+
+def _set_linux_proxy(enable: bool):
+    """Системный прокси в Linux через gsettings (GNOME/Cinnamon/Mate)."""
+    def g(*args):
+        try:
+            subprocess.run(["gsettings"] + list(args), check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+    if enable:
+        g("set", "org.gnome.system.proxy", "mode", "manual")
+        for proto in ("http", "https"):
+            g("set", f"org.gnome.system.proxy.{proto}", "host", "127.0.0.1")
+            g("set", f"org.gnome.system.proxy.{proto}", "port", str(HTTP_PORT))
+        g("set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
+        g("set", "org.gnome.system.proxy.socks", "port", str(SOCKS_PORT))
+    else:
+        g("set", "org.gnome.system.proxy", "mode", "none")
 
 
 # ══ ЗАГРУЗКА ПОДПИСКИ ════════════════════════════════════════════════════════

@@ -1,4 +1,4 @@
-name: Build JeffTON Windows
+name: Build JeffTON Clients
 
 on:
   push:
@@ -9,18 +9,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # ── WINDOWS ──────────────────────────────────────────────────────────────
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install PyInstaller
         run: pip install pyinstaller
-
       - name: Download xray-core (Windows 64-bit)
         shell: pwsh
         run: |
@@ -28,7 +26,6 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile xray.zip
           Expand-Archive -Path xray.zip -DestinationPath xray_bin -Force
           Copy-Item xray_bin/xray.exe qipcall_client/xray.exe
-
       - name: Build EXE
         shell: pwsh
         working-directory: qipcall_client
@@ -37,31 +34,66 @@ jobs:
             --name "JeffTON" `
             --add-binary "xray.exe;." `
             qipcall.py
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: JeffTON-Windows
           path: qipcall_client/dist/JeffTON.exe
-
-      - name: Remove old release assets (QipCall etc.)
-        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
-        shell: bash
-        run: |
-          gh release delete-asset qipcall-latest QipCall.exe -y || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish release
+      - name: Publish release (Windows)
         if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: qipcall-latest
-          name: JeffTON VPN (Windows)
+          name: JeffTON VPN
           files: qipcall_client/dist/JeffTON.exe
           body: |
-            JeffTON VPN для Windows — вставь ключ vless:// / vmess:// / trojan:// / ss://
+            JeffTON VPN — вставь ключ vless:// / vmess:// / trojan:// / ss://
             или ссылку-подписку и нажми «Подключиться».
+
+            • Windows: JeffTON.exe
+            • Linux: JeffTON-linux (chmod +x, затем запуск)
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── LINUX ────────────────────────────────────────────────────────────────
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+          pip install pyinstaller
+      - name: Download xray-core (Linux 64-bit)
+        run: |
+          curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          mkdir -p xray_bin && unzip -o xray.zip -d xray_bin
+          cp xray_bin/xray qipcall_client/xray
+          chmod +x qipcall_client/xray
+      - name: Build Linux binary
+        working-directory: qipcall_client
+        run: |
+          pyinstaller --noconfirm --onefile \
+            --name "JeffTON-linux" \
+            --add-binary "xray:." \
+            qipcall.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JeffTON-Linux
+          path: qipcall_client/dist/JeffTON-linux
+      - name: Publish release (Linux)
+        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: qipcall-latest
+          name: JeffTON VPN
+          files: qipcall_client/dist/JeffTON-linux
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
