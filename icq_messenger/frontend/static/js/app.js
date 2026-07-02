@@ -72,6 +72,10 @@ function applyTheme() {
   const btn = document.getElementById('theme-btn');
   if (btn) btn.textContent = t === 'qip' ? '🌙' : '🌼';
 }
+function openColorPicker() {
+  document.getElementById('color-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function toggleTheme() {
   const cur = localStorage.getItem('jf_theme') || 'dark';
   localStorage.setItem('jf_theme', cur === 'qip' ? 'dark' : 'qip');

@@ -44,16 +44,18 @@ if os.path.exists(STATIC):
     app.mount("/css", StaticFiles(directory=os.path.join(STATIC, "css")), name="css")
     app.mount("/js", StaticFiles(directory=os.path.join(STATIC, "js")), name="js")
 
+    NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
     @app.get("/")
     async def index():
-        return FileResponse(os.path.join(STATIC, "index.html"))
+        return FileResponse(os.path.join(STATIC, "index.html"), headers=NO_CACHE)
 
     @app.get("/admin")
     async def admin_page():
         p = os.path.join(STATIC, "admin.html")
         if os.path.exists(p):
-            return FileResponse(p)
-        return FileResponse(os.path.join(STATIC, "index.html"))
+            return FileResponse(p, headers=NO_CACHE)
+        return FileResponse(os.path.join(STATIC, "index.html"), headers=NO_CACHE)
 
 
 async def create_admin():
