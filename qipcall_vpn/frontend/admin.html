@@ -56,6 +56,11 @@
     <div class="stats" id="stats"></div>
 
     <div class="card">
+      <h3 style="margin-bottom:12px">⬇ Скачивания приложения</h3>
+      <div id="downloads" style="color:var(--muted)">Загрузка...</div>
+    </div>
+
+    <div class="card">
       <h3 style="margin-bottom:12px">➕ Новый пользователь</h3>
       <div class="create-grid">
         <div><label>Имя</label><input class="field" id="c-name" placeholder="user1"></div>
@@ -107,7 +112,20 @@ async function login(){
 function showPanel(){
   document.getElementById('login').style.display='none';
   document.getElementById('panel').style.display='block';
-  loadStats();loadServers();loadUsers();
+  loadStats();loadServers();loadUsers();loadDownloads();
+}
+
+async function loadDownloads(){
+  const el=document.getElementById('downloads');
+  try{
+    const r=await fetch(`${API}/api/admin/downloads`,{headers:hdr()});
+    const d=await r.json();
+    if(!d.assets||!d.assets.length){el.textContent='Пока нет данных';return}
+    el.innerHTML=`<div style="font-size:28px;font-weight:900;color:var(--acc)">${d.total}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">всего скачиваний</div>`+
+      d.assets.map(a=>`<div class="sub" style="display:flex;justify-content:space-between;padding:4px 0">
+        <span>${a.name}</span><b style="color:var(--text)">${a.count}</b></div>`).join('');
+  }catch{el.textContent='Ошибка загрузки'}
 }
 
 function hdr(){return{'Authorization':'Bearer '+token}}

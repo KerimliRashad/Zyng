@@ -287,6 +287,25 @@ async def set_user_servers(uid: int, data: SetUserServers, _: bool = Depends(req
     return {"status": "ok", "server_ids": u.server_ids}
 
 
+@app.get("/api/admin/downloads")
+async def downloads(_: bool = Depends(require_admin)):
+    """Сколько людей скачали приложение (счётчики GitHub Releases)."""
+    import urllib.request, json as _json, asyncio
+    url = "https://api.github.com/repos/kerimlirashad/kerimlirashad/releases/tags/qipcall-latest"
+
+    def fetch():
+        req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
+        return _json.loads(urllib.request.urlopen(req, timeout=10).read())
+
+    try:
+        data = await asyncio.to_thread(fetch)
+        assets = [{"name": a["name"], "count": a.get("download_count", 0)}
+                  for a in data.get("assets", [])]
+        return {"assets": assets, "total": sum(a["count"] for a in assets)}
+    except Exception as e:
+        return {"assets": [], "total": 0, "error": str(e)}
+
+
 @app.get("/api/config")
 async def public_config():
     return {"domain": config.PANEL_DOMAIN, "reality_configured": bool(config.REALITY_PUBLIC_KEY)}
