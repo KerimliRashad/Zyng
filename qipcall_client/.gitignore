@@ -1,0 +1,6 @@
+xray.exe
+xray.zip
+xray_bin/
+dist/
+build/
+*.spec

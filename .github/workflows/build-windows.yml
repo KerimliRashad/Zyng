@@ -1,0 +1,59 @@
+name: Build QipCall Windows
+
+on:
+  push:
+    branches: [ claude/icq-messenger-b0bt2n ]
+    paths:
+      - 'qipcall_client/**'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Download xray-core (Windows 64-bit)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip"
+          Invoke-WebRequest -Uri $url -OutFile xray.zip
+          Expand-Archive -Path xray.zip -DestinationPath xray_bin -Force
+          Copy-Item xray_bin/xray.exe qipcall_client/xray.exe
+
+      - name: Build EXE
+        shell: pwsh
+        working-directory: qipcall_client
+        run: |
+          pyinstaller --noconfirm --onefile --windowed `
+            --name "QipCall" `
+            --add-binary "xray.exe;." `
+            qipcall.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QipCall-Windows
+          path: qipcall_client/dist/QipCall.exe
+
+      - name: Publish release
+        if: github.ref == 'refs/heads/claude/icq-messenger-b0bt2n'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: qipcall-latest
+          name: QipCall VPN (Windows)
+          files: qipcall_client/dist/QipCall.exe
+          body: |
+            QipCall VPN для Windows — вставь ключ vless:// / vmess:// / trojan:// / ss://
+            или ссылку-подписку и нажми «Подключиться».
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
