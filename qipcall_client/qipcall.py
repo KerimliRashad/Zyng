@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.2"
+APP_VERSION = "2.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -79,6 +79,56 @@ def link_host_port(link: str):
         return u.hostname, u.port or 443
     except Exception:
         return None, None
+
+
+COUNTRY_CODES = {
+    "france": "FR", "franc": "FR", "germany": "DE", "german": "DE",
+    "finland": "FI", "finl": "FI", "usa": "US", "america": "US", "united states": "US",
+    "malaysia": "MY", "malay": "MY", "netherlands": "NL", "holland": "NL",
+    "russia": "RU", "moscow": "RU", "uk": "GB", "london": "GB", "england": "GB",
+    "poland": "PL", "sweden": "SE", "turkey": "TR", "turkiye": "TR",
+    "japan": "JP", "singapore": "SG", "canada": "CA", "france ": "FR",
+    "spain": "ES", "italy": "IT", "ukraine": "UA", "latvia": "LV",
+    "estonia": "EE", "lithuania": "LT", "switzerland": "CH", "austria": "AT",
+    "hongkong": "HK", "hong kong": "HK", "korea": "KR", "india": "IN",
+    "uae": "AE", "dubai": "AE", "kazakhstan": "KZ", "georgia": "GE",
+}
+
+
+def country_of(name: str):
+    """Возвращает (код_страны, флаг_emoji) по названию сервера."""
+    low = (name or "").lower()
+    code = None
+    for key, c in COUNTRY_CODES.items():
+        if key in low:
+            code = c
+            break
+    if not code:
+        # первые 2 буквы из названия
+        letters = "".join(ch for ch in (name or "?") if ch.isalpha())
+        code = (letters[:2] or "VP").upper()
+    # флаг из regional indicator (на некоторых ОС не рисуется — тогда виден код)
+    flag = "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code) if len(code) == 2 else ""
+    return code, flag
+
+
+def proto_line(link: str) -> str:
+    """Строка протокола для подписи, напр. 'VLESS · TCP · Reality'."""
+    try:
+        scheme = link.split("://", 1)[0].upper()
+        if link.startswith("vmess://"):
+            raw = link[8:]; raw += "=" * (-len(raw) % 4)
+            obj = json.loads(base64.b64decode(raw).decode())
+            net = obj.get("net", "tcp").upper()
+            sec = "TLS" if obj.get("tls") else "—"
+            return f"VMESS · {net} · {sec}"
+        p = parse_qs(urlparse(link).query)
+        net = p.get("type", ["tcp"])[0].upper()
+        sec = p.get("security", ["none"])[0]
+        sec = {"reality": "Reality", "tls": "TLS", "none": "—"}.get(sec, sec.title())
+        return f"{scheme} · {net} · {sec}"
+    except Exception:
+        return link.split("://", 1)[0].upper()
 
 
 def _stream(params, net, security):
@@ -327,16 +377,21 @@ class JeffTUN:
         self._chip(paste_row, "✖ Очистить", lambda: self.txt.delete("1.0", "end"), "#2a3346").pack(side="left", padx=6)
         self._chip(paste_row, "💾 Сохранить", self.save, "#2a3346").pack(side="left")
 
-        # ── Выбор сервера ──
-        self.server_var = tk.StringVar()
-        self.server_menu = ttk.Combobox(root, textvariable=self.server_var, state="readonly", font=("Segoe UI", 10))
-        self.server_menu.pack(fill="x", padx=26, pady=(14, 0))
-        self.server_menu.bind("<<ComboboxSelected>>", lambda e: self.do_ping())
-        self.server_menu.pack_forget()
+        # ── Список серверов (страны с флагами) ──
+        self.selected_idx = 0
+        self.server_rows = []
+        self.server_box = tk.Frame(root, bg=BG)
+        tk.Label(self.server_box, text="СЕРВЕРЫ", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=26, pady=(14, 4))
+        self.server_list = tk.Frame(self.server_box, bg=BG)
+        self.server_list.pack(fill="x", padx=20)
+        # Пока серверов нет — прячем
+        self.server_box.pack(fill="x")
+        self.server_box.pack_forget()
 
         # ── Пинг ──
         self.ping_lbl = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 10, "bold"))
-        self.ping_lbl.pack(pady=(14, 2))
+        self.ping_lbl.pack(pady=(12, 2))
 
         # ── Статус + кнопка ──
         self.status = tk.Label(root, text="● Отключено", bg=BG, fg=MUTED, font=("Segoe UI", 13, "bold"))
@@ -541,19 +596,52 @@ class JeffTUN:
             self.links = fetch_subscription(self.sub_url)
             if not self.links:
                 self.info.config(text="Подписка пустая", fg=DANGER); return
-            names = []
-            for i, ln in enumerate(self.links):
-                nm = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
-                names.append(nm)
-            self.server_menu["values"] = names
-            self.server_menu.current(0)
-            self.server_menu.pack(fill="x", padx=26, pady=(14, 0))
+            self.selected_idx = 0
+            self.render_servers()
             self.info.config(text=f"Серверов: {len(self.links)} ✓", fg=OK)
             self.do_ping()
             if reconnect and self.connected:
                 self.disconnect(); self.connect()
         except Exception as e:
             self.info.config(text=f"Ошибка: {e}", fg=DANGER)
+
+    def render_servers(self):
+        """Строит красивый список серверов с флагами и протоколом."""
+        for w in self.server_list.winfo_children():
+            w.destroy()
+        self.server_rows = []
+        for i, ln in enumerate(self.links):
+            name = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
+            code, flag = country_of(name)
+            sel = (i == self.selected_idx)
+            row = tk.Frame(self.server_list, bg=(CARD if sel else CARD2),
+                           highlightthickness=1,
+                           highlightbackground=(ACC if sel else BORDER))
+            row.pack(fill="x", pady=3)
+            # цветной бейдж с кодом страны (флаги на Windows не рисуются)
+            badge = tk.Label(row, text=code, bg=ACC, fg="white",
+                             font=("Segoe UI", 11, "bold"), width=4, pady=8)
+            badge.pack(side="left", padx=(8, 10), pady=8)
+            mid = tk.Frame(row, bg=row["bg"]); mid.pack(side="left", fill="x", expand=True)
+            tk.Label(mid, text=name, bg=row["bg"], fg=TEXT,
+                     font=("Segoe UI", 12, "bold"), anchor="w").pack(anchor="w")
+            tk.Label(mid, text=proto_line(ln), bg=row["bg"], fg=MUTED,
+                     font=("Segoe UI", 8), anchor="w").pack(anchor="w")
+            arrow = tk.Label(row, text=("✓" if sel else "›"), bg=row["bg"],
+                             fg=(OK if sel else MUTED), font=("Segoe UI", 14, "bold"))
+            arrow.pack(side="right", padx=12)
+            # клик по любому элементу строки
+            for w in (row, mid, arrow) + tuple(mid.winfo_children()):
+                w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
+            self.server_rows.append(row)
+        self.server_box.pack(fill="x", before=self.ping_lbl)
+
+    def select_server(self, idx):
+        self.selected_idx = idx
+        self.render_servers()
+        self.do_ping()
+        if self.connected:
+            self.disconnect(); self.connect()
 
     # ── Пинг ──
     def do_ping(self):
@@ -581,8 +669,8 @@ class JeffTUN:
         self.disconnect() if self.connected else self.connect()
 
     def _current_link(self):
-        if self.links and self.server_menu.get():
-            return self.links[self.server_menu.current()]
+        if self.links and 0 <= self.selected_idx < len(self.links):
+            return self.links[self.selected_idx]
         t = self.txt.get("1.0", "end").strip()
         return t.splitlines()[0] if t else ""
 
