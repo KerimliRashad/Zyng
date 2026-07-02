@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.2"
+APP_VERSION = "3.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -87,6 +87,16 @@ COUNTRY_CODES = {
     "latvia": "LV", "estonia": "EE", "lithuania": "LT", "switzerland": "CH",
     "austria": "AT", "hongkong": "HK", "hong kong": "HK", "korea": "KR", "india": "IN",
     "uae": "AE", "dubai": "AE", "kazakhstan": "KZ", "georgia": "GE",
+    "malayzia": "MY", "malaysia": "MY",
+}
+
+# Флаги-эмодзи по коду страны
+FLAGS = {
+    "FR": "🇫🇷", "DE": "🇩🇪", "FI": "🇫🇮", "US": "🇺🇸", "MY": "🇲🇾", "NL": "🇳🇱",
+    "RU": "🇷🇺", "GB": "🇬🇧", "PL": "🇵🇱", "SE": "🇸🇪", "TR": "🇹🇷", "JP": "🇯🇵",
+    "SG": "🇸🇬", "CA": "🇨🇦", "ES": "🇪🇸", "IT": "🇮🇹", "UA": "🇺🇦", "LV": "🇱🇻",
+    "EE": "🇪🇪", "LT": "🇱🇹", "CH": "🇨🇭", "AT": "🇦🇹", "HK": "🇭🇰", "KR": "🇰🇷",
+    "IN": "🇮🇳", "AE": "🇦🇪", "KZ": "🇰🇿", "GE": "🇬🇪",
 }
 
 
@@ -97,6 +107,12 @@ def country_of(name):
             return c
     letters = "".join(ch for ch in (name or "?") if ch.isalpha())
     return (letters[:2] or "VP").upper()
+
+
+def clean_name(name):
+    """Убирает дублирующий код страны в начале: 'frFrance - быстрый' → 'France - быстрый'."""
+    import re
+    return re.sub(r"^[a-zA-Z]{2}(?=[A-ZА-Я])", "", (name or "").strip()).strip()
 
 
 def proto_line(link):
@@ -326,8 +342,6 @@ class JeffTUN:
         sicon("🌐", lambda: None, active=True)
         sicon("＋", self.add_key)
         sicon("⚙", self.open_settings)
-        sicon("📊", self._stats)
-        sicon("⬆", self.do_self_update)
         ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
         sicon("ℹ", self._about)
 
@@ -378,12 +392,16 @@ class JeffTUN:
             row = ctk.CTkFrame(h, fg_color="transparent"); row.pack()
             ctk.CTkLabel(row, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
             ctk.CTkLabel(row, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
-        # круглая кнопка
-        self.power = ctk.CTkButton(right, text="⏻", width=180, height=180, corner_radius=90,
+        # круглая кнопка с мягкой тенью-кольцом
+        pwrap = ctk.CTkFrame(right, fg_color="transparent")
+        pwrap.grid(row=1, column=0, pady=10)
+        self.power_ring = ctk.CTkFrame(pwrap, width=210, height=210, corner_radius=105, fg_color="#141018")
+        self.power_ring.pack()
+        self.power_ring.pack_propagate(False)
+        self.power = ctk.CTkButton(self.power_ring, text="⏻", width=176, height=176, corner_radius=88,
                                    fg_color=CARD, hover_color=CARD2, text_color=MUTED,
-                                   font=ctk.CTkFont(FONT, 60), border_width=2, border_color=CARD2,
-                                   command=self.toggle)
-        self.power.grid(row=1, column=0, pady=10)
+                                   font=ctk.CTkFont(FONT, 58), border_width=0, command=self.toggle)
+        self.power.place(relx=0.5, rely=0.5, anchor="center")
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 15, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 4))
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
@@ -453,15 +471,16 @@ class JeffTUN:
             self.empty_lbl.pack(pady=40)
             return
         for i, ln in enumerate(self.links):
-            name = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
+            raw = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
+            name = clean_name(raw)
             if q and q not in name.lower():
                 continue
-            code = country_of(name); sel = (i == self.selected_idx)
+            code = country_of(raw); sel = (i == self.selected_idx)
             row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
                                corner_radius=14, border_width=2 if sel else 0, border_color=ACC)
             row.pack(fill="x", pady=4)
-            badge = ctk.CTkLabel(row, text=code, width=44, height=44, corner_radius=12,
-                                 fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 13, "bold"))
+            badge = ctk.CTkLabel(row, text=code, width=46, height=46, corner_radius=13,
+                                 fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 14, "bold"))
             badge.pack(side="left", padx=10, pady=8)
             m = ctk.CTkFrame(row, fg_color="transparent"); m.pack(side="left", fill="x", expand=True)
             ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
@@ -473,7 +492,7 @@ class JeffTUN:
 
     def select_server(self, idx):
         self.selected_idx = idx; self.render_servers()
-        nm = unquote(self.links[idx].split("#", 1)[1]) if "#" in self.links[idx] else f"Сервер {idx+1}"
+        nm = clean_name(unquote(self.links[idx].split("#", 1)[1])) if "#" in self.links[idx] else f"Сервер {idx+1}"
         self.cur_lbl.configure(text=nm)
         self.do_ping()
         if self.connected: self.disconnect(); self.connect()
@@ -528,9 +547,10 @@ class JeffTUN:
         try: set_system_proxy(True)
         except Exception: pass
         self.connected = True
-        self.power.configure(fg_color=OK, hover_color="#28b14a", text_color="white", border_color=OK)
+        self.power.configure(fg_color="#2ca44c", hover_color="#268f42", text_color="white")
+        self.power_ring.configure(fg_color="#123a1f")
         self.status.configure(text="Подключено", text_color=OK)
-        nm = unquote(link.split("#", 1)[1]) if "#" in link else "Сервер"
+        nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
 
     def disconnect(self):
@@ -541,7 +561,8 @@ class JeffTUN:
             except Exception: pass
             self.proc = None
         self.connected = False
-        self.power.configure(fg_color=CARD, hover_color=CARD2, text_color=MUTED, border_color=CARD2)
+        self.power.configure(fg_color=CARD, hover_color=CARD2, text_color=MUTED)
+        self.power_ring.configure(fg_color="#141018")
         self.status.configure(text="Отключено", text_color=MUTED)
 
     # ── Сохранение ──
