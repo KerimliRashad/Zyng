@@ -17,8 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+      - name: Install deps
+        run: pip install pyinstaller customtkinter pillow
       - name: Download xray-core (Windows 64-bit)
         shell: pwsh
         run: |
@@ -33,6 +33,7 @@ jobs:
           pyinstaller --noconfirm --onefile --windowed `
             --name "JeffTUN" `
             --icon "icon.ico" `
+            --collect-all customtkinter `
             --add-binary "xray.exe;." `
             --add-data "logo_white.png;." `
             --add-data "icon.ico;." `
@@ -73,7 +74,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk
-          pip install pyinstaller
+          pip install pyinstaller customtkinter pillow
       - name: Download xray-core (Linux 64-bit)
         run: |
           curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
@@ -85,6 +86,7 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile \
             --name "JeffTUN-linux" \
+            --collect-all customtkinter \
             --add-binary "xray:." \
             --add-data "logo_white.png:." \
             qipcall.py

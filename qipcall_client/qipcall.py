@@ -1,7 +1,7 @@
 """
-JeffTUN VPN — десктопный клиент для Windows.
-Вставь ключ (vless:// / vmess:// / trojan:// / ss://) или ссылку-подписку,
-нажми «Подключиться» — трафик пойдёт через VPN (системный прокси + xray-core).
+JeffTUN VPN — десктопный клиент (Windows/Linux) в стиле Happ.
+Слева иконки, посередине серверы с поиском, справа круглая кнопка включения.
+UI: CustomTkinter. Ядро: xray-core. Системный прокси.
 """
 import os
 import sys
@@ -15,10 +15,11 @@ import urllib.request
 from urllib.parse import urlparse, parse_qs, unquote
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.0"
+APP_VERSION = "3.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -27,53 +28,48 @@ SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
-# ── Тёмная тема ───────────────────────────────────────────────────────────────
-BG = "#0a0e17"
-CARD = "#141b2b"
-CARD2 = "#0d121d"
-ACC = "#5b8def"
-ACC2 = "#7c5cff"
-TEXT = "#eef2f9"
-MUTED = "#8a97ad"
-OK = "#3fce6a"
-WARN = "#f5b942"
-DANGER = "#f87171"
-BORDER = "#242c3d"
+# iOS/Happ-палитра (тёмная)
+BG     = "#0e0e13"
+SIDE   = "#15151c"
+PANEL  = "#141418"
+CARD   = "#1e1e26"
+CARD2  = "#2a2a34"
+ACC    = "#7c5cff"
+ACC_D  = "#6a49f2"
+TEXT   = "#f2f2f7"
+MUTED  = "#8e8e97"
+OK     = "#30d158"
+WARN   = "#ffd60a"
+DANGER = "#ff453a"
 
 
 def resource_path(name):
-    """Путь к xray.exe — рядом с программой или во временной папке PyInstaller."""
-    candidates = []
+    cands = []
     if hasattr(sys, "_MEIPASS"):
-        candidates.append(os.path.join(sys._MEIPASS, name))
-    candidates.append(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), name))
-    candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), name))
-    for c in candidates:
+        cands.append(os.path.join(sys._MEIPASS, name))
+    cands.append(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), name))
+    cands.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), name))
+    for c in cands:
         if os.path.exists(c):
             return c
     return name
 
 
-# ══ ПАРСИНГ КЛЮЧЕЙ В OUTBOUND xray ═══════════════════════════════════════════
-def parse_link(link: str) -> dict:
+# ══ ПАРСИНГ КЛЮЧЕЙ ═══════════════════════════════════════════════════════════
+def parse_link(link):
     link = link.strip()
-    if link.startswith("vless://"):
-        return _parse_vless(link)
-    if link.startswith("vmess://"):
-        return _parse_vmess(link)
-    if link.startswith("trojan://"):
-        return _parse_trojan(link)
-    if link.startswith("ss://"):
-        return _parse_ss(link)
-    raise ValueError("Неизвестный формат. Нужен vless / vmess / trojan / ss.")
+    if link.startswith("vless://"):  return _parse_vless(link)
+    if link.startswith("vmess://"):  return _parse_vmess(link)
+    if link.startswith("trojan://"): return _parse_trojan(link)
+    if link.startswith("ss://"):     return _parse_ss(link)
+    raise ValueError("Нужен ключ vless / vmess / trojan / ss")
 
 
-def link_host_port(link: str):
-    """Возвращает (host, port) из ключа — для пинга."""
+def link_host_port(link):
     link = link.strip()
     try:
         if link.startswith("vmess://"):
-            raw = link[len("vmess://"):]; raw += "=" * (-len(raw) % 4)
+            raw = link[8:]; raw += "=" * (-len(raw) % 4)
             obj = json.loads(base64.b64decode(raw).decode())
             return obj.get("add"), int(obj.get("port", 443))
         u = urlparse(link)
@@ -83,46 +79,33 @@ def link_host_port(link: str):
 
 
 COUNTRY_CODES = {
-    "france": "FR", "franc": "FR", "germany": "DE", "german": "DE",
-    "finland": "FI", "finl": "FI", "usa": "US", "america": "US", "united states": "US",
-    "malaysia": "MY", "malay": "MY", "netherlands": "NL", "holland": "NL",
+    "france": "FR", "germany": "DE", "finland": "FI", "usa": "US", "america": "US",
+    "united states": "US", "malaysia": "MY", "netherlands": "NL", "holland": "NL",
     "russia": "RU", "moscow": "RU", "uk": "GB", "london": "GB", "england": "GB",
-    "poland": "PL", "sweden": "SE", "turkey": "TR", "turkiye": "TR",
-    "japan": "JP", "singapore": "SG", "canada": "CA", "france ": "FR",
-    "spain": "ES", "italy": "IT", "ukraine": "UA", "latvia": "LV",
-    "estonia": "EE", "lithuania": "LT", "switzerland": "CH", "austria": "AT",
-    "hongkong": "HK", "hong kong": "HK", "korea": "KR", "india": "IN",
+    "poland": "PL", "sweden": "SE", "turkey": "TR", "turkiye": "TR", "japan": "JP",
+    "singapore": "SG", "canada": "CA", "spain": "ES", "italy": "IT", "ukraine": "UA",
+    "latvia": "LV", "estonia": "EE", "lithuania": "LT", "switzerland": "CH",
+    "austria": "AT", "hongkong": "HK", "hong kong": "HK", "korea": "KR", "india": "IN",
     "uae": "AE", "dubai": "AE", "kazakhstan": "KZ", "georgia": "GE",
 }
 
 
-def country_of(name: str):
-    """Возвращает (код_страны, флаг_emoji) по названию сервера."""
+def country_of(name):
     low = (name or "").lower()
-    code = None
-    for key, c in COUNTRY_CODES.items():
-        if key in low:
-            code = c
-            break
-    if not code:
-        # первые 2 буквы из названия
-        letters = "".join(ch for ch in (name or "?") if ch.isalpha())
-        code = (letters[:2] or "VP").upper()
-    # флаг из regional indicator (на некоторых ОС не рисуется — тогда виден код)
-    flag = "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code) if len(code) == 2 else ""
-    return code, flag
+    for k, c in COUNTRY_CODES.items():
+        if k in low:
+            return c
+    letters = "".join(ch for ch in (name or "?") if ch.isalpha())
+    return (letters[:2] or "VP").upper()
 
 
-def proto_line(link: str) -> str:
-    """Строка протокола для подписи, напр. 'VLESS · TCP · Reality'."""
+def proto_line(link):
     try:
         scheme = link.split("://", 1)[0].upper()
         if link.startswith("vmess://"):
             raw = link[8:]; raw += "=" * (-len(raw) % 4)
             obj = json.loads(base64.b64decode(raw).decode())
-            net = obj.get("net", "tcp").upper()
-            sec = "TLS" if obj.get("tls") else "—"
-            return f"VMESS · {net} · {sec}"
+            return f"VMESS · {obj.get('net','tcp').upper()} · {'TLS' if obj.get('tls') else '—'}"
         p = parse_qs(urlparse(link).query)
         net = p.get("type", ["tcp"])[0].upper()
         sec = p.get("security", ["none"])[0]
@@ -141,20 +124,16 @@ def _stream(params, net, security):
             "fingerprint": params.get("fp", ["chrome"])[0],
             "publicKey": params.get("pbk", [""])[0],
             "shortId": params.get("sid", [""])[0],
-            "spiderX": params.get("spx", [""])[0],
-        }
+            "spiderX": params.get("spx", [""])[0]}
     elif security == "tls":
         ss["security"] = "tls"
         ss["tlsSettings"] = {
             "serverName": params.get("sni", [params.get("host", [""])[0]])[0],
             "fingerprint": params.get("fp", ["chrome"])[0],
-            "allowInsecure": params.get("allowInsecure", ["0"])[0] in ("1", "true"),
-        }
+            "allowInsecure": params.get("allowInsecure", ["0"])[0] in ("1", "true")}
     if net == "ws":
-        ss["wsSettings"] = {
-            "path": params.get("path", ["/"])[0],
-            "headers": {"Host": params.get("host", [""])[0]} if params.get("host") else {},
-        }
+        ss["wsSettings"] = {"path": params.get("path", ["/"])[0],
+                            "headers": {"Host": params.get("host", [""])[0]} if params.get("host") else {}}
     elif net == "grpc":
         ss["grpcSettings"] = {"serviceName": params.get("serviceName", [""])[0]}
     return ss
@@ -162,104 +141,77 @@ def _stream(params, net, security):
 
 def _parse_vless(link):
     u = urlparse(link); p = parse_qs(u.query)
-    net = p.get("type", ["tcp"])[0]; security = p.get("security", ["none"])[0]
+    net = p.get("type", ["tcp"])[0]; sec = p.get("security", ["none"])[0]
     vnext = {"address": u.hostname, "port": u.port or 443,
-             "users": [{"id": unquote(u.username or ""), "encryption": "none",
-                        "flow": p.get("flow", [""])[0]}]}
-    return {"protocol": "vless", "settings": {"vnext": [vnext]},
-            "streamSettings": _stream(p, net, security), "tag": "proxy"}
+             "users": [{"id": unquote(u.username or ""), "encryption": "none", "flow": p.get("flow", [""])[0]}]}
+    return {"protocol": "vless", "settings": {"vnext": [vnext]}, "streamSettings": _stream(p, net, sec), "tag": "proxy"}
 
 
 def _parse_vmess(link):
-    raw = link[len("vmess://"):]; raw += "=" * (-len(raw) % 4)
+    raw = link[8:]; raw += "=" * (-len(raw) % 4)
     obj = json.loads(base64.b64decode(raw).decode())
-    net = obj.get("net", "tcp")
-    security = "tls" if obj.get("tls") in ("tls", True, "true") else "none"
+    net = obj.get("net", "tcp"); sec = "tls" if obj.get("tls") in ("tls", True, "true") else "none"
     p = {"path": [obj.get("path", "/")], "host": [obj.get("host", "")],
          "sni": [obj.get("sni", obj.get("host", ""))], "serviceName": [obj.get("path", "")]}
     vnext = {"address": obj.get("add"), "port": int(obj.get("port", 443)),
              "users": [{"id": obj.get("id"), "alterId": int(obj.get("aid", 0)), "security": "auto"}]}
-    return {"protocol": "vmess", "settings": {"vnext": [vnext]},
-            "streamSettings": _stream(p, net, security), "tag": "proxy"}
+    return {"protocol": "vmess", "settings": {"vnext": [vnext]}, "streamSettings": _stream(p, net, sec), "tag": "proxy"}
 
 
 def _parse_trojan(link):
     u = urlparse(link); p = parse_qs(u.query)
-    net = p.get("type", ["tcp"])[0]; security = p.get("security", ["tls"])[0]
-    return {"protocol": "trojan", "settings": {"servers": [{
-                "address": u.hostname, "port": u.port or 443,
-                "password": unquote(u.username or "")}]},
-            "streamSettings": _stream(p, net, security), "tag": "proxy"}
+    net = p.get("type", ["tcp"])[0]; sec = p.get("security", ["tls"])[0]
+    return {"protocol": "trojan", "settings": {"servers": [{"address": u.hostname, "port": u.port or 443,
+            "password": unquote(u.username or "")}]}, "streamSettings": _stream(p, net, sec), "tag": "proxy"}
 
 
 def _parse_ss(link):
-    body = link[len("ss://"):]
-    if "#" in body:
-        body = body.split("#", 1)[0]
+    body = link[5:]
+    if "#" in body: body = body.split("#", 1)[0]
     if "@" in body:
-        userinfo, server = body.split("@", 1)
-        userinfo += "=" * (-len(userinfo) % 4)
-        try:
-            method, password = base64.b64decode(userinfo).decode().split(":", 1)
-        except Exception:
-            method, password = unquote(userinfo).split(":", 1)
+        ui, server = body.split("@", 1); ui += "=" * (-len(ui) % 4)
+        try: method, password = base64.b64decode(ui).decode().split(":", 1)
+        except Exception: method, password = unquote(ui).split(":", 1)
     else:
         body += "=" * (-len(body) % 4)
         creds, server = base64.b64decode(body).decode().split("@", 1)
         method, password = creds.split(":", 1)
-    host, port = server.split(":")
-    port = int(port.split("/")[0].split("?")[0])
-    return {"protocol": "shadowsocks", "settings": {"servers": [{
-                "address": host, "port": port, "method": method, "password": password}]},
-            "tag": "proxy"}
+    host, port = server.split(":"); port = int(port.split("/")[0].split("?")[0])
+    return {"protocol": "shadowsocks", "settings": {"servers": [{"address": host, "port": port,
+            "method": method, "password": password}]}, "tag": "proxy"}
 
 
-def build_xray_config(outbound: dict) -> dict:
-    return {
-        "log": {"loglevel": "warning"},
-        "inbounds": [
-            {"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1",
-             "protocol": "socks", "settings": {"udp": True}},
-            {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"},
-        ],
-        "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}],
-    }
+def build_xray_config(outbound):
+    return {"log": {"loglevel": "warning"},
+            "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}},
+                         {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"}],
+            "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}]}
 
 
-# ══ СИСТЕМНЫЙ ПРОКСИ WINDOWS ═════════════════════════════════════════════════
-def set_system_proxy(enable: bool):
-    if sys.platform == "darwin":
-        _set_mac_proxy(enable)
-        return
-    if os.name != "nt":
-        _set_linux_proxy(enable)
-        return
+# ══ СИСТЕМНЫЙ ПРОКСИ ═════════════════════════════════════════════════════════
+def set_system_proxy(enable):
+    if sys.platform == "darwin": _set_mac_proxy(enable); return
+    if os.name != "nt": _set_linux_proxy(enable); return
     import winreg, ctypes
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-        r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-        0, winreg.KEY_ALL_ACCESS)
+        r"Software\Microsoft\Windows\CurrentVersion\Internet Settings", 0, winreg.KEY_ALL_ACCESS)
     if enable:
         winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1)
         winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, f"127.0.0.1:{HTTP_PORT}")
-        winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ,
-                          "localhost;127.*;10.*;172.16.*;192.168.*;<local>")
+        winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ, "localhost;127.*;10.*;172.16.*;192.168.*;<local>")
     else:
         winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
     winreg.CloseKey(key)
-    internet = ctypes.windll.Wininet
-    internet.InternetSetOptionW(0, 39, 0, 0)
-    internet.InternetSetOptionW(0, 37, 0, 0)
+    inet = ctypes.windll.Wininet; inet.InternetSetOptionW(0, 39, 0, 0); inet.InternetSetOptionW(0, 37, 0, 0)
 
 
-def _set_mac_proxy(enable: bool):
-    """Системный прокси в macOS через networksetup (Wi-Fi + Ethernet)."""
+def _set_mac_proxy(enable):
     def services():
         try:
             out = subprocess.check_output(["networksetup", "-listallnetworkservices"]).decode()
             return [s.strip() for s in out.splitlines()[1:] if s.strip() and not s.startswith("*")]
         except Exception:
             return ["Wi-Fi"]
-
     for svc in services():
         try:
             if enable:
@@ -267,95 +219,78 @@ def _set_mac_proxy(enable: bool):
                 subprocess.run(["networksetup", "-setsecurewebproxy", svc, "127.0.0.1", str(HTTP_PORT)], check=False)
                 subprocess.run(["networksetup", "-setsocksfirewallproxy", svc, "127.0.0.1", str(SOCKS_PORT)], check=False)
             else:
-                subprocess.run(["networksetup", "-setwebproxystate", svc, "off"], check=False)
-                subprocess.run(["networksetup", "-setsecurewebproxystate", svc, "off"], check=False)
-                subprocess.run(["networksetup", "-setsocksfirewallproxystate", svc, "off"], check=False)
+                for m in ("-setwebproxystate", "-setsecurewebproxystate", "-setsocksfirewallproxystate"):
+                    subprocess.run(["networksetup", m, svc, "off"], check=False)
         except Exception:
             pass
 
 
-def _set_linux_proxy(enable: bool):
-    """Системный прокси в Linux через gsettings (GNOME/Cinnamon/Mate)."""
-    def g(*args):
-        try:
-            subprocess.run(["gsettings"] + list(args), check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
+def _set_linux_proxy(enable):
+    def g(*a):
+        try: subprocess.run(["gsettings"] + list(a), check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception: pass
     if enable:
         g("set", "org.gnome.system.proxy", "mode", "manual")
-        for proto in ("http", "https"):
-            g("set", f"org.gnome.system.proxy.{proto}", "host", "127.0.0.1")
-            g("set", f"org.gnome.system.proxy.{proto}", "port", str(HTTP_PORT))
+        for pr in ("http", "https"):
+            g("set", f"org.gnome.system.proxy.{pr}", "host", "127.0.0.1")
+            g("set", f"org.gnome.system.proxy.{pr}", "port", str(HTTP_PORT))
         g("set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
         g("set", "org.gnome.system.proxy.socks", "port", str(SOCKS_PORT))
     else:
         g("set", "org.gnome.system.proxy", "mode", "none")
 
 
-# ══ АВТОЗАПУСК С СИСТЕМОЙ (Windows) ══════════════════════════════════════════
-def set_autostart(enable: bool):
-    if os.name != "nt" or not getattr(sys, "frozen", False):
-        return
+def set_autostart(enable):
+    if os.name != "nt" or not getattr(sys, "frozen", False): return
     import winreg
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-        r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
-    if enable:
-        winreg.SetValueEx(key, "JeffTUN", 0, winreg.REG_SZ, f'"{sys.executable}"')
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+    if enable: winreg.SetValueEx(key, "JeffTUN", 0, winreg.REG_SZ, f'"{sys.executable}"')
     else:
         try: winreg.DeleteValue(key, "JeffTUN")
         except Exception: pass
     winreg.CloseKey(key)
 
 
-def get_autostart() -> bool:
-    if os.name != "nt":
-        return False
+def get_autostart():
+    if os.name != "nt": return False
     try:
         import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Run")
-        winreg.QueryValueEx(key, "JeffTUN")
-        winreg.CloseKey(key)
-        return True
+        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run")
+        winreg.QueryValueEx(k, "JeffTUN"); winreg.CloseKey(k); return True
     except Exception:
         return False
 
 
-# ══ ЗАГРУЗКА ПОДПИСКИ ════════════════════════════════════════════════════════
-def fetch_subscription(url: str) -> list:
+def fetch_subscription(url):
     ctx = None
     try:
         import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
+        ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
     except Exception:
         pass
     req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
     with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
         data = r.read().decode().strip()
     try:
-        decoded = base64.b64decode(data + "=" * (-len(data) % 4)).decode()
-        if "://" in decoded:
-            data = decoded
+        dec = base64.b64decode(data + "=" * (-len(data) % 4)).decode()
+        if "://" in dec: data = dec
     except Exception:
         pass
     return [ln.strip() for ln in data.splitlines() if "://" in ln]
 
 
 def tcp_ping(host, port, timeout=3.0):
-    """Возвращает пинг в мс или None."""
     try:
-        start = time.time()
-        s = socket.create_connection((host, port), timeout=timeout)
-        s.close()
-        return int((time.time() - start) * 1000)
+        s = time.time(); c = socket.create_connection((host, port), timeout=timeout); c.close()
+        return int((time.time() - s) * 1000)
     except Exception:
         return None
 
 
-# ══ GUI ══════════════════════════════════════════════════════════════════════
+FONT = "SF Pro Display"
+
+
+# ══ ПРИЛОЖЕНИЕ ═══════════════════════════════════════════════════════════════
 class JeffTUN:
     def __init__(self, root):
         self.root = root
@@ -365,211 +300,280 @@ class JeffTUN:
         self.sub_url = ""
         self.autoconnect = False
         self.prefs = {}
+        self.selected_idx = 0
 
-        root.title(APP_NAME)
-        root.geometry("460x720")
-        root.minsize(440, 560)
-        root.configure(bg=BG)
-        root.resizable(True, True)
-
-        # Иконка окна / приложения
-        self._logo_img = None
+        root.title(APP_NAME); root.geometry("900x600"); root.minsize(820, 540)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
-                if os.path.exists(ico):
-                    root.iconbitmap(ico)
-        except Exception:
-            pass
-        try:
-            logo_png = resource_path("logo_white.png")
-            if os.path.exists(logo_png):
-                img = tk.PhotoImage(file=logo_png)
-                # уменьшаем до ~40px высоты
-                factor = max(1, img.height() // 40)
-                self._logo_small = img.subsample(factor, factor)
-                self._logo_img = img
-                root.iconphoto(True, img)
+                if os.path.exists(ico): root.iconbitmap(ico)
         except Exception:
             pass
 
-        # ── Заголовок ──
-        header = tk.Frame(root, bg=BG)
-        header.pack(fill="x", padx=26, pady=(24, 2))
-        logo = tk.Frame(header, bg=BG)
-        logo.pack(side="left")
-        tk.Label(logo, text="Jeff", bg=BG, fg=TEXT, font=("Segoe UI", 26, "bold")).pack(side="left")
-        tk.Label(logo, text="TUN", bg=BG, fg=ACC, font=("Segoe UI", 26, "bold")).pack(side="left")
-        tk.Label(header, text="VPN", bg=BG, fg=MUTED, font=("Segoe UI", 11, "bold")).pack(side="left", padx=(6, 0), pady=(12, 0))
-        tk.Button(header, text="⚙", command=self.open_settings, bg=BG, fg=MUTED,
-                  relief="flat", font=("Segoe UI", 18), cursor="hand2", bd=0,
-                  activebackground=BG, activeforeground=TEXT).pack(side="right", pady=(6, 0))
+        root.grid_columnconfigure(1, weight=1)
+        root.grid_columnconfigure(2, weight=1)
+        root.grid_rowconfigure(0, weight=1)
 
-        tk.Label(root, text="Вставь ключ или ссылку-подписку и подключись",
-                 bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(padx=26, anchor="w", pady=(0, 12))
+        # ── ЛЕВАЯ ПАНЕЛЬ ИКОНОК ──
+        side = ctk.CTkFrame(root, width=64, fg_color=SIDE, corner_radius=0)
+        side.grid(row=0, column=0, sticky="nsw"); side.grid_propagate(False)
+        def sicon(txt, cmd, active=False):
+            ctk.CTkButton(side, text=txt, width=44, height=44, corner_radius=14,
+                          fg_color=(CARD if active else "transparent"), hover_color=CARD,
+                          text_color=(ACC if active else MUTED), font=ctk.CTkFont(FONT, 20),
+                          command=cmd).pack(pady=6)
+        ctk.CTkLabel(side, text="", height=8).pack()
+        sicon("🌐", lambda: None, active=True)
+        sicon("＋", self.add_key)
+        sicon("⚙", self.open_settings)
+        sicon("📊", self._stats)
+        sicon("⬆", self.do_self_update)
+        ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
+        sicon("ℹ", self._about)
 
-        # ── Плашка обновления (скрыта пока нет апдейта) ──
-        self.update_bar = tk.Frame(root, bg="#1a2c1e", highlightthickness=1, highlightbackground=OK)
-        self._update_lbl = tk.Label(self.update_bar, text="", bg="#1a2c1e", fg=OK,
-                                    font=("Segoe UI", 10, "bold"))
-        self._update_lbl.pack(side="left", padx=14, pady=9)
-        tk.Button(self.update_bar, text="Обновить ⬇", command=self.do_self_update,
-                  bg=OK, fg="#0a0e17", relief="flat", cursor="hand2", bd=0,
-                  font=("Segoe UI", 9, "bold"), padx=14, pady=7).pack(side="right", padx=10)
+        # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
+        mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
+        mid.grid(row=0, column=1, sticky="nsew")
+        mid.grid_rowconfigure(2, weight=1); mid.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(mid, text="Серверы", font=ctk.CTkFont(FONT, 24, "bold"),
+                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=22, pady=(20, 8))
+        srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18)
+        self.search = ctk.CTkEntry(srow, placeholder_text="Поиск…", height=38, corner_radius=12,
+                                   fg_color=CARD, border_width=0)
+        self.search.pack(side="left", fill="x", expand=True)
+        self.search.bind("<KeyRelease>", lambda e: self.render_servers())
+        ctk.CTkButton(srow, text="⟳", width=38, height=38, corner_radius=12, fg_color=CARD,
+                      hover_color=CARD2, command=self.update_sub).pack(side="left", padx=(6, 0))
+        self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent")
+        self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
+        self.empty_lbl = ctk.CTkLabel(self.server_list,
+            text="Добавь ключ или подписку —\nкнопка ＋ слева или «Вставить» ниже",
+            font=ctk.CTkFont(FONT, 12), text_color=MUTED)
+        brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=3, column=0, sticky="ew", padx=18, pady=(4, 16))
+        ctk.CTkButton(brow, text="📋 Вставить", height=42, corner_radius=12, fg_color=CARD, hover_color=CARD2,
+                      font=ctk.CTkFont(FONT, 13), command=self.paste_key).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(brow, text="🔗 Подписка", height=42, corner_radius=12, fg_color=CARD, hover_color=CARD2,
+                      font=ctk.CTkFont(FONT, 13), command=self.add_sub).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
-        # ── Карта ключа ──
-        card = tk.Frame(root, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
-        card.pack(fill="x", padx=26)
-        tk.Label(card, text="КЛЮЧ / ПОДПИСКА", bg=CARD, fg=MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16, pady=(14, 6))
-        self.txt = tk.Text(card, height=4, bg=CARD2, fg=TEXT, insertbackground=ACC,
-                           relief="flat", font=("Consolas", 9), wrap="word",
-                           highlightthickness=1, highlightbackground=BORDER, padx=10, pady=8)
-        self.txt.pack(fill="x", padx=16, pady=(0, 8))
-        self._setup_paste(self.txt)
+        # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
+        right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
+        right.grid(row=0, column=2, sticky="nsew")
+        right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(3, weight=1)
+        right.grid_columnconfigure(0, weight=1)
+        # логотип-заголовок
+        h = ctk.CTkFrame(right, fg_color="transparent"); h.grid(row=0, column=0, pady=(24, 0), sticky="n")
+        ctk.CTkLabel(h, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
+        ctk.CTkLabel(h, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
+        # круглая кнопка
+        self.power = ctk.CTkButton(right, text="⏻", width=180, height=180, corner_radius=90,
+                                   fg_color=CARD, hover_color=CARD2, text_color=MUTED,
+                                   font=ctk.CTkFont(FONT, 60), border_width=2, border_color=CARD2,
+                                   command=self.toggle)
+        self.power.grid(row=1, column=0, pady=10)
+        self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 15, "bold"), text_color=MUTED)
+        self.status.grid(row=2, column=0, pady=(0, 4))
+        self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
+        self.cur_lbl.grid(row=3, column=0, sticky="n")
+        bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=4, column=0, pady=(0, 22))
+        self.ping_btn = ctk.CTkButton(bottom, text="Тест пинга", height=40, width=180, corner_radius=12,
+                                      fg_color=ACC, hover_color=ACC_D, font=ctk.CTkFont(FONT, 13, "bold"),
+                                      command=self.do_ping)
+        self.ping_btn.pack(pady=4)
+        self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
+        self.ping_lbl.pack()
+        ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn", font=ctk.CTkFont(FONT, 9),
+                     text_color="#48484e").grid(row=5, column=0, pady=(0, 8))
 
-        paste_row = tk.Frame(card, bg=CARD)
-        paste_row.pack(fill="x", padx=16, pady=(0, 14))
-        self._chip(paste_row, "📋 Вставить", self.paste_clipboard, ACC).pack(side="left")
-        self._chip(paste_row, "✖ Очистить", lambda: self.txt.delete("1.0", "end"), "#2a3346").pack(side="left", padx=6)
-        self._chip(paste_row, "💾 Сохранить", self.save, "#2a3346").pack(side="left")
-
-        # ══ НИЖНИЙ БЛОК — всегда виден (закреплён внизу) ══
-        # логотип + версия
-        tk.Label(root, text=f"JeffTUN v{APP_VERSION}  ·  t.me/jeffvpn", bg=BG, fg="#3a4256",
-                 font=("Segoe UI", 8)).pack(side="bottom", pady=(0, 8))
-        if getattr(self, "_logo_small", None):
-            tk.Label(root, image=self._logo_small, bg=BG).pack(side="bottom", pady=(2, 0))
-        self.info = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9),
-                             wraplength=410, justify="center")
-        self.info.pack(side="bottom", pady=(4, 4))
-        # нижние действия
-        row = tk.Frame(root, bg=BG); row.pack(side="bottom", pady=(4, 6))
-        self._chip(row, "🔄 Подписка", self.load_sub, CARD).pack(side="left", padx=4)
-        self._chip(row, "📶 Пинг", self.do_ping, CARD).pack(side="left", padx=4)
-        self._chip(row, "⬆ Обновить", self.update_sub, CARD).pack(side="left", padx=4)
-        # КНОПКА ПОДКЛЮЧЕНИЯ
-        self.btn = tk.Button(root, text="Подключиться", command=self.toggle,
-                             bg=ACC, fg="white", relief="flat", cursor="hand2",
-                             font=("Segoe UI", 15, "bold"), width=22, height=2,
-                             activebackground=ACC2, activeforeground="white", bd=0)
-        self.btn.pack(side="bottom", pady=6)
-        self.btn.bind("<Enter>", lambda e: self.btn.config(bg=(DANGER if self.connected else ACC2)))
-        self.btn.bind("<Leave>", lambda e: self.btn.config(bg=(DANGER if self.connected else ACC)))
-        self.status = tk.Label(root, text="● Отключено", bg=BG, fg=MUTED, font=("Segoe UI", 13, "bold"))
-        self.status.pack(side="bottom", pady=(6, 2))
-        self.ping_lbl = tk.Label(root, text="", bg=BG, fg=MUTED, font=("Segoe UI", 10, "bold"))
-        self.ping_lbl.pack(side="bottom", pady=(6, 0))
-
-        # ══ СПИСОК СЕРВЕРОВ — посередине, с прокруткой ══
-        self.selected_idx = 0
-        self.server_rows = []
-        self.server_box = tk.Frame(root, bg=BG)
-        tk.Label(self.server_box, text="СЕРВЕРЫ", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=26, pady=(10, 4))
-        scroll_wrap = tk.Frame(self.server_box, bg=BG)
-        scroll_wrap.pack(fill="both", expand=True, padx=20)
-        self._srv_canvas = tk.Canvas(scroll_wrap, bg=BG, highlightthickness=0)
-        srv_sb = ttk.Scrollbar(scroll_wrap, orient="vertical", command=self._srv_canvas.yview)
-        self.server_list = tk.Frame(self._srv_canvas, bg=BG)
-        self.server_list.bind("<Configure>",
-            lambda e: self._srv_canvas.configure(scrollregion=self._srv_canvas.bbox("all")))
-        self._srv_win = self._srv_canvas.create_window((0, 0), window=self.server_list, anchor="nw")
-        self._srv_canvas.bind("<Configure>",
-            lambda e: self._srv_canvas.itemconfig(self._srv_win, width=e.width))
-        self._srv_canvas.configure(yscrollcommand=srv_sb.set)
-        self._srv_canvas.pack(side="left", fill="both", expand=True)
-        srv_sb.pack(side="right", fill="y")
-        self._srv_canvas.bind_all("<MouseWheel>",
-            lambda e: self._srv_canvas.yview_scroll(int(-e.delta/120), "units"))
-        self.server_box.pack_forget()
+        # плашка обновления (поверх, снизу справа при апдейте)
+        self.update_bar = None
 
         self.load_saved()
-        self.refresh_from_box()
-        self.txt.bind("<KeyRelease>", lambda e: self._debounce_refresh())
+        self.render_servers()
         self.check_update()
         if self.autoconnect and self.links:
             self.root.after(800, self.connect)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    _refresh_timer = None
-    def _debounce_refresh(self):
-        if self._refresh_timer:
-            self.root.after_cancel(self._refresh_timer)
-        self._refresh_timer = self.root.after(600, self.refresh_from_box)
+    # ── Добавление ключа/подписки ──
+    def add_key(self):
+        dlg = ctk.CTkInputDialog(text="Вставь ключ (vless/vmess/trojan/ss):", title="Добавить ключ")
+        v = dlg.get_input()
+        if v and "://" in v:
+            self.links = [l.strip() for l in (self.links + [v.strip()]) if "://" in l]
+            self.selected_idx = 0; self.render_servers(); self.save(silent=True); self.do_ping()
 
-    # ── UI helpers ──
-    def _chip(self, parent, text, cmd, color):
-        return tk.Button(parent, text=text, command=cmd, bg=color, fg=TEXT, relief="flat",
-                         font=("Segoe UI", 9), cursor="hand2", activebackground=ACC,
-                         activeforeground="white", bd=0, padx=12, pady=7)
+    def paste_key(self):
+        try: data = self.root.clipboard_get()
+        except Exception: self._flash("Буфер пуст", DANGER); return
+        lines = [l.strip() for l in data.splitlines() if "://" in l and not l.strip().startswith("http")]
+        subs = [l.strip() for l in data.splitlines() if l.strip().startswith("http")]
+        if subs:
+            self.sub_url = subs[0]; self._pull_sub(); return
+        if not lines:
+            self._flash("В буфере нет ключа", DANGER); return
+        self.links = lines; self.selected_idx = 0
+        self.render_servers(); self.save(silent=True); self.do_ping()
+        self._flash(f"Добавлено серверов: {len(lines)}", OK)
 
-    # ── Фикс вставки (Ctrl+V не работает на рус. раскладке в tkinter) ──
-    def _setup_paste(self, widget):
-        menu = tk.Menu(widget, tearoff=0, bg=CARD, fg=TEXT,
-                       activebackground=ACC, activeforeground="white")
-        menu.add_command(label="Вставить", command=self.paste_clipboard)
-        menu.add_command(label="Копировать", command=lambda: self._copy(widget))
-        menu.add_command(label="Выделить всё", command=lambda: self._select_all(widget))
-        menu.add_command(label="Очистить", command=lambda: widget.delete("1.0", "end"))
+    def add_sub(self):
+        dlg = ctk.CTkInputDialog(text="Вставь ссылку-подписку (https://…):", title="Подписка")
+        v = dlg.get_input()
+        if v and v.startswith("http"):
+            self.sub_url = v.strip(); self._pull_sub()
 
-        def popup(e):
-            try: menu.tk_popup(e.x_root, e.y_root)
-            finally: menu.grab_release()
-        widget.bind("<Button-3>", popup)
+    def _flash(self, txt, color=MUTED):
+        self.status.configure(text=txt, text_color=color)
+        self.root.after(2500, lambda: self.status.configure(
+            text=("Подключено" if self.connected else "Отключено"),
+            text_color=(OK if self.connected else MUTED)))
 
-        def on_key(e):
-            if e.keycode == 86: self.paste_clipboard(); return "break"
-            if e.keycode == 67: self._copy(widget); return "break"
-            if e.keycode == 88: self._copy(widget);
-            if e.keycode == 65: self._select_all(widget); return "break"
-        widget.bind("<Control-KeyPress>", on_key)
+    # ── Список серверов ──
+    def render_servers(self):
+        for w in self.server_list.winfo_children():
+            w.destroy()
+        q = (self.search.get() if hasattr(self, "search") else "").lower().strip()
+        if not self.links:
+            self.empty_lbl = ctk.CTkLabel(self.server_list,
+                text="Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
+                font=ctk.CTkFont(FONT, 12), text_color=MUTED)
+            self.empty_lbl.pack(pady=40)
+            return
+        for i, ln in enumerate(self.links):
+            name = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
+            if q and q not in name.lower():
+                continue
+            code = country_of(name); sel = (i == self.selected_idx)
+            row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
+                               corner_radius=14, border_width=2 if sel else 0, border_color=ACC)
+            row.pack(fill="x", pady=4)
+            badge = ctk.CTkLabel(row, text=code, width=44, height=44, corner_radius=12,
+                                 fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 13, "bold"))
+            badge.pack(side="left", padx=10, pady=8)
+            m = ctk.CTkFrame(row, fg_color="transparent"); m.pack(side="left", fill="x", expand=True)
+            ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(m, text=proto_line(ln), font=ctk.CTkFont(FONT, 10), text_color=MUTED, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(row, text=("✓" if sel else "›"), text_color=(OK if sel else MUTED),
+                         font=ctk.CTkFont(FONT, 16, "bold")).pack(side="right", padx=14)
+            for w in (row, m, badge) + tuple(m.winfo_children()):
+                w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
 
-    def paste_clipboard(self):
+    def select_server(self, idx):
+        self.selected_idx = idx; self.render_servers()
+        nm = unquote(self.links[idx].split("#", 1)[1]) if "#" in self.links[idx] else f"Сервер {idx+1}"
+        self.cur_lbl.configure(text=nm)
+        self.do_ping()
+        if self.connected: self.disconnect(); self.connect()
+
+    def _current_link(self):
+        if self.links and 0 <= self.selected_idx < len(self.links):
+            return self.links[self.selected_idx]
+        return ""
+
+    # ── Пинг ──
+    def do_ping(self):
+        link = self._current_link()
+        if not link:
+            self.ping_lbl.configure(text="Нет сервера", text_color=MUTED); return
+        host, port = link_host_port(link)
+        if not host: return
+        self.ping_lbl.configure(text="Проверка…", text_color=MUTED); self.root.update()
+        def worker():
+            ms = tcp_ping(host, port)
+            def show():
+                if ms is None: self.ping_lbl.configure(text="📶 Недоступен", text_color=DANGER)
+                else:
+                    col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
+                    self.ping_lbl.configure(text=f"📶 {ms} мс", text_color=col)
+            self.root.after(0, show)
+        threading.Thread(target=worker, daemon=True).start()
+
+    # ── Подключение ──
+    def toggle(self):
+        self.disconnect() if self.connected else self.connect()
+
+    def connect(self):
+        link = self._current_link()
+        if not link:
+            self._flash("Добавь и выбери сервер", DANGER); return
         try:
-            data = self.root.clipboard_get()
-        except Exception:
-            self.info.config(text="Буфер пуст", fg=DANGER); return
+            outbound = parse_link(link)
+        except Exception as e:
+            self._flash(f"Неверный ключ: {e}", DANGER); return
+        xray = resource_path("xray.exe" if os.name == "nt" else "xray")
+        if not os.path.exists(xray):
+            self._flash("Не найден xray", DANGER); return
+        cfg = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump(build_xray_config(outbound), f)
         try:
-            self.txt.delete("sel.first", "sel.last")
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            self.proc = subprocess.Popen([xray, "run", "-config", cfg],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+        except Exception as e:
+            self._flash(f"Ядро: {e}", DANGER); return
+        try: set_system_proxy(True)
+        except Exception: pass
+        self.connected = True
+        self.power.configure(fg_color=OK, hover_color="#28b14a", text_color="white", border_color=OK)
+        self.status.configure(text="Подключено", text_color=OK)
+        nm = unquote(link.split("#", 1)[1]) if "#" in link else "Сервер"
+        self.cur_lbl.configure(text=nm)
+
+    def disconnect(self):
+        try: set_system_proxy(False)
+        except Exception: pass
+        if self.proc:
+            try: self.proc.terminate()
+            except Exception: pass
+            self.proc = None
+        self.connected = False
+        self.power.configure(fg_color=CARD, hover_color=CARD2, text_color=MUTED, border_color=CARD2)
+        self.status.configure(text="Отключено", text_color=MUTED)
+
+    # ── Сохранение ──
+    def save(self, silent=False):
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump({"links": self.links, "sub_url": self.sub_url,
+                           "autoconnect": self.autoconnect, "prefs": self.prefs}, f)
+            if not silent: self._flash("Сохранено ✓", OK)
         except Exception:
             pass
-        self.txt.insert("insert", data)
-        self.refresh_from_box()
 
-    def refresh_from_box(self):
-        """Всегда строим список серверов из вставленных ключей (страны + пинг)."""
-        t = self.txt.get("1.0", "end").strip()
-        lines = [l.strip() for l in t.splitlines()
-                 if "://" in l and not l.strip().startswith("http")]
-        if lines:
-            self.links = lines
-            if self.selected_idx >= len(self.links):
-                self.selected_idx = 0
-            self.render_servers()
-            self.do_ping()
-        else:
-            self.links = []
-            self.server_box.pack_forget()
-
-    def _copy(self, widget):
+    def load_saved(self):
         try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(widget.get("sel.first", "sel.last"))
+            with open(CONFIG_FILE, encoding="utf-8") as f:
+                d = json.load(f)
+                self.links = d.get("links", []) or []
+                self.sub_url = d.get("sub_url", "")
+                self.autoconnect = bool(d.get("autoconnect", False))
+                self.prefs = d.get("prefs", {}) or {}
         except Exception:
             pass
 
-    def _select_all(self, widget):
-        widget.tag_add("sel", "1.0", "end-1c")
-        return "break"
+    def update_sub(self):
+        if not self.sub_url:
+            self._flash("Нет подписки", DANGER); return
+        self._pull_sub(reconnect=True)
+
+    def _pull_sub(self, reconnect=False):
+        self._flash("Обновление подписки…", MUTED); self.root.update()
+        try:
+            self.links = fetch_subscription(self.sub_url)
+            if not self.links:
+                self._flash("Подписка пустая", DANGER); return
+            self.selected_idx = 0; self.render_servers(); self.save(silent=True); self.do_ping()
+            self._flash(f"Серверов: {len(self.links)} ✓", OK)
+            if reconnect and self.connected: self.disconnect(); self.connect()
+        except Exception as e:
+            self._flash(f"Ошибка: {e}", DANGER)
 
     # ── Обновление приложения ──
     def check_update(self):
         def worker():
             try:
                 import ssl
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+                ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
                 req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "JeffTUN"})
                 latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
                 if latest and self._newer(latest, APP_VERSION):
@@ -580,483 +584,161 @@ class JeffTUN:
 
     @staticmethod
     def _newer(a, b):
-        try:
-            return [int(x) for x in a.split(".")] > [int(x) for x in b.split(".")]
-        except Exception:
-            return a != b
+        try: return [int(x) for x in a.split(".")] > [int(x) for x in b.split(".")]
+        except Exception: return a != b
 
     def _show_update(self, latest):
-        # Плашка в окне
-        self._update_lbl.config(text=f"🎉 Доступно обновление {latest} (у тебя {APP_VERSION})")
-        self.update_bar.pack(fill="x", padx=26, pady=(0, 12), before=self.txt.master)
-        # Всплывающее уведомление с версией + кнопка
-        self.toast(f"🎉 Новая версия {latest}!",
-                   f"У тебя v{APP_VERSION}. Обнови в один клик.",
-                   action="Обновить ⬇", action_cmd=self.do_self_update, color=OK)
-
-    # ── Красивое всплывающее уведомление (toast) ──
-    def toast(self, title, msg, action=None, action_cmd=None, color=ACC, ms=9000):
-        t = tk.Toplevel(self.root)
-        t.overrideredirect(True)
-        t.attributes("-topmost", True)
-        try: t.attributes("-alpha", 0.0)
-        except Exception: pass
-        w, h = 320, 92 if action else 74
-        sw = t.winfo_screenwidth(); sh = t.winfo_screenheight()
-        x = sw - w - 24; y = sh - h - 60
-        t.geometry(f"{w}x{h}+{x}+{y}")
-        outer = tk.Frame(t, bg=color)
-        outer.pack(fill="both", expand=True)
-        inner = tk.Frame(outer, bg=CARD)
-        inner.pack(fill="both", expand=True, padx=(3, 0))  # цветная полоса слева
-        top = tk.Frame(inner, bg=CARD); top.pack(fill="x", padx=14, pady=(10, 2))
-        tk.Label(top, text=title, bg=CARD, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(side="left")
-        tk.Button(top, text="✕", command=t.destroy, bg=CARD, fg=MUTED, relief="flat",
-                  bd=0, cursor="hand2", activebackground=CARD,
-                  font=("Segoe UI", 10)).pack(side="right")
-        tk.Label(inner, text=msg, bg=CARD, fg=MUTED, font=("Segoe UI", 9),
-                 anchor="w", justify="left").pack(fill="x", padx=14)
-        if action:
-            tk.Button(inner, text=action, command=lambda: (action_cmd() if action_cmd else None, t.destroy()),
-                      bg=color, fg="#0a0e17", relief="flat", bd=0, cursor="hand2",
-                      font=("Segoe UI", 9, "bold"), padx=12, pady=5).pack(anchor="e", padx=14, pady=(4, 8))
-        # плавное появление
-        def fade(a=0.0):
-            if a < 1.0:
-                try: t.attributes("-alpha", a)
-                except Exception: pass
-                t.after(20, lambda: fade(a + 0.1))
-        fade()
-        t.after(ms, t.destroy)
-
-    # ── Окно настроек (полное, как в Happ) ──
-    def open_settings(self):
-        win = tk.Toplevel(self.root)
-        win.title("Настройки")
-        win.configure(bg=BG)
-        win.geometry("440x640")
-        win.transient(self.root)
-
-        tk.Label(win, text="Настройки", bg=BG, fg=TEXT,
-                 font=("Segoe UI", 18, "bold")).pack(pady=(14, 8))
-
-        # Прокручиваемая область
-        canvas = tk.Canvas(win, bg=BG, highlightthickness=0)
-        sb = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
-        body = tk.Frame(canvas, bg=BG)
-        body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=body, anchor="nw", width=420)
-        canvas.configure(yscrollcommand=sb.set)
-        canvas.pack(side="left", fill="both", expand=True, padx=(10, 0))
-        sb.pack(side="right", fill="y")
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-e.delta/120), "units"))
-
-        def section(title):
-            tk.Label(body, text=title, bg=BG, fg=MUTED,
-                     font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16, pady=(14, 4))
-            card = tk.Frame(body, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
-            card.pack(fill="x", padx=12)
-            return card
-
-        def toggle_row(card, text, key, default=False, cmd=None):
-            var = tk.BooleanVar(value=self.prefs.get(key, default))
-            row = tk.Frame(card, bg=CARD); row.pack(fill="x", padx=14, pady=9)
-            tk.Label(row, text=text, bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
-            def on():
-                self.prefs[key] = var.get(); self.save(silent=True)
-                if cmd: cmd(var.get())
-            tk.Checkbutton(row, variable=var, command=on, bg=CARD, selectcolor=CARD2,
-                           activebackground=CARD, bd=0, highlightthickness=0).pack(side="right")
-
-        def choice_row(card, text, key, options, default):
-            val = self.prefs.get(key, default)
-            row = tk.Frame(card, bg=CARD, cursor="hand2"); row.pack(fill="x", padx=14, pady=9)
-            tk.Label(row, text=text, bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
-            vlbl = tk.Label(row, text=val, bg=CARD, fg=ACC, font=("Segoe UI", 11, "bold"))
-            vlbl.pack(side="right")
-            def cycle(e=None):
-                cur = options.index(self.prefs.get(key, default)) if self.prefs.get(key, default) in options else 0
-                nv = options[(cur + 1) % len(options)]
-                self.prefs[key] = nv; self.save(silent=True); vlbl.config(text=nv)
-            for w in (row, vlbl): w.bind("<Button-1>", cycle)
-
-        def link_row(card, text, value, cmd, color=TEXT):
-            row = tk.Frame(card, bg=CARD, cursor="hand2"); row.pack(fill="x", padx=14, pady=9)
-            tk.Label(row, text=text, bg=CARD, fg=color, font=("Segoe UI", 11)).pack(side="left")
-            tk.Label(row, text=value, bg=CARD, fg=MUTED, font=("Segoe UI", 10)).pack(side="right")
-            for w in (row,) + tuple(row.winfo_children()):
-                w.bind("<Button-1>", lambda e: cmd())
-
-        # ── ИНТЕРФЕЙС ──
-        c = section("ИНТЕРФЕЙС")
-        choice_row(c, "Язык", "lang", ["Русский", "English"], "Русский")
-        choice_row(c, "Тема оформления", "theme", ["Тёмная", "Системная"], "Тёмная")
-        choice_row(c, "Размер текста", "text_size", ["Нормальный", "Крупный"], "Нормальный")
-        choice_row(c, "Размер кнопки", "btn_size", ["Нормальный", "Большой"], "Нормальный")
-        choice_row(c, "Действие отключения", "disc_action", ["Остановить", "Свернуть"], "Остановить")
-        toggle_row(c, "Индикатор скорости", "speed_ind", False)
-
-        # ── ЗАПУСК ──
-        c = section("ЗАПУСК")
-        self._autostart_var = tk.BooleanVar(value=get_autostart())
-        row = tk.Frame(c, bg=CARD); row.pack(fill="x", padx=14, pady=9)
-        tk.Label(row, text="Автозапуск с Windows", bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
-        tk.Checkbutton(row, variable=self._autostart_var,
-                       command=lambda: set_autostart(self._autostart_var.get()),
-                       bg=CARD, selectcolor=CARD2, activebackground=CARD, bd=0,
-                       highlightthickness=0).pack(side="right")
-        self._autoconnect_var = tk.BooleanVar(value=self.autoconnect)
-        row2 = tk.Frame(c, bg=CARD); row2.pack(fill="x", padx=14, pady=9)
-        tk.Label(row2, text="Автоподключение при запуске", bg=CARD, fg=TEXT, font=("Segoe UI", 11)).pack(side="left")
-        def _sac():
-            self.autoconnect = self._autoconnect_var.get(); self.save(silent=True)
-        tk.Checkbutton(row2, variable=self._autoconnect_var, command=_sac,
-                       bg=CARD, selectcolor=CARD2, activebackground=CARD, bd=0,
-                       highlightthickness=0).pack(side="right")
-
-        # ── ТУННЕЛЬ ──
-        c = section("ТУННЕЛЬ")
-        choice_row(c, "Предпочитаемый тип IP", "ip_type", ["IPv4", "IPv6", "Авто"], "IPv4")
-        toggle_row(c, "Использовать фрагментирование", "fragment", False)
-        toggle_row(c, "Использовать Mux", "mux", False)
-        toggle_row(c, "Разрешить LAN подключения", "lan", False)
-
-        # ── ДАННЫЕ ──
-        c = section("ДАННЫЕ")
-        link_row(c, "Подписки — обновить", "⬆", lambda: self.update_sub())
-        link_row(c, "Пинг выбранного сервера", "▶", lambda: self.do_ping())
-        link_row(c, "Статистика", "", lambda: self._stats())
-        link_row(c, "Логи", "", lambda: self._logs())
-        link_row(c, "Сброс (удалить ключ)", "", self._reset_key, color=DANGER)
-
-        # ── ПОДРОБНЕЕ ──
-        c = section("ПОДРОБНЕЕ")
-        link_row(c, "Проверить обновление", f"v{APP_VERSION}", self.do_self_update)
-        link_row(c, "FAQ", "", lambda: self._faq())
-        link_row(c, "Telegram-канал", "@jeffvpn",
-                 lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
-        link_row(c, "О приложении", "", lambda: self._about())
-
-        tk.Label(body, text=f"JeffTUN VPN v{APP_VERSION}  ·  t.me/jeffvpn",
-                 bg=BG, fg="#3a4256", font=("Segoe UI", 8)).pack(pady=14)
-
-    def _stats(self):
-        st = "Подключено" if self.connected else "Отключено"
-        srv = self.links[self.selected_idx].split("#", 1)[-1] if self.links else "—"
-        messagebox.showinfo("Статистика",
-            f"Статус: {st}\nСерверов в списке: {len(self.links)}\n"
-            f"Текущий: {unquote(srv)}\nSOCKS: 127.0.0.1:{SOCKS_PORT}\nHTTP: 127.0.0.1:{HTTP_PORT}")
-
-    def _logs(self):
-        p = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
-        messagebox.showinfo("Логи",
-            f"Конфиг ядра:\n{p}\n\nЯдро xray работает в фоне.\n"
-            "Если VPN не подключается — проверь ключ и интернет.")
-
-    def _faq(self):
-        messagebox.showinfo("FAQ",
-            "• Вставь ключ или подписку → выбери страну → Подключиться.\n"
-            "• Не подключается? Смени сервер или обнови подписку.\n"
-            "• Красный пинг — сервер далеко/занят, выбери другой.\n"
-            "• Обновление приходит само — жми «Обновить».\n\n"
-            "Поддержка: t.me/jeffvpn")
-
-    def _reset_key(self):
-        if not messagebox.askyesno(APP_NAME, "Удалить сохранённый ключ и серверы?"):
-            return
-        self.txt.delete("1.0", "end")
-        self.links = []; self.sub_url = ""; self.selected_idx = 0
-        self.server_box.pack_forget()
-        try: os.remove(CONFIG_FILE)
-        except Exception: pass
-        self.info.config(text="Ключ сброшен", fg=MUTED)
-
-    def _about(self):
-        messagebox.showinfo("О приложении",
-            f"JeffTUN VPN v{APP_VERSION}\n\n"
-            "Быстрый VPN с обходом блокировок.\n"
-            "Протоколы: VLESS (Reality), VMess, Trojan, Shadowsocks.\n\n"
-            "Telegram: t.me/jeffvpn")
+        self._latest = latest
+        if self.update_bar: return
+        self.update_bar = ctk.CTkFrame(self.root, fg_color="#132a1a", corner_radius=14, border_width=1, border_color=OK)
+        self.update_bar.place(relx=0.5, rely=0.03, anchor="n")
+        self._ulbl = ctk.CTkLabel(self.update_bar, text=f"🎉 Новая версия {latest}",
+                                  font=ctk.CTkFont(FONT, 12, "bold"), text_color=OK)
+        self._ulbl.pack(side="left", padx=14, pady=8)
+        ctk.CTkButton(self.update_bar, text="Обновить", width=90, height=28, corner_radius=14,
+                      fg_color=OK, hover_color="#28b14a", text_color="#08160c",
+                      font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
 
     def do_self_update(self):
-        """Скачивает новую версию и заменяет программу автоматически."""
-        # На macOS .dmg заменить на лету нельзя — открываем страницу
-        if sys.platform == "darwin":
+        if sys.platform == "darwin" or not getattr(sys, "frozen", False):
             import webbrowser; webbrowser.open(RELEASES_URL); return
-
-        if not getattr(sys, "frozen", False):
-            import webbrowser; webbrowser.open(RELEASES_URL); return  # запуск из исходников
-
         asset = "JeffTUN.exe" if os.name == "nt" else "JeffTUN-linux"
-        url = f"{DOWNLOAD_BASE}/{asset}"
-        cur = sys.executable
-        new = cur + ".new"
-
-        self._update_lbl.config(text="⏳ Скачиваю обновление... 0%")
-        self.root.update()
-
-        def setlbl(txt):
-            self.root.after(0, lambda: self._update_lbl.config(text=txt))
-
+        url = f"{DOWNLOAD_BASE}/{asset}"; cur = sys.executable; new = cur + ".new"
+        def setl(t):
+            if hasattr(self, "_ulbl"):
+                self.root.after(0, lambda: self._ulbl.configure(text=t))
+        setl("⏳ Скачиваю… 0%")
         def worker():
             try:
-                import ssl, shutil
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+                import ssl
+                ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
                 req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
-                # чистим прошлый недокачанный файл
                 try:
                     if os.path.exists(new): os.remove(new)
-                except Exception:
-                    pass
+                except Exception: pass
                 with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
-                    total = int(r.headers.get("Content-Length", 0))
-                    done = 0
+                    total = int(r.headers.get("Content-Length", 0)); done = 0
                     with open(new, "wb") as f:
                         while True:
                             chunk = r.read(65536)
-                            if not chunk:
-                                break
+                            if not chunk: break
                             f.write(chunk); done += len(chunk)
-                            if total:
-                                setlbl(f"⏳ Скачиваю обновление... {done*100//total}%")
-                # проверка что файл реально скачался (не пустой/не обрезанный)
-                size = os.path.getsize(new)
-                if size < 1_000_000:
-                    raise Exception("файл повреждён, попробуй ещё раз")
-                setlbl("✅ Скачано, применяю...")
+                            if total: setl(f"⏳ Скачиваю… {done*100//total}%")
+                if os.path.getsize(new) < 1_000_000:
+                    raise Exception("файл повреждён")
+                setl("✅ Применяю…")
                 self.root.after(0, lambda: self._apply_update(cur, new))
             except Exception as e:
                 try:
                     if os.path.exists(new): os.remove(new)
-                except Exception:
-                    pass
-                setlbl(f"Ошибка: {e}. Нажми «Обновить» ещё раз")
+                except Exception: pass
+                setl(f"Ошибка — жми ещё раз")
         threading.Thread(target=worker, daemon=True).start()
 
     def _apply_update(self, cur, new):
-        if self.connected:
-            self.disconnect()
+        if self.connected: self.disconnect()
         try:
             if os.name == "nt":
-                # bat ждёт выхода приложения, с повторами заменяет exe и запускает заново
                 bat = cur + "_upd.bat"
                 with open(bat, "w") as f:
-                    f.write(
-                        "@echo off\r\n"
-                        "ping 127.0.0.1 -n 3 >nul\r\n"
-                        ":retry\r\n"
-                        f'del /f /q "{cur}" >nul 2>&1\r\n'
-                        f'move /y "{new}" "{cur}" >nul 2>&1\r\n'
-                        f'if not exist "{cur}" (ping 127.0.0.1 -n 2 >nul & goto retry)\r\n'
-                        f'start "" "{cur}"\r\n'
-                        f'del /f /q "{new}" >nul 2>&1\r\n'
-                        f'del "%~f0"\r\n'
-                    )
-                subprocess.Popen(["cmd", "/c", bat],
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
+                    f.write("@echo off\r\nping 127.0.0.1 -n 3 >nul\r\n:retry\r\n"
+                            f'del /f /q "{cur}" >nul 2>&1\r\n'
+                            f'move /y "{new}" "{cur}" >nul 2>&1\r\n'
+                            f'if not exist "{cur}" (ping 127.0.0.1 -n 2 >nul & goto retry)\r\n'
+                            f'start "" "{cur}"\r\n'
+                            f'del /f /q "{new}" >nul 2>&1\r\ndel "%~f0"\r\n')
+                subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
             else:
-                os.chmod(new, 0o755)
-                sh = cur + "_upd.sh"
+                os.chmod(new, 0o755); sh = cur + "_upd.sh"
                 with open(sh, "w") as f:
                     f.write(f'#!/bin/sh\nsleep 2\nmv -f "{new}" "{cur}"\nchmod +x "{cur}"\nnohup "{cur}" >/dev/null 2>&1 &\nrm -- "$0"\n')
-                os.chmod(sh, 0o755)
-                subprocess.Popen(["/bin/sh", sh])
+                os.chmod(sh, 0o755); subprocess.Popen(["/bin/sh", sh])
             self.root.after(300, self.on_close)
-        except Exception as e:
-            self._update_lbl.config(text=f"Не удалось обновить: {e}")
-
-    # ── Сохранение / загрузка ──
-    def save(self, silent=False):
-        try:
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump({"key": self.txt.get("1.0", "end").strip(),
-                           "sub_url": self.sub_url,
-                           "autoconnect": self.autoconnect,
-                           "prefs": self.prefs}, f)
-            if not silent:
-                self.info.config(text="Сохранено ✓", fg=OK)
-        except Exception as e:
-            if not silent:
-                self.info.config(text=f"Ошибка сохранения: {e}", fg=DANGER)
-
-    def load_saved(self):
-        try:
-            with open(CONFIG_FILE, encoding="utf-8") as f:
-                d = json.load(f)
-                if d.get("key"):
-                    self.txt.insert("1.0", d["key"])
-                self.sub_url = d.get("sub_url", "")
-                self.autoconnect = bool(d.get("autoconnect", False))
-                self.prefs = d.get("prefs", {}) or {}
         except Exception:
             pass
 
-    def load_sub(self):
-        url = self.txt.get("1.0", "end").strip().splitlines()[0] if self.txt.get("1.0", "end").strip() else ""
-        if not url.startswith("http"):
-            messagebox.showinfo(APP_NAME, "Вставь ссылку-подписку (https://...) в поле, затем нажми эту кнопку.")
-            return
-        self.sub_url = url
-        self._pull_sub()
+    # ── Настройки ──
+    def open_settings(self):
+        win = ctk.CTkToplevel(self.root); win.title("Настройки"); win.geometry("420x600"); win.after(200, win.lift)
+        ctk.CTkLabel(win, text="Настройки", font=ctk.CTkFont(FONT, 20, "bold")).pack(pady=(16, 8))
+        sc = ctk.CTkScrollableFrame(win, fg_color="transparent"); sc.pack(fill="both", expand=True, padx=10)
+        def section(t):
+            ctk.CTkLabel(sc, text=t, font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED).pack(anchor="w", padx=10, pady=(14, 4))
+            c = ctk.CTkFrame(sc, fg_color=CARD, corner_radius=16); c.pack(fill="x"); return c
+        def sw(card, text, key, default=False, cmd=None):
+            row = ctk.CTkFrame(card, fg_color="transparent"); row.pack(fill="x", padx=14, pady=8)
+            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(FONT, 13)).pack(side="left")
+            v = ctk.StringVar(value="on" if self.prefs.get(key, default) else "off")
+            def on():
+                self.prefs[key] = (v.get() == "on"); self.save(silent=True)
+                if cmd: cmd(v.get() == "on")
+            ctk.CTkSwitch(row, text="", variable=v, onvalue="on", offvalue="off", command=on, progress_color=ACC).pack(side="right")
+        def choice(card, text, key, opts, default):
+            row = ctk.CTkFrame(card, fg_color="transparent"); row.pack(fill="x", padx=14, pady=8)
+            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(FONT, 13)).pack(side="left")
+            var = ctk.StringVar(value=self.prefs.get(key, default))
+            ctk.CTkOptionMenu(row, values=opts, variable=var, width=130, fg_color=CARD2,
+                              button_color=ACC, button_hover_color=ACC_D,
+                              command=lambda v: (self.prefs.__setitem__(key, v), self.save(silent=True))).pack(side="right")
+        def link(card, text, cmd, color=TEXT):
+            ctk.CTkButton(card, text=text, anchor="w", height=38, corner_radius=0, fg_color="transparent",
+                          hover_color=CARD2, text_color=color, font=ctk.CTkFont(FONT, 13), command=cmd).pack(fill="x", padx=4, pady=1)
 
-    def update_sub(self):
-        if not self.sub_url:
-            messagebox.showinfo(APP_NAME, "Сначала загрузи подписку — вставь ссылку https://... и нажми «Загрузить подписку».")
-            return
-        self._pull_sub(reconnect=True)
+        c = section("ИНТЕРФЕЙС")
+        choice(c, "Язык", "lang", ["Русский", "English"], "Русский")
+        choice(c, "Тема", "theme", ["Тёмная", "Системная", "Светлая"], "Тёмная")
+        c = section("ЗАПУСК")
+        srow = ctk.CTkFrame(c, fg_color="transparent"); srow.pack(fill="x", padx=14, pady=8)
+        ctk.CTkLabel(srow, text="Автозапуск с Windows", font=ctk.CTkFont(FONT, 13)).pack(side="left")
+        asv = ctk.StringVar(value="on" if get_autostart() else "off")
+        ctk.CTkSwitch(srow, text="", variable=asv, onvalue="on", offvalue="off",
+                      command=lambda: set_autostart(asv.get() == "on"), progress_color=ACC).pack(side="right")
+        arow = ctk.CTkFrame(c, fg_color="transparent"); arow.pack(fill="x", padx=14, pady=8)
+        ctk.CTkLabel(arow, text="Автоподключение", font=ctk.CTkFont(FONT, 13)).pack(side="left")
+        acv = ctk.StringVar(value="on" if self.autoconnect else "off")
+        ctk.CTkSwitch(arow, text="", variable=acv, onvalue="on", offvalue="off",
+                      command=lambda: (setattr(self, "autoconnect", acv.get() == "on"), self.save(silent=True)),
+                      progress_color=ACC).pack(side="right")
+        c = section("ТУННЕЛЬ")
+        choice(c, "Тип IP", "ip_type", ["IPv4", "IPv6", "Авто"], "IPv4")
+        sw(c, "Фрагментирование", "fragment", False)
+        sw(c, "Разрешить LAN", "lan", False)
+        c = section("ДАННЫЕ")
+        link(c, "🗑 Сброс (удалить ключи)", self._reset_key, color=DANGER)
+        c = section("ПОДРОБНЕЕ")
+        link(c, f"⬆ Проверить обновление (v{APP_VERSION})", self.do_self_update)
+        link(c, "❓ FAQ", self._faq)
+        link(c, "✈ Telegram  @jeffvpn", lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
+        link(c, "ℹ О приложении", self._about)
 
-    def _pull_sub(self, reconnect=False):
-        self.info.config(text="Обновление подписки...", fg=MUTED); self.root.update()
-        try:
-            self.links = fetch_subscription(self.sub_url)
-            if not self.links:
-                self.info.config(text="Подписка пустая", fg=DANGER); return
-            self.selected_idx = 0
-            self.render_servers()
-            self.info.config(text=f"Серверов: {len(self.links)} ✓", fg=OK)
-            self.do_ping()
-            if reconnect and self.connected:
-                self.disconnect(); self.connect()
-        except Exception as e:
-            self.info.config(text=f"Ошибка: {e}", fg=DANGER)
-
-    def render_servers(self):
-        """Строит красивый список серверов с флагами и протоколом."""
-        for w in self.server_list.winfo_children():
-            w.destroy()
-        self.server_rows = []
-        for i, ln in enumerate(self.links):
-            name = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
-            code, flag = country_of(name)
-            sel = (i == self.selected_idx)
-            row = tk.Frame(self.server_list, bg=(CARD if sel else CARD2),
-                           highlightthickness=1,
-                           highlightbackground=(ACC if sel else BORDER))
-            row.pack(fill="x", pady=3)
-            # цветной бейдж с кодом страны (флаги на Windows не рисуются)
-            badge = tk.Label(row, text=code, bg=ACC, fg="white",
-                             font=("Segoe UI", 11, "bold"), width=4, pady=8)
-            badge.pack(side="left", padx=(8, 10), pady=8)
-            mid = tk.Frame(row, bg=row["bg"]); mid.pack(side="left", fill="x", expand=True)
-            tk.Label(mid, text=name, bg=row["bg"], fg=TEXT,
-                     font=("Segoe UI", 12, "bold"), anchor="w").pack(anchor="w")
-            tk.Label(mid, text=proto_line(ln), bg=row["bg"], fg=MUTED,
-                     font=("Segoe UI", 8), anchor="w").pack(anchor="w")
-            arrow = tk.Label(row, text=("✓" if sel else "›"), bg=row["bg"],
-                             fg=(OK if sel else MUTED), font=("Segoe UI", 14, "bold"))
-            arrow.pack(side="right", padx=12)
-            # клик по любому элементу строки
-            for w in (row, mid, arrow) + tuple(mid.winfo_children()):
-                w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
-            self.server_rows.append(row)
-        self.server_box.pack(fill="both", expand=True)
-
-    def select_server(self, idx):
-        self.selected_idx = idx
-        self.render_servers()
-        self.do_ping()
-        if self.connected:
-            self.disconnect(); self.connect()
-
-    # ── Пинг ──
-    def do_ping(self):
-        link = self._current_link()
-        if not link or link.startswith("http"):
-            self.ping_lbl.config(text="")
-            return
-        host, port = link_host_port(link)
-        if not host:
-            return
-        self.ping_lbl.config(text="Пинг...", fg=MUTED); self.root.update()
-        def worker():
-            ms = tcp_ping(host, port)
-            def show():
-                if ms is None:
-                    self.ping_lbl.config(text="📶 Сервер недоступен", fg=DANGER)
-                else:
-                    col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
-                    self.ping_lbl.config(text=f"📶 {ms} мс", fg=col)
-            self.root.after(0, show)
-        threading.Thread(target=worker, daemon=True).start()
-
-    # ── Подключение ──
-    def toggle(self):
-        self.disconnect() if self.connected else self.connect()
-
-    def _current_link(self):
-        if self.links and 0 <= self.selected_idx < len(self.links):
-            return self.links[self.selected_idx]
-        t = self.txt.get("1.0", "end").strip()
-        return t.splitlines()[0] if t else ""
-
-    def connect(self):
-        link = self._current_link()
-        if not link:
-            self.info.config(text="Вставь ключ", fg=DANGER); return
-        if link.startswith("http"):
-            self.info.config(text="Это подписка — нажми «Загрузить подписку» и выбери сервер", fg=DANGER); return
-        try:
-            outbound = parse_link(link)
-        except Exception as e:
-            self.info.config(text=f"Неверный ключ: {e}", fg=DANGER); return
-
-        xray = resource_path("xray.exe" if os.name == "nt" else "xray")
-        if not os.path.exists(xray):
-            self.info.config(text="Не найден xray.exe рядом с программой", fg=DANGER); return
-
-        cfg_path = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
-        with open(cfg_path, "w", encoding="utf-8") as f:
-            json.dump(build_xray_config(outbound), f)
-
-        try:
-            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-            self.proc = subprocess.Popen([xray, "run", "-config", cfg_path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
-        except Exception as e:
-            self.info.config(text=f"Не удалось запустить ядро: {e}", fg=DANGER); return
-
-        try:
-            set_system_proxy(True)
-        except Exception as e:
-            self.info.config(text=f"Прокси не установлен: {e}", fg=DANGER)
-
-        self.connected = True
-        self.status.config(text="● Подключено", fg=OK)
-        self.btn.config(text="Отключиться", bg=DANGER, activebackground="#c0392b")
-        self.info.config(text="VPN активен. Весь трафик идёт через сервер.", fg=OK)
-        nm = unquote(link.split("#", 1)[1]) if "#" in link else "Сервер"
-        self.toast("✅ Подключено", nm, color=OK, ms=3000)
-
-    def disconnect(self):
-        try: set_system_proxy(False)
+    def _reset_key(self):
+        if not messagebox.askyesno(APP_NAME, "Удалить все ключи?"): return
+        self.links = []; self.sub_url = ""; self.selected_idx = 0; self.render_servers()
+        try: os.remove(CONFIG_FILE)
         except Exception: pass
-        if self.proc:
-            try: self.proc.terminate()
-            except Exception: pass
-            self.proc = None
-        self.connected = False
-        self.status.config(text="● Отключено", fg=MUTED)
-        self.btn.config(text="Подключиться", bg=ACC, activebackground=ACC2)
-        self.info.config(text="VPN выключен.", fg=MUTED)
+
+    def _about(self):
+        messagebox.showinfo("О приложении", f"JeffTUN VPN v{APP_VERSION}\n\nБыстрый VPN с обходом блокировок.\n"
+            "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/jeffvpn")
+
+    def _stats(self):
+        st = "Подключено" if self.connected else "Отключено"
+        messagebox.showinfo("Статистика", f"Статус: {st}\nСерверов: {len(self.links)}\n"
+            f"SOCKS 127.0.0.1:{SOCKS_PORT} · HTTP :{HTTP_PORT}")
+
+    def _faq(self):
+        messagebox.showinfo("FAQ", "• ＋ или «Вставить» — добавь ключ/подписку.\n• Выбери страну слева.\n"
+            "• Нажми круглую кнопку — подключение.\n• «Тест пинга» — скорость сервера.\n\nt.me/jeffvpn")
 
     def on_close(self):
-        if self.connected:
-            self.disconnect()
+        if self.connected: self.disconnect()
         self.root.destroy()
 
 
 def main():
-    root = tk.Tk()
-    try:
-        style = ttk.Style(); style.theme_use("clam")
-        style.configure("TCombobox", fieldbackground=CARD, background=CARD,
-                        foreground=TEXT, arrowcolor=TEXT, bordercolor=BORDER,
-                        selectbackground=ACC, padding=8)
-    except Exception:
-        pass
-    JeffTUN(root)
-    root.mainloop()
+    ctk.set_appearance_mode("dark"); ctk.set_default_color_theme("blue")
+    root = ctk.CTk(); root.configure(fg_color=BG)
+    JeffTUN(root); root.mainloop()
 
 
 if __name__ == "__main__":
