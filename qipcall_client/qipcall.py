@@ -18,9 +18,10 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.1"
+APP_VERSION = "2.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
+DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
@@ -305,7 +306,7 @@ class JeffTUN:
         self._update_lbl = tk.Label(self.update_bar, text="", bg="#1a2c1e", fg=OK,
                                     font=("Segoe UI", 10, "bold"))
         self._update_lbl.pack(side="left", padx=14, pady=9)
-        tk.Button(self.update_bar, text="Обновить ⬇", command=lambda: __import__("webbrowser").open(RELEASES_URL),
+        tk.Button(self.update_bar, text="Обновить ⬇", command=self.do_self_update,
                   bg=OK, fg="#0a0e17", relief="flat", cursor="hand2", bd=0,
                   font=("Segoe UI", 9, "bold"), padx=14, pady=7).pack(side="right", padx=10)
 
@@ -442,6 +443,64 @@ class JeffTUN:
         # Показываем зелёную плашку с кнопкой прямо в окне
         self._update_lbl.config(text=f"🎉 Доступно обновление {latest} (у тебя {APP_VERSION})")
         self.update_bar.pack(fill="x", padx=26, pady=(0, 12), before=self.txt.master)
+
+    def do_self_update(self):
+        """Скачивает новую версию и заменяет программу автоматически."""
+        # На macOS .dmg заменить на лету нельзя — открываем страницу
+        if sys.platform == "darwin":
+            import webbrowser; webbrowser.open(RELEASES_URL); return
+
+        if not getattr(sys, "frozen", False):
+            import webbrowser; webbrowser.open(RELEASES_URL); return  # запуск из исходников
+
+        asset = "JeffTUN.exe" if os.name == "nt" else "JeffTUN-linux"
+        url = f"{DOWNLOAD_BASE}/{asset}"
+        cur = sys.executable
+        new = cur + ".new"
+
+        self._update_lbl.config(text="⏳ Скачиваю обновление...")
+        self.root.update()
+
+        def worker():
+            try:
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+                req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
+                with urllib.request.urlopen(req, timeout=120, context=ctx) as r, open(new, "wb") as f:
+                    f.write(r.read())
+                self.root.after(0, lambda: self._apply_update(cur, new))
+            except Exception as e:
+                self.root.after(0, lambda: self._update_lbl.config(text=f"Ошибка загрузки: {e}"))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_update(self, cur, new):
+        if self.connected:
+            self.disconnect()
+        try:
+            if os.name == "nt":
+                # bat ждёт выхода приложения, подменяет exe и запускает заново
+                bat = cur + "_upd.bat"
+                with open(bat, "w") as f:
+                    f.write(
+                        "@echo off\r\n"
+                        "timeout /t 2 /nobreak >nul\r\n"
+                        f'move /y "{new}" "{cur}" >nul\r\n'
+                        f'start "" "{cur}"\r\n'
+                        f'del "%~f0"\r\n'
+                    )
+                subprocess.Popen(["cmd", "/c", bat],
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                os.chmod(new, 0o755)
+                sh = cur + "_upd.sh"
+                with open(sh, "w") as f:
+                    f.write(f'#!/bin/sh\nsleep 2\nmv -f "{new}" "{cur}"\nchmod +x "{cur}"\nnohup "{cur}" >/dev/null 2>&1 &\nrm -- "$0"\n')
+                os.chmod(sh, 0o755)
+                subprocess.Popen(["/bin/sh", sh])
+            self.root.after(300, self.on_close)
+        except Exception as e:
+            self._update_lbl.config(text=f"Не удалось обновить: {e}")
 
     # ── Сохранение / загрузка ──
     def save(self):
