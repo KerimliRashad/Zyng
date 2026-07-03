@@ -61,11 +61,33 @@ jobs:
           name: JeffTUN VPN
           files: qipcall_client/dist/JeffTUN.exe
           body: |
-            JeffTUN VPN — вставь ключ vless:// / vmess:// / trojan:// / ss://
-            или ссылку-подписку и нажми «Подключиться».
+            <h2 align="center">JeffTUN VPN 🦈</h2>
+            <p align="center">Вставь ключ <code>vless:// · vmess:// · trojan:// · ss://</code> или ссылку-подписку — и нажми «Подключиться».</p>
 
-            • Windows: JeffTUN.exe
-            • Linux: JeffTUN-linux (chmod +x, затем запуск)
+            <table>
+              <tr>
+                <td><b>🪟 Windows</b></td>
+                <td>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe"><img src="https://img.shields.io/badge/Setup-x64-2ea043?style=for-the-badge&logo=windows&logoColor=white"></a>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe"><img src="https://img.shields.io/badge/Setup-x64_(mirror)-1f6feb?style=for-the-badge"></a>
+                </td>
+              </tr>
+              <tr>
+                <td><b>🐧 Linux</b></td>
+                <td>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux"><img src="https://img.shields.io/badge/Binary-x64-2ea043?style=for-the-badge&logo=linux&logoColor=white"></a>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux"><img src="https://img.shields.io/badge/Binary-x64_(mirror)-1f6feb?style=for-the-badge"></a>
+                </td>
+              </tr>
+              <tr>
+                <td><b>🍏 macOS</b></td>
+                <td>
+                  <a href="https://github.com/Happ-proxy/happ-desktop/releases/latest"><img src="https://img.shields.io/badge/Setup-x64_%7C_arm64-8957e5?style=for-the-badge&logo=apple&logoColor=white"></a>
+                </td>
+              </tr>
+            </table>
+
+            <p align="center"><sub>Linux: <code>chmod +x JeffTUN-linux</code> и запускай. Обновления ставятся внутри приложения.</sub></p>
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
