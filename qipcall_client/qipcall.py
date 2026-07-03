@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.9"
+APP_VERSION = "4.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -118,7 +118,12 @@ def country_of(name):
 def clean_name(name):
     """Убирает дублирующий код страны в начале: 'frFrance - быстрый' → 'France - быстрый'."""
     import re
-    return re.sub(r"^[a-zA-Z]{2}(?=[A-ZА-Я])", "", (name or "").strip()).strip()
+    n = (name or "").strip()
+    # убираем ведущие эмодзи-флаги и служебные символы
+    n = re.sub(r"^[\U0001F1E6-\U0001F1FF\s\-_|·•]+", "", n)
+    # 'frFrance' / 'fr France' / 'FR - France' → 'France'
+    n = re.sub(r"^[a-zA-Z]{2}[\s\-_|·]*(?=[A-ZА-Я])", "", n)
+    return n.strip() or (name or "").strip()
 
 
 def proto_line(link):
@@ -374,6 +379,8 @@ class JeffTUN:
         self.selected_idx = 0
         self.sub_info = {}
         self._flag_cache = {}
+        self.pings = {}
+        self._ping_lbls = {}
 
         root.title(APP_NAME); root.geometry("780x520"); root.minsize(740, 480)
         try:
@@ -478,6 +485,8 @@ class JeffTUN:
         ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(_t, "dark"))
         self.render_servers()
         self.check_update()
+        if self.links:
+            self.root.after(400, self.do_ping)
         if self.autoconnect and self.links:
             self.root.after(800, self.connect)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -567,30 +576,43 @@ class JeffTUN:
                 font=ctk.CTkFont(FONT, 12), text_color=MUTED)
             self.empty_lbl.pack(pady=40)
             return
+        self._ping_lbls = {}
         for i, ln in enumerate(self.links):
             raw = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
             name = clean_name(raw)
             if q and q not in name.lower():
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
-            row = ctk.CTkFrame(self.server_list, fg_color=CARD,
-                               corner_radius=12, border_width=2 if sel else 1,
-                               border_color=(ACC if sel else BORDER))
+            row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
+                               corner_radius=14, border_width=2 if sel else 0,
+                               border_color=ACC)
             row.pack(fill="x", pady=3)
             flag = self._flag_image(code)
             if flag:
-                badge = ctk.CTkLabel(row, image=flag, text="", width=30, height=22)
+                badge = ctk.CTkLabel(row, image=flag, text="", width=32, height=24)
             else:
-                badge = ctk.CTkLabel(row, text=code, width=30, height=22, corner_radius=6,
+                badge = ctk.CTkLabel(row, text=code, width=32, height=24, corner_radius=6,
                                      fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 11, "bold"))
-            badge.pack(side="left", padx=(12, 8), pady=9)
+            badge.pack(side="left", padx=(14, 10), pady=11)
             m = ctk.CTkFrame(row, fg_color="transparent"); m.pack(side="left", fill="x", expand=True)
-            ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 13, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
-            ctk.CTkLabel(m, text=proto_line(ln), font=ctk.CTkFont(FONT, 9), text_color=MUTED, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(m, text=proto_line(ln), font=ctk.CTkFont(FONT, 10), text_color=MUTED, anchor="w").pack(anchor="w")
+            # пинг сервера справа
+            ptxt, pcol = self._ping_text(self.pings.get(i))
+            pl = ctk.CTkLabel(row, text=ptxt, font=ctk.CTkFont(FONT, 11, "bold"), text_color=pcol)
+            pl.pack(side="right", padx=(0, 8))
+            self._ping_lbls[i] = pl
             ctk.CTkLabel(row, text=("✓" if sel else "›"), text_color=(OK if sel else MUTED),
-                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=14)
+                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=(4, 10))
             for w in (row, m, badge) + tuple(m.winfo_children()):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
+
+    @staticmethod
+    def _ping_text(ms):
+        if ms is None: return "", MUTED
+        if ms == "x": return "—", DANGER
+        col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
+        return f"{ms} мс", col
 
     def select_server(self, idx):
         self.selected_idx = idx; self.render_servers()
@@ -604,23 +626,38 @@ class JeffTUN:
             return self.links[self.selected_idx]
         return ""
 
-    # ── Пинг ──
+    # ── Пинг ── (меряем все серверы разом и показываем в каждой строке)
     def do_ping(self):
         link = self._current_link()
-        if not link:
-            self.ping_lbl.configure(text="Нет сервера", text_color=MUTED); return
-        host, port = link_host_port(link)
-        if not host: return
-        self.ping_lbl.configure(text="Проверка…", text_color=MUTED); self.root.update()
-        def worker():
-            ms = tcp_ping(host, port)
-            def show():
-                if ms is None: self.ping_lbl.configure(text="📶 Недоступен", text_color=DANGER)
-                else:
-                    col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
-                    self.ping_lbl.configure(text=f"📶 {ms} мс", text_color=col)
-            self.root.after(0, show)
-        threading.Thread(target=worker, daemon=True).start()
+        if link:
+            host, port = link_host_port(link)
+            if host:
+                self.ping_lbl.configure(text="Проверка…", text_color=MUTED)
+                def w0(h=host, p=port):
+                    ms = tcp_ping(h, p)
+                    def show():
+                        if ms is None: self.ping_lbl.configure(text="📶 Недоступен", text_color=DANGER)
+                        else:
+                            col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
+                            self.ping_lbl.configure(text=f"📶 {ms} мс", text_color=col)
+                    self.root.after(0, show)
+                threading.Thread(target=w0, daemon=True).start()
+        # пингуем все серверы для списка
+        for i, ln in enumerate(self.links):
+            host, port = link_host_port(ln)
+            if not host:
+                continue
+            def worker(idx=i, h=host, p=port):
+                ms = tcp_ping(h, p)
+                self.pings[idx] = ms if ms is not None else "x"
+                self.root.after(0, lambda: self._update_ping_lbl(idx))
+            threading.Thread(target=worker, daemon=True).start()
+
+    def _update_ping_lbl(self, idx):
+        lbl = self._ping_lbls.get(idx)
+        if lbl is not None and lbl.winfo_exists():
+            txt, col = self._ping_text(self.pings.get(idx))
+            lbl.configure(text=txt, text_color=col)
 
     # ── Подключение ──
     def toggle(self):
@@ -787,23 +824,40 @@ class JeffTUN:
                 old = cur + ".old"
                 bat = cur + "_upd.bat"
                 # Работающий exe нельзя удалить, но МОЖНО переименовать → так безопасно
+                cdir = os.path.dirname(cur)
                 with open(bat, "w") as f:
                     f.write("@echo off\r\nping 127.0.0.1 -n 5 >nul\r\n"
                             ":retry\r\n"
                             f'if exist "{cur}" (move /y "{cur}" "{old}" >nul 2>&1)\r\n'
                             f'move /y "{new}" "{cur}" >nul 2>&1\r\n'
                             f'if not exist "{cur}" (ping 127.0.0.1 -n 2 >nul & goto retry)\r\n'
-                            f'start "" "{cur}"\r\n'
+                            # ВАЖНО: очищаем переменные PyInstaller, унаследованные от старого
+                            # процесса. Иначе новый exe пытается грузить python3xx.dll из уже
+                            # удалённой временной папки → «Failed to load Python DLL».
+                            'set "_MEIPASS2="\r\n'
+                            'set "_PYI_ARCHIVE_FILE="\r\n'
+                            'set "_PYI_APPLICATION_HOME_DIR="\r\n'
+                            'set "_PYI_PARENT_PROCESS_LEVEL="\r\n'
+                            'set "_PYI_ONEDIR_MODE="\r\n'
+                            f'start "" /d "{cdir}" "{cur}"\r\n'
                             f'ping 127.0.0.1 -n 2 >nul\r\n'
                             f'del /f /q "{old}" >nul 2>&1\r\n'
                             f'del /f /q "{new}" >nul 2>&1\r\n'
                             f'del "%~f0"\r\n')
-                subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
+                # запускаем bat в ЧИСТОМ окружении, без переменных PyInstaller
+                clean_env = {k: v for k, v in os.environ.items()
+                             if not (k.startswith("_MEIPASS") or k.startswith("_PYI"))}
+                subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW,
+                                 env=clean_env)
             else:
                 os.chmod(new, 0o755); sh = cur + "_upd.sh"
                 with open(sh, "w") as f:
-                    f.write(f'#!/bin/sh\nsleep 2\nmv -f "{new}" "{cur}"\nchmod +x "{cur}"\nnohup "{cur}" >/dev/null 2>&1 &\nrm -- "$0"\n')
-                os.chmod(sh, 0o755); subprocess.Popen(["/bin/sh", sh])
+                    f.write(f'#!/bin/sh\nsleep 2\nmv -f "{new}" "{cur}"\nchmod +x "{cur}"\n'
+                            f'unset _MEIPASS2 _PYI_ARCHIVE_FILE _PYI_APPLICATION_HOME_DIR _PYI_PARENT_PROCESS_LEVEL\n'
+                            f'nohup "{cur}" >/dev/null 2>&1 &\nrm -- "$0"\n')
+                clean_env = {k: v for k, v in os.environ.items()
+                             if not (k.startswith("_MEIPASS") or k.startswith("_PYI"))}
+                os.chmod(sh, 0o755); subprocess.Popen(["/bin/sh", sh], env=clean_env)
             self.root.after(300, self.on_close)
         except Exception:
             pass
