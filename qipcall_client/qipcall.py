@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.2"
+APP_VERSION = "4.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -378,11 +378,18 @@ def _parse_userinfo(userinfo, title):
 
 
 def tcp_ping(host, port, timeout=3.0):
-    try:
-        s = time.time(); c = socket.create_connection((host, port), timeout=timeout); c.close()
-        return int((time.time() - s) * 1000)
-    except Exception:
-        return None
+    """Берём лучший из 3 замеров TCP-хендшейка — стабильнее и точнее."""
+    best = None
+    for _ in range(3):
+        try:
+            s = time.time()
+            c = socket.create_connection((host, port), timeout=timeout); c.close()
+            ms = int((time.time() - s) * 1000)
+            if best is None or ms < best:
+                best = ms
+        except Exception:
+            pass
+    return best
 
 
 FONT = "SF Pro Display"
@@ -494,11 +501,15 @@ class JeffTUN:
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         self.cur_lbl.grid(row=3, column=0, sticky="n")
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=4, column=0, pady=(0, 20))
-        ctk.CTkButton(bottom, text="⚡ Тест пинга", height=36, corner_radius=18,
+        ctk.CTkButton(bottom, text="Тест пинга", width=180, height=38, corner_radius=19,
                       fg_color=ACC, hover_color=ACC_D, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 6))
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=MUTED)
-        self.ping_lbl.pack()
+        self.ping_lbl.pack(pady=(0, 6))
+        ctk.CTkButton(bottom, text="Обновить подписку", width=180, height=38, corner_radius=19,
+                      fg_color=CARD, hover_color=CARD2, text_color=TEXT, border_width=1,
+                      border_color=BORDER, font=ctk.CTkFont(FONT, 13, "bold"),
+                      command=self.update_sub).pack()
         ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn", font=ctk.CTkFont(FONT, 9),
                      text_color="#48484e").grid(row=5, column=0, pady=(0, 8))
 
@@ -559,7 +570,8 @@ class JeffTUN:
             d = ImageDraw.Draw(im)
             w = int(S * 0.09)
             pad = int(S * 0.22)
-            d.arc([pad, pad, S - pad, S - pad], start=120, end=60, fill=color, width=w)
+            # разрыв кольца — СВЕРХУ (270°), там же вертикальная черта
+            d.arc([pad, pad, S - pad, S - pad], start=-60, end=240, fill=color, width=w)
             cx = S // 2
             d.line([(cx, int(S * 0.16)), (cx, int(S * 0.5))], fill=color, width=w)
             im = im.resize((size, size), Image.LANCZOS)
@@ -662,10 +674,10 @@ class JeffTUN:
                 def w0(h=host, p=port):
                     ms = tcp_ping(h, p)
                     def show():
-                        if ms is None: self.ping_lbl.configure(text="📶 Недоступен", text_color=DANGER)
+                        if ms is None: self.ping_lbl.configure(text="Сервер недоступен", text_color=DANGER)
                         else:
                             col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
-                            self.ping_lbl.configure(text=f"📶 {ms} мс", text_color=col)
+                            self.ping_lbl.configure(text=f"Пинг: {ms} мс", text_color=col)
                     self.root.after(0, show)
                 threading.Thread(target=w0, daemon=True).start()
         # пингуем все серверы для списка

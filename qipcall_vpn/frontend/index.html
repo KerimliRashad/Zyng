@@ -49,6 +49,18 @@
   .dl-btn:active{transform:scale(.97)}
   .dl-btn.ghost{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
   .dl-btn span{display:block;font-size:11px;font-weight:500;opacity:.8;margin-top:1px}
+  /* Happ-подобная таблица загрузок */
+  .os-table{max-width:760px;margin:0 auto;background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:18px;overflow:hidden}
+  .os-row{display:flex;align-items:center;gap:16px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .os-row:last-child{border-bottom:none}
+  .os-name{display:flex;align-items:center;gap:10px;min-width:150px;font-weight:800;font-size:16px}
+  .os-name .dl-ico{font-size:22px}
+  .os-badges{display:flex;flex-wrap:wrap;gap:8px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:10px;font-weight:700;font-size:13px;background:#2b3350;color:#dfe6ff;transition:transform .12s}
+  .badge:active{transform:scale(.96)}
+  .badge b{background:#5b8def;color:#fff;padding:2px 7px;border-radius:6px;font-size:12px;font-weight:800}
+  .badge.mir b{background:#e0574a}
+  @media(max-width:560px){.os-row{flex-direction:column;align-items:flex-start}.os-name{min-width:0}}
   footer{text-align:center;color:var(--muted);padding:60px 0 40px;font-size:14px}
 
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
@@ -123,18 +135,34 @@
     </div>
 
     <!-- Desktop -->
-    <div class="dl-card highlight">
-      <div class="dl-head"><span class="dl-ico">💻</span><h3>Desktop</h3></div>
-      <a class="dl-btn" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe">JeffTUN Windows x64 ⭐</a>
-      <a class="dl-btn" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux">JeffTUN Linux ⭐</a>
-      <a class="dl-btn ghost" href="https://github.com/Happ-proxy/happ-desktop/releases/latest" target="_blank">macOS <span>Happ (dmg)</span></a>
-    </div>
-
-    <!-- TV -->
     <div class="dl-card">
       <div class="dl-head"><span class="dl-ico">📺</span><h3>TV</h3></div>
       <a class="dl-btn" href="https://play.google.com/store/apps/details?id=com.happproxy" target="_blank">Android TV</a>
       <a class="dl-btn ghost" href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank">Apple TV</a>
+    </div>
+  </div>
+
+  <!-- Desktop: таблица как у Happ -->
+  <div class="os-table" style="margin-top:22px">
+    <div class="os-row">
+      <div class="os-name"><span class="dl-ico">🪟</span>Windows</div>
+      <div class="os-badges">
+        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe">Setup <b>x64</b></a>
+        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe">Setup <b>x64 (mirror)</b></a>
+      </div>
+    </div>
+    <div class="os-row">
+      <div class="os-name"><span class="dl-ico">🐧</span>Linux</div>
+      <div class="os-badges">
+        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux">Binary <b>x64</b></a>
+        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux">Binary <b>x64 (mirror)</b></a>
+      </div>
+    </div>
+    <div class="os-row">
+      <div class="os-name"><span class="dl-ico">🍏</span>macOS</div>
+      <div class="os-badges">
+        <a class="badge" href="https://github.com/Happ-proxy/happ-desktop/releases/latest" target="_blank">Setup <b>x64 | arm64</b></a>
+      </div>
     </div>
   </div>
 
