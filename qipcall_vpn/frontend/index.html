@@ -147,21 +147,22 @@
     <div class="os-row">
       <div class="os-name"><span class="dl-ico">🪟</span>Windows</div>
       <div class="os-badges">
-        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe">Setup <b>x64</b></a>
-        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN.exe">Setup <b>x64 (mirror)</b></a>
+        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe">Setup <b>x64</b></a>
+        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe">Setup <b>x64 (mirror)</b></a>
       </div>
     </div>
     <div class="os-row">
       <div class="os-name"><span class="dl-ico">🐧</span>Linux</div>
       <div class="os-badges">
-        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux">Binary <b>x64</b></a>
-        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest/JeffTUN-linux">Binary <b>x64 (mirror)</b></a>
+        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux">Binary <b>x64</b></a>
+        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux">Binary <b>x64 (mirror)</b></a>
       </div>
     </div>
     <div class="os-row">
       <div class="os-name"><span class="dl-ico">🍏</span>macOS</div>
       <div class="os-badges">
-        <a class="badge" href="https://github.com/Happ-proxy/happ-desktop/releases/latest" target="_blank">Setup <b>x64 | arm64</b></a>
+        <a class="badge" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-mac">App <b>x64 | arm64</b></a>
+        <a class="badge mir" href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-mac">App <b>mirror</b></a>
       </div>
     </div>
   </div>
@@ -216,9 +217,15 @@ function openDonate(t){
 // Счётчик скачиваний напрямую с GitHub (открытый API)
 (async function(){
   try{
-    const r=await fetch('https://api.github.com/repos/kerimlirashad/kerimlirashad/releases/tags/qipcall-latest');
-    const d=await r.json();
-    const total=(d.assets||[]).reduce((s,a)=>s+(a.download_count||0),0);
+    const tags=['jefftun','qipcall-latest'];
+    let total=0;
+    for(const t of tags){
+      try{
+        const r=await fetch('https://api.github.com/repos/kerimlirashad/kerimlirashad/releases/tags/'+t);
+        const d=await r.json();
+        total+=(d.assets||[]).reduce((s,a)=>s+(a.download_count||0),0);
+      }catch{}
+    }
     document.getElementById('dlnum').textContent=total.toLocaleString('ru');
   }catch{ document.getElementById('dlcount').style.display='none'; }
 })();

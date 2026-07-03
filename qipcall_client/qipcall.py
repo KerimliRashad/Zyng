@@ -19,10 +19,10 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.3"
+APP_VERSION = "4.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
-RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
-DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
+RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
+DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
 TELEGRAM_URL = "https://t.me/jeffvpn"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
@@ -810,9 +810,14 @@ class JeffTUN:
                       font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
 
     def do_self_update(self):
-        if sys.platform == "darwin" or not getattr(sys, "frozen", False):
+        if not getattr(sys, "frozen", False):
             import webbrowser; webbrowser.open(RELEASES_URL); return
-        asset = "JeffTUN.exe" if os.name == "nt" else "JeffTUN-linux"
+        if os.name == "nt":
+            asset = "JeffTUN.exe"
+        elif sys.platform == "darwin":
+            asset = "JeffTUN-mac"
+        else:
+            asset = "JeffTUN-linux"
         url = f"{DOWNLOAD_BASE}/{asset}"; cur = sys.executable; new = cur + ".new"
         def setl(t):
             if hasattr(self, "_ulbl"):
@@ -841,11 +846,16 @@ class JeffTUN:
                 if total and size != total:
                     raise Exception("скачан не полностью")
                 with open(new, "rb") as f:
-                    head = f.read(2)
-                if os.name == "nt" and head != b"MZ":
+                    head = f.read(4)
+                if os.name == "nt" and head[:2] != b"MZ":
                     raise Exception("не Windows-программа")
-                if os.name != "nt" and head != b"\x7fE":
+                elif os.name != "nt" and sys.platform != "darwin" and head[:2] != b"\x7fE":
                     raise Exception("не Linux-программа")
+                elif sys.platform == "darwin":
+                    # macOS: Mach-O (0xFEEDFACE/CF, 0xCAFEBABE) — проверяем магию
+                    if head not in (b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe",
+                                    b"\xca\xfe\xba\xbe", b"\xfe\xed\xfa\xcf"):
+                        raise Exception("не macOS-программа")
                 setl("✅ Применяю…")
                 self.root.after(0, lambda: self._apply_update(cur, new))
             except Exception as e:
@@ -891,6 +901,7 @@ class JeffTUN:
                 os.chmod(new, 0o755); sh = cur + "_upd.sh"
                 with open(sh, "w") as f:
                     f.write(f'#!/bin/sh\nsleep 2\nmv -f "{new}" "{cur}"\nchmod +x "{cur}"\n'
+                            f'xattr -dr com.apple.quarantine "{cur}" 2>/dev/null || true\n'
                             f'unset _MEIPASS2 _PYI_ARCHIVE_FILE _PYI_APPLICATION_HOME_DIR _PYI_PARENT_PROCESS_LEVEL\n'
                             f'nohup "{cur}" >/dev/null 2>&1 &\nrm -- "$0"\n')
                 clean_env = {k: v for k, v in os.environ.items()
