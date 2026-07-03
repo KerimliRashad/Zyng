@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.7"
+APP_VERSION = "4.8"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -435,6 +435,7 @@ class JeffTUN:
         ctk.CTkLabel(side, text="", height=8).pack()
         sicon("🌐", lambda: None, active=True)
         sicon("＋", self.add_key)
+        sicon("🗑", self.clear_servers)
         ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
         sicon("ℹ", self._about)
 
@@ -645,8 +646,13 @@ class JeffTUN:
             pl = ctk.CTkLabel(row, text=ptxt, font=ctk.CTkFont(FONT, 11, "bold"), text_color=pcol)
             pl.pack(side="right", padx=(0, 8))
             self._ping_lbls[i] = pl
+            # кнопка удаления сервера
+            ctk.CTkButton(row, text="✕", width=26, height=26, corner_radius=13,
+                          fg_color="transparent", hover_color=DANGER, text_color=MUTED,
+                          font=ctk.CTkFont(FONT, 13, "bold"),
+                          command=lambda idx=i: self.delete_server(idx)).pack(side="right", padx=(2, 8))
             ctk.CTkLabel(row, text=("✓" if sel else "›"), text_color=(OK if sel else MUTED),
-                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=(4, 10))
+                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=(4, 4))
             for w in (row, m, badge) + tuple(m.winfo_children()):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
 
@@ -663,6 +669,36 @@ class JeffTUN:
         self.cur_lbl.configure(text=nm)
         self.do_ping()
         if self.connected: self.disconnect(); self.connect()
+
+    def delete_server(self, idx):
+        if not (0 <= idx < len(self.links)):
+            return
+        nm = clean_name(unquote(self.links[idx].split("#", 1)[1])) if "#" in self.links[idx] else f"Сервер {idx+1}"
+        if not messagebox.askyesno("Удалить сервер", f"Удалить «{nm}» из списка?"):
+            return
+        was_current = (idx == self.selected_idx)
+        del self.links[idx]
+        self.pings.pop(idx, None)
+        # переиндексация пингов (сдвигаем ключи после удалённого)
+        self.pings = {(k - 1 if k > idx else k): v for k, v in self.pings.items() if k != idx}
+        if self.selected_idx >= len(self.links):
+            self.selected_idx = max(0, len(self.links) - 1)
+        elif self.selected_idx > idx:
+            self.selected_idx -= 1
+        if was_current and self.connected:
+            self.disconnect()
+        self.render_servers(); self.save(silent=True)
+        self._flash("Сервер удалён", MUTED)
+
+    def clear_servers(self):
+        if not self.links:
+            return
+        if not messagebox.askyesno("Очистить список", "Удалить ВСЕ серверы из списка?"):
+            return
+        if self.connected: self.disconnect()
+        self.links = []; self.pings = {}; self.selected_idx = 0
+        self.render_servers(); self.save(silent=True)
+        self._flash("Список очищен", MUTED)
 
     def _current_link(self):
         if self.links and 0 <= self.selected_idx < len(self.links):
