@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.5"
+APP_VERSION = "4.6"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -446,11 +446,11 @@ class JeffTUN:
                      text_color=TEXT).grid(row=0, column=0, sticky="w", padx=22, pady=(20, 8))
         srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18)
         self.search = ctk.CTkEntry(srow, placeholder_text="Поиск…", height=38, corner_radius=12,
-                                   fg_color=CARD, border_width=1, border_color=BORDER, text_color=TEXT)
+                                   fg_color=CARD, border_width=0, text_color=TEXT)
         self.search.pack(side="left", fill="x", expand=True)
         self.search.bind("<KeyRelease>", lambda e: self.render_servers())
         ctk.CTkButton(srow, text="⟳", width=38, height=38, corner_radius=12, fg_color=CARD,
-                      hover_color=CARD2, text_color=ACC, border_width=1, border_color=BORDER,
+                      hover_color=CARD2, text_color=ACC, border_width=0,
                       command=self.update_sub).pack(side="left", padx=(6, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
@@ -468,7 +468,7 @@ class JeffTUN:
         ctk.CTkButton(brow, text="📋 Вставить", height=36, corner_radius=18, fg_color=ACC, hover_color=ACC_D,
                       text_color="white", font=ctk.CTkFont(FONT, 12, "bold"), command=self.paste_key).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(brow, text="🔗 Подписка", height=36, corner_radius=18, fg_color=CARD, hover_color=CARD2,
-                      text_color=TEXT, border_width=1, border_color=BORDER,
+                      text_color=TEXT, border_width=0,
                       font=ctk.CTkFont(FONT, 12, "bold"), command=self.add_sub).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
         # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
@@ -608,7 +608,7 @@ class JeffTUN:
         if self.sub_info:
             si = self.sub_info
             card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
-                                border_width=1, border_color=SUBBORDER)
+                                border_width=0)
             card.pack(fill="x", pady=(0, 8))
             ctk.CTkLabel(card, text=si.get("title", "JeffTUN VPN"),
                          font=ctk.CTkFont(FONT, 14, "bold"), text_color=ACC, anchor="w").pack(anchor="w", padx=14, pady=(10, 2))
@@ -628,8 +628,7 @@ class JeffTUN:
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
             row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
-                               corner_radius=14, border_width=2 if sel else 0,
-                               border_color=ACC)
+                               corner_radius=14, border_width=0)
             row.pack(fill="x", pady=3)
             flag = self._flag_image(code)
             if flag:
