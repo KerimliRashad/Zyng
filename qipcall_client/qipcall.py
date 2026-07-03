@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.1"
+APP_VERSION = "5.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -509,7 +509,9 @@ class JeffTUN:
             if os.path.exists(lp):
                 im = Image.open(lp)
                 ratio = im.width / im.height
-                img = ctk.CTkImage(im, size=(int(58 * ratio), 58))
+                # крупный логотип: 150px по высоте (было 58px — слишком мелко)
+                H = 150
+                img = ctk.CTkImage(im, size=(int(H * ratio), H))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
         except Exception:
