@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.5"
+APP_VERSION = "5.5.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -538,10 +538,6 @@ class JeffTUN:
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 6))
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 6))
-        ctk.CTkButton(bottom, text="Обновить подписку", width=180, height=38, corner_radius=19,
-                      fg_color=CARD, hover_color=CARD2, text_color=TEXT, border_width=1,
-                      border_color=BORDER, font=ctk.CTkFont(FONT, 13, "bold"),
-                      command=self.update_sub).pack()
         ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn", font=ctk.CTkFont(FONT, 9),
                      text_color="#48484e").grid(row=5, column=0, pady=(0, 8))
 
@@ -684,14 +680,21 @@ class JeffTUN:
         for w in self.server_list.winfo_children():
             w.destroy()
         q = (self.search.get() if hasattr(self, "search") else "").lower().strip()
-        # Карточка подписки (тариф/остаток/дни)
-        if self.sub_info:
+        # Карточка подписки (тариф/остаток/дни) + кнопка удаления подписки
+        if self.sub_info and self.subs:
             si = self.sub_info
+            # какую подписку удалять: активную вкладку, иначе последнюю
+            del_url = self.active_tab if any(s["url"] == self.active_tab for s in self.subs) else self.subs[-1]["url"]
             card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
                                 border_width=0)
             card.pack(fill="x", pady=(0, 8))
-            ctk.CTkLabel(card, text=si.get("title", "JeffTUN VPN"),
-                         font=ctk.CTkFont(FONT, 14, "bold"), text_color=ACC, anchor="w").pack(anchor="w", padx=14, pady=(10, 2))
+            top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(10, 2))
+            ctk.CTkLabel(top, text=si.get("title", "JeffTUN VPN"),
+                         font=ctk.CTkFont(FONT, 14, "bold"), text_color=ACC, anchor="w").pack(side="left")
+            ctk.CTkButton(top, text="✕", width=26, height=26, corner_radius=13,
+                          fg_color="transparent", hover_color=DANGER, text_color=MUTED,
+                          font=ctk.CTkFont(FONT, 13, "bold"),
+                          command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
             ctk.CTkLabel(card, text=f"{si.get('traffic','')}   ·   {si.get('expire','')}",
                          font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w").pack(anchor="w", padx=14, pady=(0, 10))
         if not self.links:
@@ -725,13 +728,9 @@ class JeffTUN:
             pl = ctk.CTkLabel(row, text=ptxt, font=ctk.CTkFont(FONT, 11, "bold"), text_color=pcol)
             pl.pack(side="right", padx=(0, 8))
             self._ping_lbls[i] = pl
-            # кнопка удаления сервера
-            ctk.CTkButton(row, text="✕", width=26, height=26, corner_radius=13,
-                          fg_color="transparent", hover_color=DANGER, text_color=MUTED,
-                          font=ctk.CTkFont(FONT, 13, "bold"),
-                          command=lambda idx=i: self.delete_server(idx)).pack(side="right", padx=(2, 8))
+            # индикатор выбора (крестик удаления серверов убран — удаляем через подписку)
             ctk.CTkLabel(row, text=("✓" if sel else "›"), text_color=(OK if sel else MUTED),
-                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=(4, 4))
+                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=(4, 12))
             for w in (row, m, badge) + tuple(m.winfo_children()):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
 
@@ -769,6 +768,20 @@ class JeffTUN:
             self._flash("Сервер удалён", MUTED)
         except Exception as e:
             self._flash(f"Не удалось удалить: {e}", DANGER)
+
+    def delete_subscription(self, url):
+        try:
+            if self.connected: self.disconnect()
+            self.subs = [s for s in self.subs if s["url"] != url]
+            self.sub_cache.pop(url, None)
+            if self.active_tab == url:
+                self.active_tab = "all"
+            self.pings = {}; self.selected_idx = 0
+            self._rebuild_links(); self.render_servers()
+            self.save(silent=True); self.do_ping()
+            self._flash("Подписка удалена", MUTED)
+        except Exception as e:
+            self._flash(f"Ошибка: {e}", DANGER)
 
     def clear_servers(self):
         try:
@@ -952,18 +965,26 @@ class JeffTUN:
         if reconnect and self.connected: self.disconnect(); self.connect()
 
     # ── Обновление приложения ──
-    def check_update(self):
+    def check_update(self, periodic=True):
         def worker():
             try:
                 import ssl
                 ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-                req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "JeffTUN"})
+                # cache-buster: raw.githubusercontent кэшируется ~5 мин на CDN,
+                # из-за этого «у одних сразу, у других долго». Обходим кэш.
+                url = VERSION_URL + ("?t=%d" % int(time.time()))
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": "JeffTUN", "Cache-Control": "no-cache", "Pragma": "no-cache"})
                 latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
                 if latest and self._newer(latest, APP_VERSION):
                     self.root.after(0, lambda: self._show_update(latest))
             except Exception:
                 pass
         threading.Thread(target=worker, daemon=True).start()
+        # периодически перепроверяем (каждые 3 мин), пока приложение открыто —
+        # чтобы уведомление об обновлении дошло до всех, а не только при запуске
+        if periodic:
+            self.root.after(180000, lambda: self.check_update(periodic=True))
 
     @staticmethod
     def _newer(a, b):
