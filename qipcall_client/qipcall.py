@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.4"
+APP_VERSION = "3.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -28,19 +28,20 @@ SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
-# iOS/Happ-палитра (тёмная)
-BG     = "#0e0e13"
-SIDE   = "#15151c"
-PANEL  = "#141418"
-CARD   = "#1e1e26"
-CARD2  = "#2a2a34"
-ACC    = "#7c5cff"
-ACC_D  = "#6a49f2"
-TEXT   = "#f2f2f7"
-MUTED  = "#8e8e97"
-OK     = "#30d158"
-WARN   = "#ffd60a"
-DANGER = "#ff453a"
+# Светлая iOS-палитра (чистая, приятная глазу)
+BG     = "#eef1f6"   # общий фон
+SIDE   = "#e5e8ef"   # левая панель
+PANEL  = "#f6f8fb"   # средняя панель
+CARD   = "#ffffff"   # карточки
+CARD2  = "#eef1f6"   # выбранная/вторичная
+BORDER = "#e0e4ec"   # тонкие рамки
+ACC    = "#5b6cff"   # мягкий индиго
+ACC_D  = "#4a5ae6"
+TEXT   = "#1d1d24"
+MUTED  = "#8a8d99"
+OK     = "#22c55e"
+WARN   = "#f5a623"
+DANGER = "#ff5a5a"
 
 
 def resource_path(name):
@@ -300,9 +301,23 @@ def fetch_subscription(url):
     return links, info
 
 
+def _decode_title(title):
+    """Некоторые панели отдают Profile-Title в base64 (с префиксом 'base64:')."""
+    t = (title or "").strip()
+    if t.lower().startswith("base64:"):
+        t = t.split(":", 1)[1]
+    try:
+        dec = base64.b64decode(t + "=" * (-len(t) % 4)).decode("utf-8")
+        if dec.isprintable() or any(ord(c) > 127 for c in dec):
+            return dec.strip()
+    except Exception:
+        pass
+    return (title or "").strip()
+
+
 def _parse_userinfo(userinfo, title):
     """Разбирает 'upload=..; download=..; total=..; expire=..' в понятный вид."""
-    d = {"title": title.strip() or "JeffTUN VPN"}
+    d = {"title": _decode_title(title) or "JeffTUN VPN"}
     parts = {}
     for kv in userinfo.replace(",", ";").split(";"):
         if "=" in kv:
@@ -371,10 +386,10 @@ class JeffTUN:
         side = ctk.CTkFrame(root, width=64, fg_color=SIDE, corner_radius=0)
         side.grid(row=0, column=0, sticky="nsw"); side.grid_propagate(False)
         def sicon(txt, cmd, active=False):
-            ctk.CTkButton(side, text=txt, width=44, height=44, corner_radius=14,
+            ctk.CTkButton(side, text=txt, width=40, height=40, corner_radius=12,
                           fg_color=(CARD if active else "transparent"), hover_color=CARD,
-                          text_color=(ACC if active else MUTED), font=ctk.CTkFont(FONT, 20),
-                          command=cmd).pack(pady=6)
+                          text_color=(ACC if active else MUTED), font=ctk.CTkFont(FONT, 17),
+                          command=cmd).pack(pady=5)
         ctk.CTkLabel(side, text="", height=8).pack()
         sicon("🌐", lambda: None, active=True)
         sicon("＋", self.add_key)
@@ -390,21 +405,23 @@ class JeffTUN:
                      text_color=TEXT).grid(row=0, column=0, sticky="w", padx=22, pady=(20, 8))
         srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18)
         self.search = ctk.CTkEntry(srow, placeholder_text="Поиск…", height=38, corner_radius=12,
-                                   fg_color=CARD, border_width=0)
+                                   fg_color=CARD, border_width=1, border_color=BORDER, text_color=TEXT)
         self.search.pack(side="left", fill="x", expand=True)
         self.search.bind("<KeyRelease>", lambda e: self.render_servers())
         ctk.CTkButton(srow, text="⟳", width=38, height=38, corner_radius=12, fg_color=CARD,
-                      hover_color=CARD2, command=self.update_sub).pack(side="left", padx=(6, 0))
+                      hover_color=CARD2, text_color=ACC, border_width=1, border_color=BORDER,
+                      command=self.update_sub).pack(side="left", padx=(6, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent")
         self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
         self.empty_lbl = ctk.CTkLabel(self.server_list,
             text="Добавь ключ или подписку —\nкнопка ＋ слева или «Вставить» ниже",
             font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=3, column=0, sticky="ew", padx=18, pady=(4, 16))
-        ctk.CTkButton(brow, text="📋 Вставить", height=42, corner_radius=12, fg_color=CARD, hover_color=CARD2,
-                      font=ctk.CTkFont(FONT, 13), command=self.paste_key).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ctk.CTkButton(brow, text="🔗 Подписка", height=42, corner_radius=12, fg_color=CARD, hover_color=CARD2,
-                      font=ctk.CTkFont(FONT, 13), command=self.add_sub).pack(side="left", fill="x", expand=True, padx=(5, 0))
+        ctk.CTkButton(brow, text="📋 Вставить", height=36, corner_radius=18, fg_color=ACC, hover_color=ACC_D,
+                      text_color="white", font=ctk.CTkFont(FONT, 12, "bold"), command=self.paste_key).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(brow, text="🔗 Подписка", height=36, corner_radius=18, fg_color=CARD, hover_color=CARD2,
+                      text_color=TEXT, border_width=1, border_color=BORDER,
+                      font=ctk.CTkFont(FONT, 12, "bold"), command=self.add_sub).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
         # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
         right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
@@ -429,22 +446,26 @@ class JeffTUN:
             row = ctk.CTkFrame(h, fg_color="transparent"); row.pack()
             ctk.CTkLabel(row, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
             ctk.CTkLabel(row, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
-        # круглая кнопка с мягкой тенью-кольцом
+        # круглая кнопка с мягкой тенью-кольцом (нарисованная иконка питания)
         pwrap = ctk.CTkFrame(right, fg_color="transparent")
-        pwrap.grid(row=1, column=0, pady=10)
-        self.power_ring = ctk.CTkFrame(pwrap, width=210, height=210, corner_radius=105, fg_color="#141018")
+        pwrap.grid(row=1, column=0, pady=14)
+        self.power_ring = ctk.CTkFrame(pwrap, width=168, height=168, corner_radius=84,
+                                       fg_color=CARD2)
         self.power_ring.pack()
         self.power_ring.pack_propagate(False)
-        self.power = ctk.CTkButton(self.power_ring, text="⏻", width=176, height=176, corner_radius=88,
-                                   fg_color=CARD, hover_color=CARD2, text_color=MUTED,
-                                   font=ctk.CTkFont(FONT, 58), border_width=0, command=self.toggle)
+        self._icon_off = self._power_icon(MUTED, 72)
+        self._icon_on = self._power_icon("#ffffff", 72)
+        self.power = ctk.CTkButton(self.power_ring, text="", image=self._icon_off,
+                                   width=140, height=140, corner_radius=70,
+                                   fg_color=CARD, hover_color="#f0f2f7", border_width=1,
+                                   border_color=BORDER, command=self.toggle)
         self.power.place(relx=0.5, rely=0.5, anchor="center")
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 15, "bold"), text_color=MUTED)
-        self.status.grid(row=2, column=0, pady=(0, 4))
+        self.status.grid(row=2, column=0, pady=(2, 2))
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         self.cur_lbl.grid(row=3, column=0, sticky="n")
-        bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=4, column=0, pady=(0, 22))
-        self.ping_btn = ctk.CTkButton(bottom, text="Тест пинга", height=40, width=180, corner_radius=12,
+        bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=4, column=0, pady=(0, 20))
+        self.ping_btn = ctk.CTkButton(bottom, text="Тест пинга", height=38, width=160, corner_radius=19,
                                       fg_color=ACC, hover_color=ACC_D, font=ctk.CTkFont(FONT, 13, "bold"),
                                       command=self.do_ping)
         self.ping_btn.pack(pady=4)
@@ -457,6 +478,9 @@ class JeffTUN:
         self.update_bar = None
 
         self.load_saved()
+        # применяем сохранённую тему
+        _t = self.prefs.get("theme", "Светлая")
+        ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(_t, "light"))
         self.render_servers()
         self.check_update()
         if self.autoconnect and self.links:
@@ -496,6 +520,23 @@ class JeffTUN:
             text=("Подключено" if self.connected else "Отключено"),
             text_color=(OK if self.connected else MUTED)))
 
+    def _power_icon(self, color, size=72):
+        """Рисует символ питания (кольцо с разрывом + вертикальная черта)."""
+        try:
+            from PIL import Image, ImageDraw
+            S = size * 4  # рисуем крупно и уменьшаем — сглаживание
+            im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            w = int(S * 0.09)
+            pad = int(S * 0.22)
+            d.arc([pad, pad, S - pad, S - pad], start=120, end=60, fill=color, width=w)
+            cx = S // 2
+            d.line([(cx, int(S * 0.16)), (cx, int(S * 0.5))], fill=color, width=w)
+            im = im.resize((size, size), Image.LANCZOS)
+            return ctk.CTkImage(im, size=(size, size))
+        except Exception:
+            return None
+
     def _flag_image(self, code):
         if code in self._flag_cache:
             return self._flag_cache[code]
@@ -504,7 +545,7 @@ class JeffTUN:
             path = resource_path(os.path.join("flags", code.lower() + ".png"))
             if os.path.exists(path):
                 from PIL import Image
-                img = ctk.CTkImage(Image.open(path), size=(38, 28))
+                img = ctk.CTkImage(Image.open(path), size=(26, 18))
         except Exception:
             img = None
         self._flag_cache[code] = img
@@ -518,13 +559,12 @@ class JeffTUN:
         # Карточка подписки (тариф/остаток/дни)
         if self.sub_info:
             si = self.sub_info
-            card = ctk.CTkFrame(self.server_list, fg_color=CARD, corner_radius=14)
+            card = ctk.CTkFrame(self.server_list, fg_color="#eef0ff", corner_radius=12,
+                                border_width=1, border_color="#d6d9f5")
             card.pack(fill="x", pady=(0, 8))
-            ctk.CTkLabel(card, text="🦈 " + si.get("title", "JeffTUN VPN"),
-                         font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w", padx=14, pady=(10, 2))
-            ctk.CTkLabel(card, text=f"📊 {si.get('traffic','')} · {si.get('left_gb','')}",
-                         font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w").pack(anchor="w", padx=14)
-            ctk.CTkLabel(card, text=f"⏳ {si.get('expire','')}",
+            ctk.CTkLabel(card, text=si.get("title", "JeffTUN VPN"),
+                         font=ctk.CTkFont(FONT, 14, "bold"), text_color=ACC, anchor="w").pack(anchor="w", padx=14, pady=(10, 2))
+            ctk.CTkLabel(card, text=f"{si.get('traffic','')}   ·   {si.get('expire','')}",
                          font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w").pack(anchor="w", padx=14, pady=(0, 10))
         if not self.links:
             self.empty_lbl = ctk.CTkLabel(self.server_list,
@@ -538,21 +578,22 @@ class JeffTUN:
             if q and q not in name.lower():
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
-            row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
-                               corner_radius=14, border_width=2 if sel else 0, border_color=ACC)
-            row.pack(fill="x", pady=4)
+            row = ctk.CTkFrame(self.server_list, fg_color=CARD,
+                               corner_radius=12, border_width=2 if sel else 1,
+                               border_color=(ACC if sel else BORDER))
+            row.pack(fill="x", pady=3)
             flag = self._flag_image(code)
             if flag:
-                badge = ctk.CTkLabel(row, image=flag, text="", width=46, height=46)
+                badge = ctk.CTkLabel(row, image=flag, text="", width=30, height=22)
             else:
-                badge = ctk.CTkLabel(row, text=code, width=46, height=46, corner_radius=13,
-                                     fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 14, "bold"))
-            badge.pack(side="left", padx=10, pady=8)
+                badge = ctk.CTkLabel(row, text=code, width=30, height=22, corner_radius=6,
+                                     fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 11, "bold"))
+            badge.pack(side="left", padx=(12, 8), pady=9)
             m = ctk.CTkFrame(row, fg_color="transparent"); m.pack(side="left", fill="x", expand=True)
-            ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
-            ctk.CTkLabel(m, text=proto_line(ln), font=ctk.CTkFont(FONT, 10), text_color=MUTED, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 13, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(m, text=proto_line(ln), font=ctk.CTkFont(FONT, 9), text_color=MUTED, anchor="w").pack(anchor="w")
             ctk.CTkLabel(row, text=("✓" if sel else "›"), text_color=(OK if sel else MUTED),
-                         font=ctk.CTkFont(FONT, 16, "bold")).pack(side="right", padx=14)
+                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=14)
             for w in (row, m, badge) + tuple(m.winfo_children()):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
 
@@ -613,8 +654,8 @@ class JeffTUN:
         try: set_system_proxy(True)
         except Exception: pass
         self.connected = True
-        self.power.configure(fg_color="#2ca44c", hover_color="#268f42", text_color="white")
-        self.power_ring.configure(fg_color="#123a1f")
+        self.power.configure(fg_color=OK, hover_color="#1eae54", image=self._icon_on, border_width=0)
+        self.power_ring.configure(fg_color="#c7f0d5")
         self.status.configure(text="Подключено", text_color=OK)
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
@@ -627,8 +668,8 @@ class JeffTUN:
             except Exception: pass
             self.proc = None
         self.connected = False
-        self.power.configure(fg_color=CARD, hover_color=CARD2, text_color=MUTED)
-        self.power_ring.configure(fg_color="#141018")
+        self.power.configure(fg_color=CARD, hover_color="#f0f2f7", image=self._icon_off, border_width=1)
+        self.power_ring.configure(fg_color=CARD2)
         self.status.configure(text="Отключено", text_color=MUTED)
 
     # ── Сохранение ──
@@ -691,10 +732,10 @@ class JeffTUN:
     def _show_update(self, latest):
         self._latest = latest
         if self.update_bar: return
-        self.update_bar = ctk.CTkFrame(self.root, fg_color="#132a1a", corner_radius=14, border_width=1, border_color=OK)
-        self.update_bar.place(relx=0.5, rely=0.03, anchor="n")
+        self.update_bar = ctk.CTkFrame(self.root, fg_color="#e8f9ee", corner_radius=14, border_width=1, border_color=OK)
+        self.update_bar.place(relx=0.5, rely=0.02, anchor="n")
         self._ulbl = ctk.CTkLabel(self.update_bar, text=f"🎉 Новая версия {latest}",
-                                  font=ctk.CTkFont(FONT, 12, "bold"), text_color=OK)
+                                  font=ctk.CTkFont(FONT, 12, "bold"), text_color="#1a8f43")
         self._ulbl.pack(side="left", padx=14, pady=8)
         ctk.CTkButton(self.update_bar, text="Обновить", width=90, height=28, corner_radius=14,
                       fg_color=OK, hover_color="#28b14a", text_color="#08160c",
@@ -776,37 +817,43 @@ class JeffTUN:
 
     # ── Настройки ──
     def open_settings(self):
-        win = ctk.CTkToplevel(self.root); win.title("Настройки"); win.geometry("420x600"); win.after(200, win.lift)
-        ctk.CTkLabel(win, text="Настройки", font=ctk.CTkFont(FONT, 20, "bold")).pack(pady=(16, 8))
+        win = ctk.CTkToplevel(self.root); win.title("Настройки"); win.geometry("420x600")
+        win.configure(fg_color=BG)
+        win.after(250, lambda: (win.lift(), win.focus_force()))
+        ctk.CTkLabel(win, text="Настройки", font=ctk.CTkFont(FONT, 20, "bold"), text_color=TEXT).pack(pady=(16, 8))
         sc = ctk.CTkScrollableFrame(win, fg_color="transparent"); sc.pack(fill="both", expand=True, padx=10)
         def section(t):
             ctk.CTkLabel(sc, text=t, font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED).pack(anchor="w", padx=10, pady=(14, 4))
-            c = ctk.CTkFrame(sc, fg_color=CARD, corner_radius=16); c.pack(fill="x"); return c
+            c = ctk.CTkFrame(sc, fg_color=CARD, corner_radius=16, border_width=1, border_color=BORDER); c.pack(fill="x"); return c
         def sw(card, text, key, default=False, cmd=None):
             row = ctk.CTkFrame(card, fg_color="transparent"); row.pack(fill="x", padx=14, pady=8)
-            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(FONT, 13)).pack(side="left")
+            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
             v = ctk.StringVar(value="on" if self.prefs.get(key, default) else "off")
             def on():
                 self.prefs[key] = (v.get() == "on"); self.save(silent=True)
                 if cmd: cmd(v.get() == "on")
             ctk.CTkSwitch(row, text="", variable=v, onvalue="on", offvalue="off", command=on, progress_color=ACC).pack(side="right")
-        def choice(card, text, key, opts, default):
+        def choice(card, text, key, opts, default, on_change=None):
             row = ctk.CTkFrame(card, fg_color="transparent"); row.pack(fill="x", padx=14, pady=8)
-            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(FONT, 13)).pack(side="left")
+            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
             var = ctk.StringVar(value=self.prefs.get(key, default))
+            def _cb(v):
+                self.prefs[key] = v; self.save(silent=True)
+                if on_change: on_change(v)
             ctk.CTkOptionMenu(row, values=opts, variable=var, width=130, fg_color=CARD2,
-                              button_color=ACC, button_hover_color=ACC_D,
-                              command=lambda v: (self.prefs.__setitem__(key, v), self.save(silent=True))).pack(side="right")
+                              text_color=TEXT, button_color=ACC, button_hover_color=ACC_D,
+                              command=_cb).pack(side="right")
         def link(card, text, cmd, color=TEXT):
             ctk.CTkButton(card, text=text, anchor="w", height=38, corner_radius=0, fg_color="transparent",
                           hover_color=CARD2, text_color=color, font=ctk.CTkFont(FONT, 13), command=cmd).pack(fill="x", padx=4, pady=1)
 
         c = section("ИНТЕРФЕЙС")
-        choice(c, "Язык", "lang", ["Русский", "English"], "Русский")
-        choice(c, "Тема", "theme", ["Тёмная", "Системная", "Светлая"], "Тёмная")
+        def _theme(v):
+            ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(v, "light"))
+        choice(c, "Тема", "theme", ["Светлая", "Тёмная", "Системная"], "Светлая", on_change=_theme)
         c = section("ЗАПУСК")
         srow = ctk.CTkFrame(c, fg_color="transparent"); srow.pack(fill="x", padx=14, pady=8)
-        ctk.CTkLabel(srow, text="Автозапуск с Windows", font=ctk.CTkFont(FONT, 13)).pack(side="left")
+        ctk.CTkLabel(srow, text="Автозапуск с Windows", font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
         asv = ctk.StringVar(value="on" if get_autostart() else "off")
         ctk.CTkSwitch(srow, text="", variable=asv, onvalue="on", offvalue="off",
                       command=lambda: set_autostart(asv.get() == "on"), progress_color=ACC).pack(side="right")
@@ -853,7 +900,7 @@ class JeffTUN:
 
 
 def main():
-    ctk.set_appearance_mode("dark"); ctk.set_default_color_theme("blue")
+    ctk.set_appearance_mode("light"); ctk.set_default_color_theme("blue")
     root = ctk.CTk(); root.configure(fg_color=BG)
     JeffTUN(root); root.mainloop()
 
