@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.6"
+APP_VERSION = "3.7"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -451,20 +451,14 @@ class JeffTUN:
             row = ctk.CTkFrame(h, fg_color="transparent"); row.pack()
             ctk.CTkLabel(row, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
             ctk.CTkLabel(row, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
-        # круглая кнопка с мягкой тенью-кольцом (нарисованная иконка питания)
-        pwrap = ctk.CTkFrame(right, fg_color="transparent")
-        pwrap.grid(row=1, column=0, pady=14)
-        self.power_ring = ctk.CTkFrame(pwrap, width=168, height=168, corner_radius=84,
-                                       fg_color=CARD2)
-        self.power_ring.pack()
-        self.power_ring.pack_propagate(False)
-        self._icon_off = self._power_icon(MUTED, 72)
-        self._icon_on = self._power_icon("#ffffff", 72)
-        self.power = ctk.CTkButton(self.power_ring, text="", image=self._icon_off,
-                                   width=140, height=140, corner_radius=70,
-                                   fg_color=CARD, hover_color=POWER_HOVER, border_width=1,
+        # чистая круглая кнопка питания (без кольца — чтобы не было «овала»)
+        self._icon_off = self._power_icon(MUTED, 64)
+        self._icon_on = self._power_icon("#ffffff", 64)
+        self.power = ctk.CTkButton(right, text="", image=self._icon_off,
+                                   width=132, height=132, corner_radius=66,
+                                   fg_color=CARD, hover_color=POWER_HOVER, border_width=2,
                                    border_color=BORDER, command=self.toggle)
-        self.power.place(relx=0.5, rely=0.5, anchor="center")
+        self.power.grid(row=1, column=0, pady=16)
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 15, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(2, 2))
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
@@ -656,8 +650,7 @@ class JeffTUN:
         try: set_system_proxy(True)
         except Exception: pass
         self.connected = True
-        self.power.configure(fg_color=OK, hover_color="#1eae54", image=self._icon_on, border_width=0)
-        self.power_ring.configure(fg_color="#123a24")
+        self.power.configure(fg_color=OK, hover_color="#28b866", image=self._icon_on, border_color=OK)
         self.status.configure(text="Подключено", text_color=OK)
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
@@ -670,8 +663,7 @@ class JeffTUN:
             except Exception: pass
             self.proc = None
         self.connected = False
-        self.power.configure(fg_color=CARD, hover_color=POWER_HOVER, image=self._icon_off, border_width=1)
-        self.power_ring.configure(fg_color=CARD2)
+        self.power.configure(fg_color=CARD, hover_color=POWER_HOVER, image=self._icon_off, border_color=BORDER)
         self.status.configure(text="Отключено", text_color=MUTED)
 
     # ── Сохранение ──
@@ -902,9 +894,20 @@ class JeffTUN:
 
 
 def main():
-    ctk.set_appearance_mode("dark"); ctk.set_default_color_theme("blue")
-    root = ctk.CTk(); root.configure(fg_color=BG)
-    JeffTUN(root); root.mainloop()
+    try:
+        ctk.set_appearance_mode("dark"); ctk.set_default_color_theme("blue")
+        root = ctk.CTk(); root.configure(fg_color=BG)
+        JeffTUN(root); root.mainloop()
+    except Exception:
+        # Ни при каких сбоях (в т.ч. после самообновления) не показываем
+        # окно «Failed to execute script» — тихо логируем в файл рядом с exe.
+        try:
+            import traceback
+            log = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "jefftun_error.log")
+            with open(log, "a", encoding="utf-8") as f:
+                f.write(traceback.format_exc() + "\n")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
