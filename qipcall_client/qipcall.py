@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.1"
+APP_VERSION = "4.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -444,7 +444,9 @@ class JeffTUN:
         ctk.CTkButton(srow, text="⟳", width=38, height=38, corner_radius=12, fg_color=CARD,
                       hover_color=CARD2, text_color=ACC, border_width=1, border_color=BORDER,
                       command=self.update_sub).pack(side="left", padx=(6, 0))
-        self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent")
+        self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
+                                                  scrollbar_button_color=PANEL,
+                                                  scrollbar_button_hover_color=PANEL)
         self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
         self.empty_lbl = ctk.CTkLabel(self.server_list,
             text="Добавь ключ или подписку —\nкнопка ＋ слева или «Вставить» ниже",
@@ -492,7 +494,9 @@ class JeffTUN:
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         self.cur_lbl.grid(row=3, column=0, sticky="n")
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=4, column=0, pady=(0, 20))
-        # пинг измеряется автоматически при выборе сервера — отдельная кнопка не нужна
+        ctk.CTkButton(bottom, text="⚡ Тест пинга", height=36, corner_radius=18,
+                      fg_color=ACC, hover_color=ACC_D, text_color="white",
+                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 6))
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=MUTED)
         self.ping_lbl.pack()
         ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn", font=ctk.CTkFont(FONT, 9),
