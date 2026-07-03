@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.5"
+APP_VERSION = "3.6"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -28,20 +28,25 @@ SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
-# Светлая iOS-палитра (чистая, приятная глазу)
-BG     = "#eef1f6"   # общий фон
-SIDE   = "#e5e8ef"   # левая панель
-PANEL  = "#f6f8fb"   # средняя панель
-CARD   = "#ffffff"   # карточки
-CARD2  = "#eef1f6"   # выбранная/вторичная
-BORDER = "#e0e4ec"   # тонкие рамки
-ACC    = "#5b6cff"   # мягкий индиго
-ACC_D  = "#4a5ae6"
-TEXT   = "#1d1d24"
-MUTED  = "#8a8d99"
-OK     = "#22c55e"
-WARN   = "#f5a623"
-DANGER = "#ff5a5a"
+# Тёмная iOS-палитра (по умолчанию)
+BG      = "#0f1116"   # общий фон
+SIDE    = "#161922"   # левая панель
+PANEL   = "#13151c"   # средняя панель
+CARD    = "#1c1f29"   # карточки
+CARD2   = "#262a37"   # выбранная/вторичная
+BORDER  = "#2b2f3c"   # тонкие рамки
+ACC     = "#6c7bff"   # индиго
+ACC_D   = "#5867ec"
+TEXT    = "#eceef4"
+MUTED   = "#8b8f9e"
+OK      = "#34d17a"
+WARN    = "#f5c451"
+DANGER  = "#ff5c5c"
+# Спец-цвета карточек (адаптированы под тёмную)
+SUBCARD   = "#1a1f36"
+SUBBORDER = "#2e3660"
+UPDCARD   = "#12291b"
+POWER_HOVER = "#242836"
 
 
 def resource_path(name):
@@ -370,7 +375,7 @@ class JeffTUN:
         self.sub_info = {}
         self._flag_cache = {}
 
-        root.title(APP_NAME); root.geometry("900x600"); root.minsize(820, 540)
+        root.title(APP_NAME); root.geometry("780x520"); root.minsize(740, 480)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -437,7 +442,7 @@ class JeffTUN:
             if os.path.exists(lp):
                 im = Image.open(lp)
                 ratio = im.width / im.height
-                img = ctk.CTkImage(im, size=(int(64 * ratio), 64))
+                img = ctk.CTkImage(im, size=(int(48 * ratio), 48))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
         except Exception:
@@ -457,7 +462,7 @@ class JeffTUN:
         self._icon_on = self._power_icon("#ffffff", 72)
         self.power = ctk.CTkButton(self.power_ring, text="", image=self._icon_off,
                                    width=140, height=140, corner_radius=70,
-                                   fg_color=CARD, hover_color="#f0f2f7", border_width=1,
+                                   fg_color=CARD, hover_color=POWER_HOVER, border_width=1,
                                    border_color=BORDER, command=self.toggle)
         self.power.place(relx=0.5, rely=0.5, anchor="center")
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 15, "bold"), text_color=MUTED)
@@ -465,11 +470,8 @@ class JeffTUN:
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         self.cur_lbl.grid(row=3, column=0, sticky="n")
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=4, column=0, pady=(0, 20))
-        self.ping_btn = ctk.CTkButton(bottom, text="Тест пинга", height=38, width=160, corner_radius=19,
-                                      fg_color=ACC, hover_color=ACC_D, font=ctk.CTkFont(FONT, 13, "bold"),
-                                      command=self.do_ping)
-        self.ping_btn.pack(pady=4)
-        self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
+        # пинг измеряется автоматически при выборе сервера — отдельная кнопка не нужна
+        self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=MUTED)
         self.ping_lbl.pack()
         ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn", font=ctk.CTkFont(FONT, 9),
                      text_color="#48484e").grid(row=5, column=0, pady=(0, 8))
@@ -479,8 +481,8 @@ class JeffTUN:
 
         self.load_saved()
         # применяем сохранённую тему
-        _t = self.prefs.get("theme", "Светлая")
-        ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(_t, "light"))
+        _t = self.prefs.get("theme", "Тёмная")
+        ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(_t, "dark"))
         self.render_servers()
         self.check_update()
         if self.autoconnect and self.links:
@@ -559,8 +561,8 @@ class JeffTUN:
         # Карточка подписки (тариф/остаток/дни)
         if self.sub_info:
             si = self.sub_info
-            card = ctk.CTkFrame(self.server_list, fg_color="#eef0ff", corner_radius=12,
-                                border_width=1, border_color="#d6d9f5")
+            card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
+                                border_width=1, border_color=SUBBORDER)
             card.pack(fill="x", pady=(0, 8))
             ctk.CTkLabel(card, text=si.get("title", "JeffTUN VPN"),
                          font=ctk.CTkFont(FONT, 14, "bold"), text_color=ACC, anchor="w").pack(anchor="w", padx=14, pady=(10, 2))
@@ -655,7 +657,7 @@ class JeffTUN:
         except Exception: pass
         self.connected = True
         self.power.configure(fg_color=OK, hover_color="#1eae54", image=self._icon_on, border_width=0)
-        self.power_ring.configure(fg_color="#c7f0d5")
+        self.power_ring.configure(fg_color="#123a24")
         self.status.configure(text="Подключено", text_color=OK)
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
@@ -668,7 +670,7 @@ class JeffTUN:
             except Exception: pass
             self.proc = None
         self.connected = False
-        self.power.configure(fg_color=CARD, hover_color="#f0f2f7", image=self._icon_off, border_width=1)
+        self.power.configure(fg_color=CARD, hover_color=POWER_HOVER, image=self._icon_off, border_width=1)
         self.power_ring.configure(fg_color=CARD2)
         self.status.configure(text="Отключено", text_color=MUTED)
 
@@ -732,7 +734,7 @@ class JeffTUN:
     def _show_update(self, latest):
         self._latest = latest
         if self.update_bar: return
-        self.update_bar = ctk.CTkFrame(self.root, fg_color="#e8f9ee", corner_radius=14, border_width=1, border_color=OK)
+        self.update_bar = ctk.CTkFrame(self.root, fg_color=UPDCARD, corner_radius=14, border_width=1, border_color=OK)
         self.update_bar.place(relx=0.5, rely=0.02, anchor="n")
         self._ulbl = ctk.CTkLabel(self.update_bar, text=f"🎉 Новая версия {latest}",
                                   font=ctk.CTkFont(FONT, 12, "bold"), text_color="#1a8f43")
@@ -795,7 +797,7 @@ class JeffTUN:
                 bat = cur + "_upd.bat"
                 # Работающий exe нельзя удалить, но МОЖНО переименовать → так безопасно
                 with open(bat, "w") as f:
-                    f.write("@echo off\r\nping 127.0.0.1 -n 3 >nul\r\n"
+                    f.write("@echo off\r\nping 127.0.0.1 -n 5 >nul\r\n"
                             ":retry\r\n"
                             f'if exist "{cur}" (move /y "{cur}" "{old}" >nul 2>&1)\r\n'
                             f'move /y "{new}" "{cur}" >nul 2>&1\r\n'
@@ -850,7 +852,7 @@ class JeffTUN:
         c = section("ИНТЕРФЕЙС")
         def _theme(v):
             ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(v, "light"))
-        choice(c, "Тема", "theme", ["Светлая", "Тёмная", "Системная"], "Светлая", on_change=_theme)
+        choice(c, "Тема", "theme", ["Тёмная", "Светлая", "Системная"], "Тёмная", on_change=_theme)
         c = section("ЗАПУСК")
         srow = ctk.CTkFrame(c, fg_color="transparent"); srow.pack(fill="x", padx=14, pady=8)
         ctk.CTkLabel(srow, text="Автозапуск с Windows", font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
@@ -900,7 +902,7 @@ class JeffTUN:
 
 
 def main():
-    ctk.set_appearance_mode("light"); ctk.set_default_color_theme("blue")
+    ctk.set_appearance_mode("dark"); ctk.set_default_color_theme("blue")
     root = ctk.CTk(); root.configure(fg_color=BG)
     JeffTUN(root); root.mainloop()
 
