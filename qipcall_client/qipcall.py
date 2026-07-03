@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.4"
+APP_VERSION = "4.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -121,8 +121,9 @@ def clean_name(name):
     n = (name or "").strip()
     # убираем ведущие эмодзи-флаги и служебные символы
     n = re.sub(r"^[\U0001F1E6-\U0001F1FF\s\-_|·•]+", "", n)
-    # 'frFrance' / 'fr France' / 'FR - France' → 'France'
-    n = re.sub(r"^[a-zA-Z]{2}[\s\-_|·]*(?=[A-ZА-Я])", "", n)
+    # 'frFrance' → 'France': только СТРОЧНЫЙ код-префикс перед заглавной буквой
+    # (не трогаем 'USA', 'UK' и т.п. — они уже заглавные)
+    n = re.sub(r"^[a-z]{2}(?=[A-ZА-Я])", "", n)
     return n.strip() or (name or "").strip()
 
 
@@ -454,6 +455,11 @@ class JeffTUN:
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
+        # полностью прячем полосу прокрутки (та самая «синяя линия»); колесо мыши работает
+        try:
+            self.server_list._scrollbar.grid_forget()
+        except Exception:
+            pass
         self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
         self.empty_lbl = ctk.CTkLabel(self.server_list,
             text="Добавь ключ или подписку —\nкнопка ＋ слева или «Вставить» ниже",

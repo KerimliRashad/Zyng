@@ -80,6 +80,12 @@ jobs:
               </tr>
             </table>
 
+            <blockquote>
+            <b>⚠️ Windows ругается «SmartScreen защитил ваш компьютер»?</b><br>
+            Это нормально для новых программ без платной подписи. Нажми
+            <b>«Подробнее» → «Выполнить в любом случае»</b> — приложение безопасно.
+            </blockquote>
+
             <p align="center"><sub>macOS/Linux: <code>chmod +x</code> и запускай. Обновления ставятся внутри приложения.</sub></p>
           fail_on_unmatched_files: false
         env:
