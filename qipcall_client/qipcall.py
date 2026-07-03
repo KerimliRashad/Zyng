@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.9"
+APP_VERSION = "5.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -378,6 +378,14 @@ def _parse_userinfo(userinfo, title):
     return d
 
 
+def _sub_title(url):
+    try:
+        h = urlparse(url).hostname or url
+        return h.replace("www.", "")[:22]
+    except Exception:
+        return "Подписка"
+
+
 def tcp_ping(host, port, timeout=3.0):
     """Берём лучший из 3 замеров TCP-хендшейка — стабильнее и точнее."""
     best = None
@@ -402,8 +410,12 @@ class JeffTUN:
         self.root = root
         self.proc = None
         self.connected = False
-        self.links = []
-        self.sub_url = ""
+        self.links = []            # текущий отображаемый список (по активной вкладке)
+        self.manual_links = []     # ключи, добавленные вручную
+        self.subs = []             # [{"url","title"}] — несколько подписок
+        self.sub_cache = {}        # url -> {"links":[...], "info":{...}}
+        self.active_tab = "all"    # "all" | "manual" | url подписки
+        self.sub_url = ""          # совместимость (последняя подписка)
         self.autoconnect = False
         self.prefs = {}
         self.selected_idx = 0
@@ -411,6 +423,7 @@ class JeffTUN:
         self._flag_cache = {}
         self.pings = {}
         self._ping_lbls = {}
+        self.side_collapsed = False
 
         root.title(APP_NAME); root.geometry("780x520"); root.minsize(740, 480)
         try:
@@ -438,13 +451,20 @@ class JeffTUN:
         sicon("🗑", self.clear_servers)
         ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
         sicon("ℹ", self._about)
+        self.side = side
 
         # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
         mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
         mid.grid(row=0, column=1, sticky="nsew")
-        mid.grid_rowconfigure(2, weight=1); mid.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(mid, text="Серверы", font=ctk.CTkFont(FONT, 24, "bold"),
-                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=22, pady=(20, 8))
+        mid.grid_rowconfigure(3, weight=1); mid.grid_columnconfigure(0, weight=1)
+        # заголовок + кнопка «свернуть боковую панель»
+        hrow = ctk.CTkFrame(mid, fg_color="transparent"); hrow.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 6))
+        hrow.grid_columnconfigure(1, weight=1)
+        ctk.CTkButton(hrow, text="⟨", width=34, height=34, corner_radius=10, fg_color=CARD,
+                      hover_color=CARD2, text_color=TEXT, font=ctk.CTkFont(FONT, 16),
+                      command=self.toggle_side).grid(row=0, column=0, sticky="w", padx=(4, 8))
+        ctk.CTkLabel(hrow, text="Серверы", font=ctk.CTkFont(FONT, 22, "bold"),
+                     text_color=TEXT).grid(row=0, column=1, sticky="w")
         srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18)
         self.search = ctk.CTkEntry(srow, placeholder_text="Поиск…", height=38, corner_radius=12,
                                    fg_color=CARD, border_width=0, text_color=TEXT)
@@ -453,6 +473,9 @@ class JeffTUN:
         ctk.CTkButton(srow, text="⟳", width=38, height=38, corner_radius=12, fg_color=CARD,
                       hover_color=CARD2, text_color=ACC, border_width=0,
                       command=self.update_sub).pack(side="left", padx=(6, 0))
+        # ── ВКЛАДКИ подписок ──
+        self.tabs_frame = ctk.CTkFrame(mid, fg_color="transparent")
+        self.tabs_frame.grid(row=2, column=0, sticky="ew", padx=14, pady=(8, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
@@ -461,11 +484,11 @@ class JeffTUN:
             self.server_list._scrollbar.grid_forget()
         except Exception:
             pass
-        self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
+        self.server_list.grid(row=3, column=0, sticky="nsew", padx=14, pady=8)
         self.empty_lbl = ctk.CTkLabel(self.server_list,
             text="Добавь ключ или подписку —\nкнопка ＋ слева или «Вставить» ниже",
             font=ctk.CTkFont(FONT, 12), text_color=MUTED)
-        brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=3, column=0, sticky="ew", padx=18, pady=(4, 16))
+        brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=4, column=0, sticky="ew", padx=18, pady=(4, 16))
         ctk.CTkButton(brow, text="📋 Вставить", height=36, corner_radius=18, fg_color=ACC, hover_color=ACC_D,
                       text_color="white", font=ctk.CTkFont(FONT, 12, "bold"), command=self.paste_key).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(brow, text="🔗 Подписка", height=36, corner_radius=18, fg_color=CARD, hover_color=CARD2,
@@ -486,7 +509,7 @@ class JeffTUN:
             if os.path.exists(lp):
                 im = Image.open(lp)
                 ratio = im.width / im.height
-                img = ctk.CTkImage(im, size=(int(48 * ratio), 48))
+                img = ctk.CTkImage(im, size=(int(58 * ratio), 58))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
         except Exception:
@@ -536,12 +559,20 @@ class JeffTUN:
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     # ── Добавление ключа/подписки ──
+    def _add_manual(self, keys):
+        existing = set(self.manual_links)
+        added = [k for k in keys if "://" in k and k not in existing]
+        self.manual_links += added
+        self.active_tab = "all"
+        self.selected_idx = 0
+        self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
+        return len(added)
+
     def add_key(self):
         dlg = ctk.CTkInputDialog(text="Вставь ключ (vless/vmess/trojan/ss):", title="Добавить ключ")
         v = dlg.get_input()
         if v and "://" in v:
-            self.links = [l.strip() for l in (self.links + [v.strip()]) if "://" in l]
-            self.selected_idx = 0; self.render_servers(); self.save(silent=True); self.do_ping()
+            self._add_manual([v.strip()])
 
     def paste_key(self):
         try: data = self.root.clipboard_get()
@@ -549,22 +580,36 @@ class JeffTUN:
         lines = [l.strip() for l in data.splitlines() if "://" in l and not l.strip().startswith("http")]
         subs = [l.strip() for l in data.splitlines() if l.strip().startswith("http")]
         if subs:
-            self.sub_url = subs[0]; self._pull_sub(); return
+            self._add_sub_url(subs[0]); return
         if not lines:
             self._flash("В буфере нет ключа", DANGER); return
-        # ДОБАВЛЯЕМ к списку (не затираем), убираем дубли
-        existing = set(self.links)
-        added = [l for l in lines if l not in existing]
-        self.links = self.links + added
-        self.selected_idx = 0
-        self.render_servers(); self.save(silent=True); self.do_ping()
-        self._flash(f"Добавлено серверов: {len(added)}", OK)
+        n = self._add_manual(lines)
+        self._flash(f"Добавлено серверов: {n}", OK)
 
     def add_sub(self):
         dlg = ctk.CTkInputDialog(text="Вставь ссылку-подписку (https://…):", title="Подписка")
         v = dlg.get_input()
         if v and v.startswith("http"):
-            self.sub_url = v.strip(); self._pull_sub()
+            self._add_sub_url(v.strip())
+
+    def _add_sub_url(self, url):
+        if any(s["url"] == url for s in self.subs):
+            self._flash("Подписка уже добавлена", WARN)
+        else:
+            self.subs.append({"url": url, "title": _sub_title(url)})
+        self.sub_url = url
+        self._flash("Загружаю подписку…", MUTED); self.root.update()
+        try:
+            links, info = fetch_subscription(url)
+            self.sub_cache[url] = {"links": links, "info": info}
+            for s in self.subs:
+                if s["url"] == url and info.get("title"):
+                    s["title"] = info["title"]
+            self.active_tab = url; self.selected_idx = 0
+            self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
+            self._flash(f"Серверов: {len(links)} ✓", OK if links else DANGER)
+        except Exception as e:
+            self._flash(f"Ошибка: {e}", DANGER)
 
     def _flash(self, txt, color=MUTED):
         self.status.configure(text=txt, text_color=color)
@@ -604,8 +649,36 @@ class JeffTUN:
         self._flag_cache[code] = img
         return img
 
+    def toggle_side(self):
+        self.side_collapsed = not self.side_collapsed
+        if self.side_collapsed:
+            self.side.grid_remove()
+        else:
+            self.side.grid()
+
+    def render_tabs(self):
+        for w in self.tabs_frame.winfo_children():
+            w.destroy()
+        # вкладки показываем только если есть что переключать
+        if not self.subs and not self.manual_links:
+            return
+        tabs = [("all", "Все")]
+        if self.manual_links:
+            tabs.append(("manual", "Мои ключи"))
+        for s in self.subs:
+            tabs.append((s["url"], s.get("title") or "Подписка"))
+        if len(tabs) <= 1:
+            return
+        for key, label in tabs:
+            act = (self.active_tab == key)
+            ctk.CTkButton(self.tabs_frame, text=label, height=28, corner_radius=14,
+                          fg_color=(ACC if act else CARD), hover_color=(ACC_D if act else CARD2),
+                          text_color=("white" if act else MUTED), font=ctk.CTkFont(FONT, 11, "bold"),
+                          command=lambda k=key: self.switch_tab(k)).pack(side="left", padx=(0, 6), pady=2)
+
     # ── Список серверов ──
     def render_servers(self):
+        self.render_tabs()
         for w in self.server_list.winfo_children():
             w.destroy()
         q = (self.search.get() if hasattr(self, "search") else "").lower().strip()
@@ -680,18 +753,17 @@ class JeffTUN:
             if not (0 <= idx < len(self.links)):
                 return
             was_current = (idx == self.selected_idx)
-            del self.links[idx]
-            # переиндексация пингов: ключи после удалённого сдвигаются на 1
-            self.pings = {(k - 1 if k > idx else k): v
-                          for k, v in self.pings.items() if k != idx}
-            if self.selected_idx >= len(self.links):
-                self.selected_idx = max(0, len(self.links) - 1)
-            elif self.selected_idx > idx:
-                self.selected_idx -= 1
+            link = self.links[idx]
+            # удаляем это значение из источника (ручные ключи и все подписки)
+            self.manual_links = [l for l in self.manual_links if l != link]
+            for url, c in self.sub_cache.items():
+                c["links"] = [l for l in c.get("links", []) if l != link]
+            self.pings = {}
             if was_current and self.connected:
                 self.disconnect()
+            self._rebuild_links()
             self.render_servers()
-            self.save(silent=True)
+            self.save(silent=True); self.do_ping()
             self._flash("Сервер удалён", MUTED)
         except Exception as e:
             self._flash(f"Не удалось удалить: {e}", DANGER)
@@ -701,12 +773,20 @@ class JeffTUN:
             if not self.links:
                 self._flash("Список уже пуст", MUTED); return
             if self.connected: self.disconnect()
-            self.links = []; self.pings = {}; self.selected_idx = 0
-            # чистим и подписку, чтобы удалённые серверы не вернулись при обновлении
-            self.sub_url = ""; self.sub_info = {}
-            self.render_servers()
+            # чистим ТОЛЬКО активную вкладку, чтобы можно было удалять по подпискам
+            tab = self.active_tab
+            if tab == "manual":
+                self.manual_links = []
+            elif tab != "all" and tab in self.sub_cache:
+                self.subs = [s for s in self.subs if s["url"] != tab]
+                self.sub_cache.pop(tab, None)
+                self.active_tab = "all"
+            else:
+                self.manual_links = []; self.subs = []; self.sub_cache = {}
+            self.pings = {}; self.selected_idx = 0
+            self._rebuild_links(); self.render_servers()
             self.save(silent=True)
-            self._flash("Список очищен", MUTED)
+            self._flash("Очищено", MUTED)
         except Exception as e:
             self._flash(f"Ошибка: {e}", DANGER)
 
@@ -795,7 +875,9 @@ class JeffTUN:
     def save(self, silent=False):
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump({"links": self.links, "sub_url": self.sub_url,
+                json.dump({"manual_links": self.manual_links,
+                           "subs": self.subs, "sub_cache": self.sub_cache,
+                           "active_tab": self.active_tab,
                            "autoconnect": self.autoconnect, "prefs": self.prefs}, f)
             if not silent: self._flash("Сохранено ✓", OK)
         except Exception:
@@ -805,29 +887,67 @@ class JeffTUN:
         try:
             with open(CONFIG_FILE, encoding="utf-8") as f:
                 d = json.load(f)
-                self.links = d.get("links", []) or []
-                self.sub_url = d.get("sub_url", "")
+                self.manual_links = d.get("manual_links", []) or []
+                self.subs = d.get("subs", []) or []
+                self.sub_cache = d.get("sub_cache", {}) or {}
+                self.active_tab = d.get("active_tab", "all") or "all"
                 self.autoconnect = bool(d.get("autoconnect", False))
                 self.prefs = d.get("prefs", {}) or {}
+                # миграция со старого формата (одна подписка + links)
+                old_links = d.get("links", []) or []
+                old_sub = d.get("sub_url", "")
+                if old_sub and not self.subs:
+                    self.subs = [{"url": old_sub, "title": _sub_title(old_sub)}]
+                    self.sub_cache[old_sub] = {"links": old_links, "info": {}}
+                elif old_links and not self.manual_links and not self.subs:
+                    self.manual_links = old_links
         except Exception:
             pass
+        self._rebuild_links()
+
+    def _rebuild_links(self):
+        """Собирает self.links по активной вкладке из ручных ключей и подписок."""
+        tab = self.active_tab
+        if tab == "manual":
+            links = list(self.manual_links)
+            self.sub_info = {}
+        elif tab != "all" and any(s["url"] == tab for s in self.subs):
+            links = list(self.sub_cache.get(tab, {}).get("links", []))
+            self.sub_info = self.sub_cache.get(tab, {}).get("info", {})
+        else:  # all
+            links = list(self.manual_links)
+            for s in self.subs:
+                links += self.sub_cache.get(s["url"], {}).get("links", [])
+            self.sub_info = self.sub_cache.get(self.subs[-1]["url"], {}).get("info", {}) if self.subs else {}
+        self.links = links
+        if self.selected_idx >= len(self.links):
+            self.selected_idx = max(0, len(self.links) - 1)
+
+    def switch_tab(self, tab):
+        self.active_tab = tab
+        self.selected_idx = 0
+        self._rebuild_links(); self.render_servers(); self.do_ping(); self.save(silent=True)
 
     def update_sub(self):
-        if not self.sub_url:
-            self._flash("Нет подписки", DANGER); return
-        self._pull_sub(reconnect=True)
+        if not self.subs:
+            self._flash("Нет подписок", DANGER); return
+        self._pull_all_subs(reconnect=True)
 
-    def _pull_sub(self, reconnect=False):
-        self._flash("Обновление подписки…", MUTED); self.root.update()
-        try:
-            self.links, self.sub_info = fetch_subscription(self.sub_url)
-            if not self.links:
-                self._flash("Подписка пустая", DANGER); return
-            self.selected_idx = 0; self.render_servers(); self.save(silent=True); self.do_ping()
-            self._flash(f"Серверов: {len(self.links)} ✓", OK)
-            if reconnect and self.connected: self.disconnect(); self.connect()
-        except Exception as e:
-            self._flash(f"Ошибка: {e}", DANGER)
+    def _pull_all_subs(self, reconnect=False):
+        self._flash("Обновление подписок…", MUTED); self.root.update()
+        ok = 0
+        for s in self.subs:
+            try:
+                links, info = fetch_subscription(s["url"])
+                if links:
+                    self.sub_cache[s["url"]] = {"links": links, "info": info}
+                    if info.get("title"): s["title"] = info["title"]
+                    ok += 1
+            except Exception:
+                pass
+        self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
+        self._flash(f"Обновлено подписок: {ok}", OK if ok else DANGER)
+        if reconnect and self.connected: self.disconnect(); self.connect()
 
     # ── Обновление приложения ──
     def check_update(self):
@@ -1024,7 +1144,8 @@ class JeffTUN:
 
     def _reset_key(self):
         if not messagebox.askyesno(APP_NAME, "Удалить все ключи?"): return
-        self.links = []; self.sub_url = ""; self.selected_idx = 0; self.render_servers()
+        self.links = []; self.manual_links = []; self.subs = []; self.sub_cache = {}
+        self.sub_url = ""; self.active_tab = "all"; self.selected_idx = 0; self.render_servers()
         try: os.remove(CONFIG_FILE)
         except Exception: pass
 
