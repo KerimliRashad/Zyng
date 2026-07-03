@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.0"
+APP_VERSION = "4.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/qipcall-latest"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/qipcall-latest"
@@ -267,25 +267,47 @@ def _set_linux_proxy(enable):
         g("set", "org.gnome.system.proxy", "mode", "none")
 
 
+def _linux_autostart_path():
+    d = os.path.join(os.path.expanduser("~"), ".config", "autostart")
+    return os.path.join(d, "jefftun.desktop")
+
+
 def set_autostart(enable):
-    if os.name != "nt" or not getattr(sys, "frozen", False): return
-    import winreg
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
-    if enable: winreg.SetValueEx(key, "JeffTUN", 0, winreg.REG_SZ, f'"{sys.executable}"')
-    else:
-        try: winreg.DeleteValue(key, "JeffTUN")
-        except Exception: pass
-    winreg.CloseKey(key)
+    if not getattr(sys, "frozen", False): return
+    if os.name == "nt":
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+        if enable: winreg.SetValueEx(key, "JeffTUN", 0, winreg.REG_SZ, f'"{sys.executable}"')
+        else:
+            try: winreg.DeleteValue(key, "JeffTUN")
+            except Exception: pass
+        winreg.CloseKey(key)
+    elif sys.platform != "darwin":
+        # Linux: файл .desktop в ~/.config/autostart
+        path = _linux_autostart_path()
+        try:
+            if enable:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("[Desktop Entry]\nType=Application\nName=JeffTUN VPN\n"
+                            f"Exec=\"{sys.executable}\"\nX-GNOME-Autostart-enabled=true\nTerminal=false\n")
+            elif os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
 
 
 def get_autostart():
-    if os.name != "nt": return False
-    try:
-        import winreg
-        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run")
-        winreg.QueryValueEx(k, "JeffTUN"); winreg.CloseKey(k); return True
-    except Exception:
-        return False
+    if os.name == "nt":
+        try:
+            import winreg
+            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run")
+            winreg.QueryValueEx(k, "JeffTUN"); winreg.CloseKey(k); return True
+        except Exception:
+            return False
+    if sys.platform != "darwin":
+        return os.path.exists(_linux_autostart_path())
+    return False
 
 
 def fetch_subscription(url):
@@ -900,7 +922,7 @@ class JeffTUN:
         choice(c, "Тема", "theme", ["Тёмная", "Светлая", "Системная"], "Тёмная", on_change=_theme)
         c = section("ЗАПУСК")
         srow = ctk.CTkFrame(c, fg_color="transparent"); srow.pack(fill="x", padx=14, pady=8)
-        ctk.CTkLabel(srow, text="Автозапуск с Windows", font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
+        ctk.CTkLabel(srow, text="Автозапуск при входе", font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
         asv = ctk.StringVar(value="on" if get_autostart() else "off")
         ctk.CTkSwitch(srow, text="", variable=asv, onvalue="on", offvalue="off",
                       command=lambda: set_autostart(asv.get() == "on"), progress_color=ACC).pack(side="right")
