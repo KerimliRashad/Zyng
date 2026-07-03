@@ -9,16 +9,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── WINDOWS ──────────────────────────────────────────────────────────────
+  # ── WINDOWS (Python 3.8 — совместимость с Windows 7 / 8 / 8.1 / 10 / 11) ───
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.8'   # последняя версия Python с поддержкой Windows 7
       - name: Install deps
-        run: pip install pyinstaller customtkinter pillow
+        # версии пакетов, ещё поддерживающие Python 3.8
+        run: pip install "pyinstaller==6.6.0" "customtkinter==5.2.2" "pillow<11" "darkdetect"
       - name: Download xray-core (Windows 64-bit)
         shell: pwsh
         run: |
