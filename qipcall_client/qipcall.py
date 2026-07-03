@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.5.1"
+APP_VERSION = "5.5.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -489,11 +489,9 @@ class JeffTUN:
             text="Добавь ключ или подписку —\nкнопка ＋ слева или «Вставить» ниже",
             font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=4, column=0, sticky="ew", padx=18, pady=(4, 16))
-        ctk.CTkButton(brow, text="📋 Вставить", height=36, corner_radius=18, fg_color=ACC, hover_color=ACC_D,
-                      text_color="white", font=ctk.CTkFont(FONT, 12, "bold"), command=self.paste_key).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ctk.CTkButton(brow, text="🔗 Подписка", height=36, corner_radius=18, fg_color=CARD, hover_color=CARD2,
-                      text_color=TEXT, border_width=0,
-                      font=ctk.CTkFont(FONT, 12, "bold"), command=self.add_sub).pack(side="left", fill="x", expand=True, padx=(5, 0))
+        ctk.CTkButton(brow, text="＋  Вставить ключ / подписку", height=38, corner_radius=19,
+                      fg_color=ACC, hover_color=ACC_D, text_color="white",
+                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.paste_key).pack(fill="x", expand=True)
 
         # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
         right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
@@ -559,7 +557,9 @@ class JeffTUN:
     # ── Добавление ключа/подписки ──
     def _add_manual(self, keys):
         existing = set(self.manual_links)
-        added = [k for k in keys if "://" in k and k not in existing]
+        # принимаем только настоящие ключи, http(s)-ссылки сюда не попадают
+        ok = ("vless://", "vmess://", "trojan://", "ss://")
+        added = [k for k in keys if k.startswith(ok) and k not in existing]
         self.manual_links += added
         self.active_tab = "all"
         self.selected_idx = 0
@@ -567,10 +567,18 @@ class JeffTUN:
         return len(added)
 
     def add_key(self):
-        dlg = ctk.CTkInputDialog(text="Вставь ключ (vless/vmess/trojan/ss):", title="Добавить ключ")
-        v = dlg.get_input()
-        if v and "://" in v:
-            self._add_manual([v.strip()])
+        dlg = ctk.CTkInputDialog(text="Вставь ключ (vless/vmess/trojan/ss) или ссылку-подписку:", title="Добавить")
+        v = (dlg.get_input() or "").strip()
+        if not v:
+            return
+        # ссылка-подписка → отдельным разделом, а не как «битый ключ»
+        if v.startswith("http://") or v.startswith("https://"):
+            self._add_sub_url(v); return
+        if "://" in v:
+            n = self._add_manual([v])
+            self._flash(f"Добавлено: {n}" if n else "Такой ключ уже есть", OK if n else WARN)
+        else:
+            self._flash("Не похоже на ключ или ссылку", DANGER)
 
     def paste_key(self):
         try: data = self.root.clipboard_get()
@@ -826,15 +834,27 @@ class JeffTUN:
                             self.ping_lbl.configure(text=f"Пинг: {ms} мс", text_color=col)
                     self.root.after(0, show)
                 threading.Thread(target=w0, daemon=True).start()
-        # пингуем все серверы для списка
+        # очередь всех серверов + ограниченный пул воркеров (не спамим сокетами)
+        import queue
+        gen = getattr(self, "_ping_gen", 0) + 1
+        self._ping_gen = gen
+        q = queue.Queue()
         for i, ln in enumerate(self.links):
             host, port = link_host_port(ln)
-            if not host:
-                continue
-            def worker(idx=i, h=host, p=port):
-                ms = tcp_ping(h, p)
+            if host:
+                q.put((i, host, port))
+        def worker():
+            while gen == self._ping_gen:
+                try:
+                    idx, h, p = q.get_nowait()
+                except Exception:
+                    return
+                ms = tcp_ping(h, p, timeout=2.5)
+                if gen != self._ping_gen:
+                    return
                 self.pings[idx] = ms if ms is not None else "x"
-                self.root.after(0, lambda: self._update_ping_lbl(idx))
+                self.root.after(0, lambda i=idx: self._update_ping_lbl(i))
+        for _ in range(min(8, max(1, q.qsize()))):
             threading.Thread(target=worker, daemon=True).start()
 
     def _update_ping_lbl(self, idx):
@@ -874,6 +894,25 @@ class JeffTUN:
         self.status.configure(text="Подключено", text_color=OK)
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
+        self._start_pulse()
+
+    def _start_pulse(self):
+        # мягкая «дышащая» анимация кнопки, пока подключено
+        self._pulse_step = 0
+        self._pulse()
+
+    def _pulse(self):
+        if not self.connected:
+            return
+        # плавно меняем оттенок зелёного/рамку — эффект «дыхания»
+        greens = ["#34d17a", "#3ee089", "#2bbf6c", "#3ee089"]
+        c = greens[self._pulse_step % len(greens)]
+        try:
+            self.power.configure(border_color=c, fg_color=c)
+        except Exception:
+            pass
+        self._pulse_step += 1
+        self._pulse_after = self.root.after(600, self._pulse)
 
     def disconnect(self):
         try: set_system_proxy(False)
@@ -883,6 +922,11 @@ class JeffTUN:
             except Exception: pass
             self.proc = None
         self.connected = False
+        try:
+            if getattr(self, "_pulse_after", None):
+                self.root.after_cancel(self._pulse_after); self._pulse_after = None
+        except Exception:
+            pass
         self.power.configure(fg_color=CARD, hover_color=POWER_HOVER, image=self._icon_off, border_color=BORDER)
         self.status.configure(text="Отключено", text_color=MUTED)
 
