@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.5.5"
+APP_VERSION = "6.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -768,6 +768,41 @@ class JeffTUN:
         self._flag_cache[code] = img
         return img
 
+    def _flag_tk(self, code):
+        """Флаг как лёгкий tk.PhotoImage (для быстрых строк списка)."""
+        if not hasattr(self, "_flag_tk_cache"):
+            self._flag_tk_cache = {}
+        if code in self._flag_tk_cache:
+            return self._flag_tk_cache[code]
+        img = None
+        try:
+            path = resource_path(os.path.join("flags", code.lower() + ".png"))
+            if os.path.exists(path):
+                ph = tk.PhotoImage(file=path)
+                # flagcdn w80 (~80px) → уменьшаем до ~27px
+                if ph.width() > 40:
+                    ph = ph.subsample(max(1, ph.width() // 30))
+                img = ph
+        except Exception:
+            img = None
+        self._flag_tk_cache[code] = img
+        return img
+
+    def _wheel(self, e):
+        """Прокрутка колесом над лёгкими строками (быстро)."""
+        cv = getattr(self.server_list, "_parent_canvas", None)
+        if cv is None:
+            return
+        try:
+            if getattr(e, "num", None) == 4:
+                cv.yview_scroll(-3, "units")
+            elif getattr(e, "num", None) == 5:
+                cv.yview_scroll(3, "units")
+            else:
+                cv.yview_scroll(int(-e.delta / 40) or (-1 if e.delta > 0 else 1), "units")
+        except Exception:
+            pass
+
     def toggle_side(self):
         self.side_collapsed = not self.side_collapsed
         if self.side_collapsed:
@@ -825,35 +860,40 @@ class JeffTUN:
             self.empty_lbl.pack(pady=40)
             return
         self._ping_lbls = {}
+        # Лёгкие tk-строки вместо CTk — прокрутка в разы быстрее (нет canvas на каждый виджет)
         for i, ln in enumerate(self.links):
             raw = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
             name = clean_name(raw)
             if q and q not in name.lower():
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
-            row = ctk.CTkFrame(self.server_list, fg_color=(CARD2 if sel else CARD),
-                               corner_radius=14, border_width=0)
-            row.pack(fill="x", pady=3)
-            flag = self._flag_image(code)
-            if flag:
-                badge = ctk.CTkLabel(row, image=flag, text="", width=32, height=24)
+            bg = CARD2 if sel else CARD
+            row = tk.Frame(self.server_list, bg=bg, height=50)
+            row.pack(fill="x", pady=2); row.pack_propagate(False)
+            ph = self._flag_tk(code)
+            if ph:
+                badge = tk.Label(row, image=ph, bg=bg)
             else:
-                badge = ctk.CTkLabel(row, text=code, width=32, height=24, corner_radius=6,
-                                     fg_color=ACC, text_color="white", font=ctk.CTkFont(FONT, 11, "bold"))
-            badge.pack(side="left", padx=(14, 10), pady=11)
-            m = ctk.CTkFrame(row, fg_color="transparent"); m.pack(side="left", fill="x", expand=True)
-            ctk.CTkLabel(m, text=name, font=ctk.CTkFont(FONT, 14, "bold"), text_color=TEXT, anchor="w").pack(anchor="w")
-            ctk.CTkLabel(m, text=proto_line(ln), font=ctk.CTkFont(FONT, 10), text_color=MUTED, anchor="w").pack(anchor="w")
-            # пинг сервера справа
+                badge = tk.Label(row, text=code, bg=ACC, fg="white",
+                                 font=(FONT, 10, "bold"), width=4)
+            badge.pack(side="left", padx=(12, 10))
+            m = tk.Frame(row, bg=bg); m.pack(side="left", fill="both", expand=True)
+            l1 = tk.Label(m, text=name, bg=bg, fg=TEXT, font=(FONT, 12, "bold"), anchor="w")
+            l1.pack(anchor="w", pady=(7, 0))
+            l2 = tk.Label(m, text=proto_line(ln), bg=bg, fg=MUTED, font=(FONT, 9), anchor="w")
+            l2.pack(anchor="w")
             ptxt, pcol = self._ping_text(self.pings.get(i))
-            pl = ctk.CTkLabel(row, text=ptxt, font=ctk.CTkFont(FONT, 11, "bold"), text_color=pcol)
-            pl.pack(side="right", padx=(0, 8))
+            pl = tk.Label(row, text=ptxt, bg=bg, fg=pcol, font=(FONT, 10, "bold"))
+            pl.pack(side="right", padx=(0, 10))
             self._ping_lbls[i] = pl
-            # индикатор выбора (крестик удаления серверов убран — удаляем через подписку)
-            ctk.CTkLabel(row, text=("✓" if sel else "›"), text_color=(OK if sel else MUTED),
-                         font=ctk.CTkFont(FONT, 15, "bold")).pack(side="right", padx=(4, 12))
-            for w in (row, m, badge) + tuple(m.winfo_children()):
+            chev = tk.Label(row, text=("✓" if sel else "›"), bg=bg,
+                            fg=(OK if sel else MUTED), font=(FONT, 13, "bold"))
+            chev.pack(side="right", padx=(4, 6))
+            for w in (row, m, badge, l1, l2, pl, chev):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
+                w.bind("<MouseWheel>", self._wheel)
+                w.bind("<Button-4>", self._wheel)
+                w.bind("<Button-5>", self._wheel)
 
     @staticmethod
     def _ping_text(ms):
@@ -981,7 +1021,7 @@ class JeffTUN:
         lbl = self._ping_lbls.get(idx)
         if lbl is not None and lbl.winfo_exists():
             txt, col = self._ping_text(self.pings.get(idx))
-            lbl.configure(text=txt, text_color=col)
+            lbl.configure(text=txt, fg=col)   # tk.Label использует fg
 
     # ── Подключение ──
     def toggle(self):
