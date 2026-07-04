@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0"
+APP_VERSION = "2.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -527,7 +527,6 @@ class JeffTUN:
         ctk.CTkLabel(side, text="", height=8).pack()
         sicon("⊕", self.paste_key)
         sicon("🌐", lambda: None, active=True)
-        sicon("⚙", self.open_settings)
         ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
         sicon("ⓘ", self._about)
 
@@ -579,7 +578,7 @@ class JeffTUN:
             lp = resource_path("logo_white.png")
             if os.path.exists(lp):
                 im = Image.open(lp); ratio = im.width / im.height
-                img = ctk.CTkImage(im, size=(int(66 * ratio), 66))
+                img = ctk.CTkImage(im, size=(int(92 * ratio), 92))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
         except Exception:
@@ -609,12 +608,6 @@ class JeffTUN:
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 8))
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 8))
-        # Proxy / TUN индикатор (как в Happ)
-        mode = ctk.CTkFrame(bottom, fg_color=CARD, corner_radius=14); mode.pack()
-        ctk.CTkLabel(mode, text="Proxy", font=ctk.CTkFont(FONT, 12, "bold"),
-                     text_color=TEXT).pack(side="left", padx=(12, 6), pady=5)
-        ctk.CTkLabel(mode, text="TUN", font=ctk.CTkFont(FONT, 12, "bold"), text_color="white",
-                     fg_color=ACC, corner_radius=10, width=44).pack(side="left", padx=(0, 6), pady=5)
         foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn",
                             font=ctk.CTkFont(FONT, 10, "bold"), text_color="#ffffff", cursor="hand2")
         foot.grid(row=6, column=0, pady=(0, 10))
@@ -842,24 +835,37 @@ class JeffTUN:
         self._flag_cache[code] = img
         return img
 
-    def _flag_tk(self, code):
-        """Флаг как лёгкий tk.PhotoImage (для быстрых строк списка)."""
+    def _flag_tk(self, code, size=26):
+        """Круглый флаг (кроп в квадрат + маска-круг) как изображение для tk."""
+        key = f"{code}:{size}"
         if not hasattr(self, "_flag_tk_cache"):
             self._flag_tk_cache = {}
-        if code in self._flag_tk_cache:
-            return self._flag_tk_cache[code]
+        if key in self._flag_tk_cache:
+            return self._flag_tk_cache[key]
         img = None
         try:
             path = resource_path(os.path.join("flags", code.lower() + ".png"))
             if os.path.exists(path):
-                ph = tk.PhotoImage(file=path)
-                # flagcdn w80 (~80px) → уменьшаем до ~22px (маленькие аккуратные флаги)
-                if ph.width() > 30:
-                    ph = ph.subsample(max(1, ph.width() // 22))
-                img = ph
+                from PIL import Image, ImageDraw, ImageTk
+                im = Image.open(path).convert("RGBA")
+                # центр-кроп в квадрат
+                w, h = im.size
+                s = min(w, h)
+                im = im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
+                ss = size * 4
+                im = im.resize((ss, ss), Image.LANCZOS)
+                mask = Image.new("L", (ss, ss), 0)
+                ImageDraw.Draw(mask).ellipse((0, 0, ss, ss), fill=255)
+                # тонкая светлая обводка
+                ring = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
+                ImageDraw.Draw(ring).ellipse((0, 0, ss - 1, ss - 1), outline=(255, 255, 255, 90),
+                                             width=max(2, ss // 26))
+                im.putalpha(mask)
+                im = Image.alpha_composite(im, ring).resize((size, size), Image.LANCZOS)
+                img = ImageTk.PhotoImage(im)
         except Exception:
             img = None
-        self._flag_tk_cache[code] = img
+        self._flag_tk_cache[key] = img
         return img
 
     def _wheel(self, e):
@@ -930,9 +936,9 @@ class JeffTUN:
             ctk.CTkLabel(card, text=f"{si.get('traffic','∞')}   ·   {si.get('expire','')}",
                          font=ctk.CTkFont(FONT, 12, "bold"), text_color="#ffffff", anchor="w").pack(anchor="w", padx=14)
             # описание / канал / бот
-            ctk.CTkLabel(card, text="Если VPN не работает — нажми «⟳» (выше).\n"
-                                    "Есть несколько серверов — переключайся, если один медленный.\n"
-                                    "Канал: @jeffvpn   ·   Бот: @jeffshark_bot",
+            ctk.CTkLabel(card, text="Если VPN не работает — нажми «Обновить» (значок сверху).\n"
+                                    "Серверов несколько — переключайся, если один медленный.\n"
+                                    "Канал: @jeffvpn      Бот: @jeffshark_bot",
                          font=ctk.CTkFont(FONT, 10), text_color=MUTED, justify="left",
                          anchor="w").pack(anchor="w", padx=14, pady=(4, 10))
         if not self.links:
@@ -1142,9 +1148,11 @@ class JeffTUN:
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
         try:
-            ph = self._flag_tk(country_of(nm))
-            if ph: self.cur_flag.configure(image=ph)
-            else:  self.cur_flag.configure(image="")
+            ph = self._flag_tk(country_of(nm), size=36)
+            if ph:
+                self.cur_flag.configure(image=ph); self._cur_flag_ref = ph
+            else:
+                self.cur_flag.configure(image="")
         except Exception:
             pass
 
