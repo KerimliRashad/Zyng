@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.2"
+APP_VERSION = "6.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -359,27 +359,63 @@ def get_autostart():
     return False
 
 
+# Многие панели по User-Agent решают, какой формат отдать. С незнакомым UA
+# отдают заглушку «App not supported». Перебираем UA известных клиентов.
+SUB_USER_AGENTS = [
+    "v2rayNG/1.9.5",
+    "Happ/1.0",
+    "Streisand",
+    "v2rayN/6.45",
+    "clash-verge/1.6.0",
+    "sing-box/1.9.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+]
+
+
+def _fetch_sub_once(url, ua, ctx):
+    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
+    with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
+        data = r.read().decode("utf-8", "ignore").strip()
+        title = r.headers.get("Profile-Title", "")
+        userinfo = r.headers.get("Subscription-Userinfo", "")
+    try:
+        dec = base64.b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", "ignore")
+        if "://" in dec:
+            data = dec
+    except Exception:
+        pass
+    links = [ln.strip() for ln in data.splitlines() if "://" in ln]
+    # отсеиваем серверы-заглушки вроде «App not supported»
+    links = [l for l in links if "app not supported" not in l.lower()]
+    return links, title, userinfo
+
+
 def fetch_subscription(url):
-    """Возвращает (список_ключей, инфо_подписки)."""
+    """Возвращает (список_ключей, инфо_подписки). Перебирает User-Agent'ы,
+    пока панель не отдаст настоящие серверы (а не «App not supported»)."""
     ctx = None
     try:
         import ssl
         ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
     except Exception:
         pass
-    req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
-    with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
-        data = r.read().decode().strip()
-        title = r.headers.get("Profile-Title", "")
-        userinfo = r.headers.get("Subscription-Userinfo", "")
-    try:
-        dec = base64.b64decode(data + "=" * (-len(data) % 4)).decode()
-        if "://" in dec: data = dec
-    except Exception:
-        pass
-    links = [ln.strip() for ln in data.splitlines() if "://" in ln]
-    info = _parse_userinfo(userinfo, title)
-    return links, info
+    last_err = None
+    best = ([], "", "")
+    for ua in SUB_USER_AGENTS:
+        try:
+            links, title, userinfo = _fetch_sub_once(url, ua, ctx)
+            if links:
+                return links, _parse_userinfo(userinfo, title)
+            # запомним хоть какой-то ответ (для инфо), но продолжим искать серверы
+            if title or userinfo:
+                best = (links, title, userinfo)
+        except Exception as e:
+            last_err = e
+    if best[1] or best[2]:
+        return best[0], _parse_userinfo(best[2], best[1])
+    if last_err:
+        raise last_err
+    return [], _parse_userinfo("", "")
 
 
 def _decode_title(title):
