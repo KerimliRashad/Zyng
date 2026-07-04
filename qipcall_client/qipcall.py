@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -589,15 +589,13 @@ class JeffTUN:
             pass
         if self._logo_ref is None:
             ctk.CTkLabel(h, text="JEFF", font=ctk.CTkFont(FONT, 26, "bold"), text_color=ACC).pack()
-        # кнопка-сфера: реальные картинки-пузыри (вкл/выкл), иначе рисуем сами
-        self._orb_off = self._orb_image(False, 1.0, 140) or self._make_orb(False, size=140)
-        self._orb_frames = [self._orb_image(True, b, 140) or self._make_orb(True, b, size=140)
-                            for b in (0.78, 0.9, 1.0, 1.12, 1.0, 0.9)]
-        self._orb_idx = 0
-        self.power = ctk.CTkButton(right, text="", image=self._orb_off,
-                                   width=150, height=150, corner_radius=75,
-                                   fg_color=BG, hover_color=BG, border_width=0,
-                                   command=self.toggle)
+        # простая круглая кнопка питания (без анимаций)
+        self._picon_off = self._power_icon("#9fb0d0", 54)
+        self._picon_on = self._power_icon("#ffffff", 54)
+        self.power = ctk.CTkButton(right, text="", image=self._picon_off,
+                                   width=132, height=132, corner_radius=66,
+                                   fg_color=CARD, hover_color=CARD2, border_width=2,
+                                   border_color=BORDER, command=self.toggle)
         self.power.grid(row=1, column=0, pady=(8, 2))
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 0))
@@ -974,7 +972,7 @@ class JeffTUN:
             code = country_of(raw); sel = (i == self.selected_idx)
             bg = CARD2 if sel else CARD
             row = tk.Frame(self.server_list, bg=bg, height=40)
-            row.pack(fill="x", pady=2); row.pack_propagate(False)
+            row.pack(fill="x", pady=1); row.pack_propagate(False)
             ph = self._flag_tk(code)
             if ph:
                 badge = tk.Label(row, image=ph, bg=bg)
@@ -1157,10 +1155,9 @@ class JeffTUN:
         self.connected = True
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self._update_current(nm)
+        self.power.configure(fg_color=OK, hover_color="#2bb768", image=self._picon_on, border_color=OK)
         self._connect_time = time.time()
         self._tick()
-        self._start_pulse()
-        self._notify("JeffTUN VPN — подключено ✅", f"Сервер: {nm}")
 
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
@@ -1183,21 +1180,6 @@ class JeffTUN:
         self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
-    def _start_pulse(self):
-        # анимация «дыхания» свечения: циклично меняем кадры синей сферы
-        self._orb_idx = 0
-        self._pulse()
-
-    def _pulse(self):
-        if not self.connected:
-            return
-        try:
-            self.power.configure(image=self._orb_frames[self._orb_idx % len(self._orb_frames)])
-        except Exception:
-            pass
-        self._orb_idx += 1
-        self._pulse_after = self.root.after(140, self._pulse)
-
     def disconnect(self):
         try: set_system_proxy(False)
         except Exception: pass
@@ -1207,13 +1189,12 @@ class JeffTUN:
             self.proc = None
         self.connected = False
         self._connect_time = None
-        for attr in ("_pulse_after", "_tick_after"):
-            try:
-                if getattr(self, attr, None):
-                    self.root.after_cancel(getattr(self, attr)); setattr(self, attr, None)
-            except Exception:
-                pass
-        self.power.configure(image=self._orb_off)
+        try:
+            if getattr(self, "_tick_after", None):
+                self.root.after_cancel(self._tick_after); self._tick_after = None
+        except Exception:
+            pass
+        self.power.configure(fg_color=CARD, hover_color=CARD2, image=self._picon_off, border_color=BORDER)
         self.timer_lbl.configure(text="")
         self.status.configure(text="Отключено", text_color=MUTED)
 
