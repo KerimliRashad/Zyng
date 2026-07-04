@@ -616,13 +616,23 @@ class JeffTUN:
             self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
             self._flash(f"Серверов: {len(links)} ✓", OK if links else DANGER)
         except Exception as e:
-            self._flash(f"Ошибка: {e}", DANGER)
+            self._flash(self._friendly_err(e), WARN)
 
     def _flash(self, txt, color=MUTED):
         self.status.configure(text=txt, text_color=color)
         self.root.after(2500, lambda: self.status.configure(
             text=("Подключено" if self.connected else "Отключено"),
             text_color=(OK if self.connected else MUTED)))
+
+    @staticmethod
+    def _friendly_err(e):
+        """Технические сетевые ошибки → понятный текст, без пугающих Errno."""
+        s = str(e).lower()
+        if any(k in s for k in ("getaddrinfo", "errno 11001", "errno -2", "name or service",
+                                "temporary failure", "urlopen", "timed out", "timeout",
+                                "connection", "network is unreachable", "ssl")):
+            return "Нет интернета или сервер недоступен"
+        return "Не удалось выполнить"
 
     def _power_icon(self, color, size=72):
         """Рисует символ питания (кольцо с разрывом + вертикальная черта)."""
@@ -830,7 +840,7 @@ class JeffTUN:
                 def w0(h=host, p=port):
                     ms = tcp_ping(h, p)
                     def show():
-                        if ms is None: self.ping_lbl.configure(text="Сервер недоступен", text_color=DANGER)
+                        if ms is None: self.ping_lbl.configure(text="Пинг: нет ответа", text_color=MUTED)
                         else:
                             col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
                             self.ping_lbl.configure(text=f"Пинг: {ms} мс", text_color=col)
@@ -905,22 +915,27 @@ class JeffTUN:
         self._start_pulse()
 
     def _start_pulse(self):
-        # мягкая «дышащая» анимация кнопки, пока подключено
-        self._pulse_step = 0
+        # плавная «дышащая» анимация кнопки, пока подключено
+        self._pulse_t = 0.0
         self._pulse()
 
     def _pulse(self):
         if not self.connected:
             return
-        # плавно меняем оттенок зелёного/рамку — эффект «дыхания»
-        greens = ["#34d17a", "#3ee089", "#2bbf6c", "#3ee089"]
-        c = greens[self._pulse_step % len(greens)]
+        import math
+        # синусоида → плавное «дыхание» между тёмно- и ярко-зелёным
+        k = (math.sin(self._pulse_t) + 1) / 2      # 0..1
+        lo = (0x22, 0xb4, 0x66); hi = (0x52, 0xf0, 0x9a)
+        r = int(lo[0] + (hi[0] - lo[0]) * k)
+        g = int(lo[1] + (hi[1] - lo[1]) * k)
+        b = int(lo[2] + (hi[2] - lo[2]) * k)
+        c = f"#{r:02x}{g:02x}{b:02x}"
         try:
-            self.power.configure(border_color=c, fg_color=c)
+            self.power.configure(fg_color=c, border_color=c)
         except Exception:
             pass
-        self._pulse_step += 1
-        self._pulse_after = self.root.after(600, self._pulse)
+        self._pulse_t += 0.20
+        self._pulse_after = self.root.after(45, self._pulse)
 
     def disconnect(self):
         try: set_system_proxy(False)
@@ -1013,7 +1028,10 @@ class JeffTUN:
             except Exception:
                 pass
         self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
-        self._flash(f"Обновлено подписок: {ok}", OK if ok else DANGER)
+        if ok:
+            self._flash(f"Обновлено подписок: {ok}", OK)
+        else:
+            self._flash("Нет интернета или подписки недоступны", WARN)
         if reconnect and self.connected: self.disconnect(); self.connect()
 
     # ── Обновление приложения ──
