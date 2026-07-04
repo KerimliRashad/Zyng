@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.1"
+APP_VERSION = "6.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -450,7 +450,13 @@ def tcp_ping(host, port, timeout=4.0):
     return best
 
 
-FONT = "SF Pro Display"
+# красивый системный шрифт под каждую ОС (SF Pro на Windows нет → был некрасивый фолбэк)
+if os.name == "nt":
+    FONT = "Segoe UI"
+elif sys.platform == "darwin":
+    FONT = "SF Pro Display"
+else:
+    FONT = "DejaVu Sans"
 
 
 # ══ ПРИЛОЖЕНИЕ ═══════════════════════════════════════════════════════════════
@@ -474,7 +480,7 @@ class JeffTUN:
         self._ping_lbls = {}
         self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("780x520"); root.minsize(740, 480)
+        root.title(APP_NAME); root.geometry("820x560"); root.minsize(760, 520)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -779,9 +785,9 @@ class JeffTUN:
             path = resource_path(os.path.join("flags", code.lower() + ".png"))
             if os.path.exists(path):
                 ph = tk.PhotoImage(file=path)
-                # flagcdn w80 (~80px) → уменьшаем до ~27px
-                if ph.width() > 40:
-                    ph = ph.subsample(max(1, ph.width() // 30))
+                # flagcdn w80 (~80px) → уменьшаем до ~22px (маленькие аккуратные флаги)
+                if ph.width() > 30:
+                    ph = ph.subsample(max(1, ph.width() // 22))
                 img = ph
         except Exception:
             img = None
@@ -868,27 +874,27 @@ class JeffTUN:
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
             bg = CARD2 if sel else CARD
-            row = tk.Frame(self.server_list, bg=bg, height=50)
+            row = tk.Frame(self.server_list, bg=bg, height=46)
             row.pack(fill="x", pady=2); row.pack_propagate(False)
             ph = self._flag_tk(code)
             if ph:
                 badge = tk.Label(row, image=ph, bg=bg)
             else:
                 badge = tk.Label(row, text=code, bg=ACC, fg="white",
-                                 font=(FONT, 10, "bold"), width=4)
-            badge.pack(side="left", padx=(12, 10))
+                                 font=(FONT, 9, "bold"), width=3)
+            badge.pack(side="left", padx=(14, 12))
             m = tk.Frame(row, bg=bg); m.pack(side="left", fill="both", expand=True)
-            l1 = tk.Label(m, text=name, bg=bg, fg=TEXT, font=(FONT, 12, "bold"), anchor="w")
+            l1 = tk.Label(m, text=name, bg=bg, fg=TEXT, font=(FONT, 11, "bold"), anchor="w")
             l1.pack(anchor="w", pady=(7, 0))
-            l2 = tk.Label(m, text=proto_line(ln), bg=bg, fg=MUTED, font=(FONT, 9), anchor="w")
+            l2 = tk.Label(m, text=proto_line(ln), bg=bg, fg=MUTED, font=(FONT, 8), anchor="w")
             l2.pack(anchor="w")
             ptxt, pcol = self._ping_text(self.pings.get(i))
-            pl = tk.Label(row, text=ptxt, bg=bg, fg=pcol, font=(FONT, 10, "bold"))
-            pl.pack(side="right", padx=(0, 10))
+            pl = tk.Label(row, text=ptxt, bg=bg, fg=pcol, font=(FONT, 9, "bold"))
+            pl.pack(side="right", padx=(0, 12))
             self._ping_lbls[i] = pl
             chev = tk.Label(row, text=("✓" if sel else "›"), bg=bg,
-                            fg=(OK if sel else MUTED), font=(FONT, 13, "bold"))
-            chev.pack(side="right", padx=(4, 6))
+                            fg=(OK if sel else MUTED), font=(FONT, 12, "bold"))
+            chev.pack(side="right", padx=(4, 8))
             for w in (row, m, badge, l1, l2, pl, chev):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
                 w.bind("<MouseWheel>", self._wheel)
