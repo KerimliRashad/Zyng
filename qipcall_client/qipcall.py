@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0.2"
+APP_VERSION = "2.0.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -541,12 +541,12 @@ class JeffTUN:
                                    corner_radius=12, fg_color=CARD, border_width=0, text_color=TEXT)
         self.search.pack(side="left", fill="x", expand=True)
         self.search.bind("<KeyRelease>", lambda e: self.render_servers())
-        ctk.CTkButton(srow, text="◔", width=40, height=40, corner_radius=12, fg_color=CARD,
-                      hover_color=CARD2, text_color=MUTED, border_width=0,
-                      command=self.do_ping).pack(side="left", padx=(6, 0))
-        ctk.CTkButton(srow, text="⟳", width=40, height=40, corner_radius=12, fg_color=CARD,
-                      hover_color=CARD2, text_color=ACC, border_width=0,
-                      command=self.update_sub).pack(side="left", padx=(6, 0))
+        ctk.CTkButton(srow, text="📶", width=42, height=42, corner_radius=13, fg_color=CARD,
+                      hover_color=CARD2, text_color=TEXT, border_width=0,
+                      font=ctk.CTkFont(FONT, 15), command=self.do_ping).pack(side="left", padx=(6, 0))
+        ctk.CTkButton(srow, text="🔄", width=42, height=42, corner_radius=13, fg_color=CARD,
+                      hover_color=CARD2, text_color=TEXT, border_width=0,
+                      font=ctk.CTkFont(FONT, 15), command=self.update_sub).pack(side="left", padx=(6, 0))
         self.tabs_frame = ctk.CTkFrame(mid, fg_color="transparent")
         self.tabs_frame.grid(row=2, column=0, sticky="ew", padx=14, pady=(8, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
@@ -568,7 +568,7 @@ class JeffTUN:
         # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
         right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
         right.grid(row=0, column=2, sticky="nsew")
-        right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(5, weight=1)
+        right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(6, weight=1)
         right.grid_columnconfigure(0, weight=1)
         # логотип сверху
         h = ctk.CTkFrame(right, fg_color="transparent"); h.grid(row=0, column=0, pady=(16, 0), sticky="s")
@@ -578,7 +578,9 @@ class JeffTUN:
             lp = resource_path("logo_white.png")
             if os.path.exists(lp):
                 im = Image.open(lp); ratio = im.width / im.height
-                img = ctk.CTkImage(im, size=(int(92 * ratio), 92))
+                # крупнее и шире
+                H = 108
+                img = ctk.CTkImage(im, size=(int(H * ratio * 1.08), H))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
         except Exception:
@@ -595,19 +597,18 @@ class JeffTUN:
                                    fg_color=BG, hover_color=BG, border_width=0,
                                    command=self.toggle)
         self.power.grid(row=1, column=0, pady=(10, 4))
-        # таймер прямо внутри кнопки (появляется при подключении)
-        self.timer_lbl = ctk.CTkLabel(right, text="", width=88, height=26, fg_color="transparent",
-                                      corner_radius=13, text_color="#ffffff",
-                                      font=ctk.CTkFont(FONT, 14, "bold"))
-        self.timer_lbl.place(in_=self.power, relx=0.5, rely=0.72, anchor="center")
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 0))
+        # таймер КРАСИВО ПОД кнопкой (появляется при подключении)
+        self.timer_lbl = ctk.CTkLabel(right, text="", text_color=ACC,
+                                      font=ctk.CTkFont(FONT, 18, "bold"))
+        self.timer_lbl.grid(row=3, column=0, pady=(2, 0))
         # текущий сервер (флаг + имя)
         self.cur_flag = tk.Label(right, bg=BG)
-        self.cur_flag.grid(row=3, column=0, pady=(10, 0))
+        self.cur_flag.grid(row=4, column=0, pady=(8, 0))
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=TEXT)
-        self.cur_lbl.grid(row=4, column=0, pady=(2, 0))
-        bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=5, column=0, pady=(8, 6))
+        self.cur_lbl.grid(row=5, column=0, pady=(2, 0))
+        bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=6, column=0, pady=(8, 6))
         ctk.CTkButton(bottom, text="Тест пинга", width=190, height=40, corner_radius=20,
                       fg_color=ACC, hover_color=ACC_D, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 8))
@@ -615,7 +616,7 @@ class JeffTUN:
         self.ping_lbl.pack(pady=(0, 8))
         foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn",
                             font=ctk.CTkFont(FONT, 10, "bold"), text_color="#ffffff", cursor="hand2")
-        foot.grid(row=6, column=0, pady=(0, 10))
+        foot.grid(row=7, column=0, pady=(0, 10))
         foot.bind("<Button-1>", lambda e: self._open_tg())
         self._connect_time = None
 
@@ -1168,7 +1169,7 @@ class JeffTUN:
             return
         s = int(time.time() - self._connect_time)
         hhmmss = f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
-        self.timer_lbl.configure(text=hhmmss, fg_color="#2b2f6b")
+        self.timer_lbl.configure(text=f"⏱ {hhmmss}")
         self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
@@ -1203,7 +1204,7 @@ class JeffTUN:
             except Exception:
                 pass
         self.power.configure(image=self._orb_off)
-        self.timer_lbl.configure(text="", fg_color="transparent")
+        self.timer_lbl.configure(text="")
         self.status.configure(text="Отключено", text_color=MUTED)
 
     # ── Сохранение ──
