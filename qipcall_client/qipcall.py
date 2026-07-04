@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.4"
+APP_VERSION = "6.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -536,12 +536,10 @@ class JeffTUN:
                           fg_color=(CARD if active else "transparent"), hover_color=CARD,
                           text_color=(ACC if active else MUTED), font=ctk.CTkFont(FONT, 17),
                           command=cmd).pack(pady=5)
-        ctk.CTkLabel(side, text="", height=8).pack()
-        sicon("🌐", lambda: None, active=True)
+        ctk.CTkLabel(side, text="", height=10).pack()
         sicon("＋", self.add_key)
         sicon("🗑", self.clear_servers)
         ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
-        sicon("ℹ", self._about)
         self.side = side
 
         # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
@@ -629,8 +627,10 @@ class JeffTUN:
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 6))
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 6))
-        ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn", font=ctk.CTkFont(FONT, 9),
-                     text_color="#48484e").grid(row=5, column=0, pady=(0, 8))
+        foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn",
+                            font=ctk.CTkFont(FONT, 10, "bold"), text_color="#ffffff", cursor="hand2")
+        foot.grid(row=5, column=0, pady=(0, 10))
+        foot.bind("<Button-1>", lambda e: self._open_tg())
 
         # плашка обновления (поверх, снизу справа при апдейте)
         self.update_bar = None
@@ -717,6 +717,41 @@ class JeffTUN:
                 self.root.after(0, done)
             except Exception as e:
                 self.root.after(0, lambda: self._flash(self._friendly_err(e), WARN))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _open_tg(self):
+        try:
+            import webbrowser; webbrowser.open(TELEGRAM_URL)
+        except Exception:
+            pass
+
+    def _notify(self, title, msg):
+        """Системное уведомление у часов (Windows toast / Linux notify-send / mac)."""
+        def worker():
+            try:
+                if os.name == "nt":
+                    ps = (
+                        "$ErrorActionPreference='SilentlyContinue';"
+                        "[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]|Out-Null;"
+                        "$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
+                        "$x=$t.GetElementsByTagName('text');"
+                        f"$x[0].AppendChild($t.CreateTextNode('{title}'))|Out-Null;"
+                        f"$x[1].AppendChild($t.CreateTextNode('{msg}'))|Out-Null;"
+                        "$n=[Windows.UI.Notifications.ToastNotification]::new($t);"
+                        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('JeffTUN VPN').Show($n);"
+                    )
+                    subprocess.Popen(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps],
+                                     creationflags=subprocess.CREATE_NO_WINDOW,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["osascript", "-e",
+                                      f'display notification "{msg}" with title "{title}"'],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    subprocess.Popen(["notify-send", "-a", "JeffTUN VPN", title, msg],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
         threading.Thread(target=worker, daemon=True).start()
 
     def _flash(self, txt, color=MUTED):
@@ -896,13 +931,13 @@ class JeffTUN:
             card.pack(fill="x", pady=(0, 8))
             top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(10, 2))
             ctk.CTkLabel(top, text=si.get("title", "JeffTUN VPN"),
-                         font=ctk.CTkFont(FONT, 14, "bold"), text_color=ACC, anchor="w").pack(side="left")
+                         font=ctk.CTkFont(FONT, 14, "bold"), text_color="#ffffff", anchor="w").pack(side="left")
             ctk.CTkButton(top, text="✕", width=26, height=26, corner_radius=13,
-                          fg_color="transparent", hover_color=DANGER, text_color=MUTED,
+                          fg_color="transparent", hover_color=DANGER, text_color="#ffffff",
                           font=ctk.CTkFont(FONT, 13, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
             ctk.CTkLabel(card, text=f"{si.get('traffic','')}   ·   {si.get('expire','')}",
-                         font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w").pack(anchor="w", padx=14, pady=(0, 10))
+                         font=ctk.CTkFont(FONT, 11), text_color="#ffffff", anchor="w").pack(anchor="w", padx=14, pady=(0, 10))
         if not self.links:
             self.empty_lbl = ctk.CTkLabel(self.server_list,
                 text="Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
@@ -1104,6 +1139,7 @@ class JeffTUN:
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
         self._start_pulse()
+        self._notify("JeffTUN VPN — подключено ✅", f"Сервер: {nm}")
 
     def _start_pulse(self):
         # анимация «дыхания» свечения: циклично меняем кадры синей сферы
