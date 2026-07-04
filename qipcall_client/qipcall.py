@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.0.1"
+APP_VERSION = "1.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -28,25 +28,25 @@ SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
-# Тёмная iOS-палитра (по умолчанию)
-BG      = "#0f1116"   # общий фон
-SIDE    = "#161922"   # левая панель
-PANEL   = "#13151c"   # средняя панель
-CARD    = "#1c1f29"   # карточки
-CARD2   = "#262a37"   # выбранная/вторичная
-BORDER  = "#2b2f3c"   # тонкие рамки
-ACC     = "#6c7bff"   # индиго
-ACC_D   = "#5867ec"
-TEXT    = "#eceef4"
-MUTED   = "#8b8f9e"
+# Тёмно-СИНЯЯ минималистичная тема
+BG      = "#0a0e1a"   # общий фон — глубокий тёмно-синий
+SIDE    = "#0a0e1a"
+PANEL   = "#0c1120"   # средняя панель
+CARD    = "#141b2e"   # карточки
+CARD2   = "#1e2942"   # выбранная/вторичная
+BORDER  = "#22304c"   # тонкие рамки
+ACC     = "#3b82f6"   # яркий синий-акцент
+ACC_D   = "#2f6be0"
+TEXT    = "#eaf0fb"
+MUTED   = "#8794b3"
 OK      = "#34d17a"
 WARN    = "#f5c451"
 DANGER  = "#ff5c5c"
-# Спец-цвета карточек (адаптированы под тёмную)
-SUBCARD   = "#1a1f36"
-SUBBORDER = "#2e3660"
-UPDCARD   = "#12291b"
-POWER_HOVER = "#242836"
+# Спец-цвета
+SUBCARD   = "#122444"
+SUBBORDER = "#284a86"
+UPDCARD   = "#0f2a3a"
+POWER_HOVER = "#141b2e"
 
 
 def resource_path(name):

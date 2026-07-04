@@ -93,15 +93,6 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Mirror to qipcall-latest (совместимость со старыми версиями)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: qipcall-latest
-          name: JeffTUN VPN
-          files: qipcall_client/dist/JeffTUN.exe
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── macOS убран: раннеры дорогие и держат очередь. Windows/Linux не зависят от него.
 
@@ -146,15 +137,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: jefftun
-          name: JeffTUN VPN
-          files: qipcall_client/dist/JeffTUN-linux
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Mirror to qipcall-latest
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: qipcall-latest
           name: JeffTUN VPN
           files: qipcall_client/dist/JeffTUN-linux
           fail_on_unmatched_files: false
