@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0.3"
+APP_VERSION = "2.0.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -348,12 +348,19 @@ def get_autostart():
 # Многие панели по User-Agent решают, какой формат отдать. С незнакомым UA
 # отдают заглушку «App not supported». Перебираем UA известных клиентов.
 SUB_USER_AGENTS = [
-    "v2rayNG/1.9.5",
     "Happ/1.0",
-    "Streisand",
+    "v2rayNG/1.9.5",
     "v2rayN/6.45",
-    "clash-verge/1.6.0",
+    "Streisand",
     "sing-box/1.9.0",
+    "SFA/1.9.0",
+    "SFI/1.9.0",
+    "clash-verge/1.6.0",
+    "clash.meta/1.18.0",
+    "NekoBox/1.3.0",
+    "hiddify-next/2.0.0",
+    "Shadowrocket/2.2.0",
+    "ktor-client",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
 ]
 
@@ -371,8 +378,11 @@ def _fetch_sub_once(url, ua, ctx):
     except Exception:
         pass
     links = [ln.strip() for ln in data.splitlines() if "://" in ln]
-    # отсеиваем серверы-заглушки вроде «App not supported»
-    links = [l for l in links if "app not supported" not in l.lower()]
+    # отсеиваем серверы-заглушки «App not supported» (имя может быть URL-кодировано, %20)
+    def _is_stub(l):
+        low = unquote(l).lower()
+        return ("app not supported" in low) or ("not supported" in low) or ("unsupported" in low)
+    links = [l for l in links if not _is_stub(l)]
     return links, title, userinfo
 
 
@@ -510,9 +520,10 @@ class JeffTUN:
         except Exception:
             pass
 
-        # три колонки как в Happ: иконки | серверы | кнопка
-        root.grid_columnconfigure(1, weight=3)
-        root.grid_columnconfigure(2, weight=3)
+        # три колонки как в Happ: иконки | серверы | кнопка.
+        # uniform → серверы и кнопка ВСЕГДА одинаковой ширины (кнопка не сужается от вкладок)
+        root.grid_columnconfigure(1, weight=1, uniform="main")
+        root.grid_columnconfigure(2, weight=1, uniform="main")
         root.grid_rowconfigure(0, weight=1)
 
         # ── ЛЕВАЯ ПАНЕЛЬ ИКОНОК (как в Happ) ──
