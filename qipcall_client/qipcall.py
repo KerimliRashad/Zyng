@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.5"
+APP_VERSION = "6.6"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -516,7 +516,7 @@ class JeffTUN:
         self._ping_lbls = {}
         self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("820x560"); root.minsize(760, 520)
+        root.title(APP_NAME); root.geometry("760x560"); root.minsize(700, 520)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -524,36 +524,20 @@ class JeffTUN:
         except Exception:
             pass
 
+        # без левой панели — две колонки: серверы + кнопка
+        root.grid_columnconfigure(0, weight=1)
         root.grid_columnconfigure(1, weight=1)
-        root.grid_columnconfigure(2, weight=1)
         root.grid_rowconfigure(0, weight=1)
-
-        # ── ЛЕВАЯ ПАНЕЛЬ ИКОНОК ──
-        side = ctk.CTkFrame(root, width=64, fg_color=SIDE, corner_radius=0)
-        side.grid(row=0, column=0, sticky="nsw"); side.grid_propagate(False)
-        def sicon(txt, cmd, active=False):
-            ctk.CTkButton(side, text=txt, width=40, height=40, corner_radius=12,
-                          fg_color=(CARD if active else "transparent"), hover_color=CARD,
-                          text_color=(ACC if active else MUTED), font=ctk.CTkFont(FONT, 17),
-                          command=cmd).pack(pady=5)
-        ctk.CTkLabel(side, text="", height=10).pack()
-        sicon("＋", self.add_key)
-        sicon("🗑", self.clear_servers)
-        ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
-        self.side = side
+        self.side = None
 
         # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
         mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
-        mid.grid(row=0, column=1, sticky="nsew")
+        mid.grid(row=0, column=0, sticky="nsew")
         mid.grid_rowconfigure(3, weight=1); mid.grid_columnconfigure(0, weight=1)
-        # заголовок + кнопка «свернуть боковую панель»
         hrow = ctk.CTkFrame(mid, fg_color="transparent"); hrow.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 6))
-        hrow.grid_columnconfigure(1, weight=1)
-        ctk.CTkButton(hrow, text="⟨", width=34, height=34, corner_radius=10, fg_color=CARD,
-                      hover_color=CARD2, text_color=TEXT, font=ctk.CTkFont(FONT, 16),
-                      command=self.toggle_side).grid(row=0, column=0, sticky="w", padx=(4, 8))
+        hrow.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(hrow, text="Серверы", font=ctk.CTkFont(FONT, 22, "bold"),
-                     text_color=TEXT).grid(row=0, column=1, sticky="w")
+                     text_color=TEXT).grid(row=0, column=0, sticky="w")
         srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18)
         self.search = ctk.CTkEntry(srow, placeholder_text="Поиск…", height=38, corner_radius=12,
                                    fg_color=CARD, border_width=0, text_color=TEXT)
@@ -584,7 +568,7 @@ class JeffTUN:
 
         # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
         right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
-        right.grid(row=0, column=2, sticky="nsew")
+        right.grid(row=0, column=1, sticky="nsew")
         right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(3, weight=1)
         right.grid_columnconfigure(0, weight=1)
         # логотип-заголовок (картинка It's Jeff! + подпись)
@@ -889,11 +873,7 @@ class JeffTUN:
             pass
 
     def toggle_side(self):
-        self.side_collapsed = not self.side_collapsed
-        if self.side_collapsed:
-            self.side.grid_remove()
-        else:
-            self.side.grid()
+        pass  # левой панели больше нет
 
     def render_tabs(self):
         for w in self.tabs_frame.winfo_children():
