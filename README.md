@@ -6,8 +6,8 @@
 | Платформа | Ссылка |
 |-----------|--------|
 | 🪟 **Windows** (7 / 8 / 10 / 11) | [JeffTUN.exe](https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe) |
-| 🍏 **macOS** (Intel / Apple Silicon) | [JeffTUN-mac](https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-mac) |
 | 🐧 **Linux** (x64) | [JeffTUN-linux](https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux) |
+| 📺 **Android TV** | [Совместимый клиент (APK)](https://github.com/Happ-proxy/happ-android/releases/latest) — вставь свой ключ/подписку JeffTUN |
 
 Все релизы: **https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun**
 
@@ -35,7 +35,7 @@
 - 🌍 **Список серверов** — флаги стран, живой пинг по каждому серверу
 - ⚡ **Тест пинга** — проверка скорости всех серверов разом
 - 🔄 **Авто-обновление приложения** — обновляется внутри программы, без переустановки
-- 🖥 **Системный прокси** — Windows / macOS / Linux
+- 🖥 **Системный прокси** — Windows / Linux
 - 🚀 **Автозапуск** при входе в систему
 - 🔒 **Приватность** — никакой сборки данных, всё хранится только на устройстве
 

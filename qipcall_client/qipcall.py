@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.0"
+APP_VERSION = "6.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -1207,14 +1207,10 @@ class JeffTUN:
                       font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
 
     def do_self_update(self):
-        if not getattr(sys, "frozen", False):
+        # macOS-сборки больше нет — на Mac (и в dev-режиме) открываем страницу релиза
+        if not getattr(sys, "frozen", False) or sys.platform == "darwin":
             import webbrowser; webbrowser.open(RELEASES_URL); return
-        if os.name == "nt":
-            asset = "JeffTUN.exe"
-        elif sys.platform == "darwin":
-            asset = "JeffTUN-mac"
-        else:
-            asset = "JeffTUN-linux"
+        asset = "JeffTUN.exe" if os.name == "nt" else "JeffTUN-linux"
         url = f"{DOWNLOAD_BASE}/{asset}"; cur = sys.executable; new = cur + ".new"
         def setl(t):
             if hasattr(self, "_ulbl"):
