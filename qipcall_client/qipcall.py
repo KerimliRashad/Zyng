@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "1.0"
+APP_VERSION = "1.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -512,7 +512,7 @@ class JeffTUN:
         self._ping_lbls = {}
         self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("760x570"); root.minsize(700, 530)
+        root.title(APP_NAME); root.geometry("640x500"); root.minsize(600, 460)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -581,7 +581,7 @@ class JeffTUN:
             if os.path.exists(lp):
                 im = Image.open(lp); ratio = im.width / im.height
                 # крупнее и шире
-                H = 108
+                H = 82
                 img = ctk.CTkImage(im, size=(int(H * ratio * 1.08), H))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
@@ -590,15 +590,15 @@ class JeffTUN:
         if self._logo_ref is None:
             ctk.CTkLabel(h, text="JEFF", font=ctk.CTkFont(FONT, 26, "bold"), text_color=ACC).pack()
         # кнопка-сфера: реальные картинки-пузыри (вкл/выкл), иначе рисуем сами
-        self._orb_off = self._orb_image(False, 1.0, 172) or self._make_orb(False, size=172)
-        self._orb_frames = [self._orb_image(True, b, 172) or self._make_orb(True, b, size=172)
+        self._orb_off = self._orb_image(False, 1.0, 140) or self._make_orb(False, size=140)
+        self._orb_frames = [self._orb_image(True, b, 140) or self._make_orb(True, b, size=140)
                             for b in (0.78, 0.9, 1.0, 1.12, 1.0, 0.9)]
         self._orb_idx = 0
         self.power = ctk.CTkButton(right, text="", image=self._orb_off,
-                                   width=186, height=186, corner_radius=93,
+                                   width=150, height=150, corner_radius=75,
                                    fg_color=BG, hover_color=BG, border_width=0,
                                    command=self.toggle)
-        self.power.grid(row=1, column=0, pady=(10, 4))
+        self.power.grid(row=1, column=0, pady=(8, 2))
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 0))
         # таймер КРАСИВО ПОД кнопкой (появляется при подключении)
@@ -611,7 +611,7 @@ class JeffTUN:
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=TEXT)
         self.cur_lbl.grid(row=5, column=0, pady=(2, 0))
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=6, column=0, pady=(8, 6))
-        ctk.CTkButton(bottom, text="Тест пинга", width=190, height=40, corner_radius=20,
+        ctk.CTkButton(bottom, text="Тест пинга", width=160, height=36, corner_radius=18,
                       fg_color=ACC, hover_color=ACC_D, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 8))
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
@@ -859,7 +859,7 @@ class JeffTUN:
         self._flag_cache[code] = img
         return img
 
-    def _flag_tk(self, code, size=26):
+    def _flag_tk(self, code, size=20):
         """Круглый флаг (кроп в квадрат + маска-круг) как изображение для tk."""
         key = f"{code}:{size}"
         if not hasattr(self, "_flag_tk_cache"):
@@ -973,7 +973,7 @@ class JeffTUN:
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
             bg = CARD2 if sel else CARD
-            row = tk.Frame(self.server_list, bg=bg, height=46)
+            row = tk.Frame(self.server_list, bg=bg, height=40)
             row.pack(fill="x", pady=2); row.pack_propagate(False)
             ph = self._flag_tk(code)
             if ph:
@@ -1165,7 +1165,7 @@ class JeffTUN:
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
         try:
-            ph = self._flag_tk(country_of(nm), size=36)
+            ph = self._flag_tk(country_of(nm), size=28)
             if ph:
                 self.cur_flag.configure(image=ph); self._cur_flag_ref = ph
             else:
