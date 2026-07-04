@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0.5"
+APP_VERSION = "3.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -897,14 +897,17 @@ class JeffTUN:
             return
         tabs = [("all", "Все")]
         if self.manual_links:
-            tabs.append(("manual", "Мои ключи"))
+            tabs.append(("manual", "Ключи"))
         for s in self.subs:
             tabs.append((s["url"], s.get("title") or "Подписка"))
         if len(tabs) <= 1:
             return
+        def short(t):
+            t = "".join(c for c in t if c.isprintable())
+            return t if len(t) <= 12 else t[:11] + "…"
         for key, label in tabs:
             act = (self.active_tab == key)
-            ctk.CTkButton(self.tabs_frame, text=label, height=28, corner_radius=14,
+            ctk.CTkButton(self.tabs_frame, text=short(label), height=30, corner_radius=15,
                           fg_color=(ACC if act else CARD), hover_color=(ACC_D if act else CARD2),
                           text_color=("white" if act else MUTED), font=ctk.CTkFont(FONT, 11, "bold"),
                           command=lambda k=key: self.switch_tab(k)).pack(side="left", padx=(0, 6), pady=2)
@@ -923,27 +926,17 @@ class JeffTUN:
             card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
                                 border_width=0)
             card.pack(fill="x", pady=(0, 8))
-            top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(10, 0))
-            ctk.CTkLabel(top, text=si.get("title", "JEFFvpn 🦈"),
+            top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(12, 2))
+            ctk.CTkLabel(top, text=si.get("title", "VPN"),
                          font=ctk.CTkFont(FONT, 15, "bold"), text_color="#ffffff", anchor="w").pack(side="left")
             ctk.CTkButton(top, text="✕", width=26, height=26, corner_radius=13,
                           fg_color="transparent", hover_color=DANGER, text_color="#ffffff",
                           font=ctk.CTkFont(FONT, 13, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
-            ctk.CTkButton(top, text="⟳", width=26, height=26, corner_radius=13,
-                          fg_color="transparent", hover_color=CARD2, text_color=ACC,
-                          font=ctk.CTkFont(FONT, 13), command=self.update_sub).pack(side="right", padx=(0, 4))
-            ctk.CTkLabel(card, text=f"{time.strftime('%d.%m.%Y %H:%M')} | Автообновление - 3 ч.",
-                         font=ctk.CTkFont(FONT, 10), text_color=MUTED, anchor="w").pack(anchor="w", padx=14, pady=(0, 4))
-            # полоса трафика
+            # только объём/срок — без даты и описаний
             ctk.CTkLabel(card, text=f"{si.get('traffic','∞')}   ·   {si.get('expire','')}",
-                         font=ctk.CTkFont(FONT, 12, "bold"), text_color="#ffffff", anchor="w").pack(anchor="w", padx=14)
-            # описание / канал / бот
-            ctk.CTkLabel(card, text="Если VPN не работает — нажми «Обновить» (значок сверху).\n"
-                                    "Серверов несколько — переключайся, если один медленный.\n"
-                                    "Канал: @jeffvpn      Бот: @jeffshark_bot",
-                         font=ctk.CTkFont(FONT, 10), text_color=MUTED, justify="left",
-                         anchor="w").pack(anchor="w", padx=14, pady=(4, 10))
+                         font=ctk.CTkFont(FONT, 12, "bold"), text_color="#ffffff",
+                         anchor="w").pack(anchor="w", padx=14, pady=(0, 12))
         if not self.links:
             self.empty_lbl = ctk.CTkLabel(self.server_list,
                 text="Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
