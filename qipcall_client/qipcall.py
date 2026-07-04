@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.5.2"
+APP_VERSION = "5.5.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -386,10 +386,11 @@ def _sub_title(url):
         return "Подписка"
 
 
-def tcp_ping(host, port, timeout=3.0):
-    """Берём лучший из 3 замеров TCP-хендшейка — стабильнее и точнее."""
+def tcp_ping(host, port, timeout=4.0):
+    """Лучший из 2 замеров TCP-хендшейка. Домены резолвим заранее (система может
+    блокировать DNS — тогда пробуем как есть)."""
     best = None
-    for _ in range(3):
+    for _ in range(2):
         try:
             s = time.time()
             c = socket.create_connection((host, port), timeout=timeout); c.close()
@@ -745,7 +746,8 @@ class JeffTUN:
     @staticmethod
     def _ping_text(ms):
         if ms is None: return "", MUTED
-        if ms == "x": return "—", DANGER
+        if ms == "…": return "…", MUTED
+        if ms == "x": return "—", MUTED
         col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
         return f"{ms} мс", col
 
@@ -842,19 +844,25 @@ class JeffTUN:
         for i, ln in enumerate(self.links):
             host, port = link_host_port(ln)
             if host:
+                self.pings[i] = "…"          # показываем «идёт проверка»
                 q.put((i, host, port))
+            else:
+                self.pings[i] = "x"
+        # сразу перерисуем метки в состояние «…», чтобы было видно, что крутится
+        for i in range(len(self.links)):
+            self._update_ping_lbl(i)
         def worker():
             while gen == self._ping_gen:
                 try:
                     idx, h, p = q.get_nowait()
                 except Exception:
                     return
-                ms = tcp_ping(h, p, timeout=2.5)
+                ms = tcp_ping(h, p, timeout=4.0)
                 if gen != self._ping_gen:
                     return
                 self.pings[idx] = ms if ms is not None else "x"
                 self.root.after(0, lambda i=idx: self._update_ping_lbl(i))
-        for _ in range(min(8, max(1, q.qsize()))):
+        for _ in range(min(10, max(1, q.qsize()))):
             threading.Thread(target=worker, daemon=True).start()
 
     def _update_ping_lbl(self, idx):
