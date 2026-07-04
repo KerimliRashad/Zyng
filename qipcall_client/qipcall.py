@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.5.4"
+APP_VERSION = "5.5.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -567,14 +567,16 @@ class JeffTUN:
             row = ctk.CTkFrame(h, fg_color="transparent"); row.pack()
             ctk.CTkLabel(row, text="Jeff", font=ctk.CTkFont(FONT, 22, "bold"), text_color=TEXT).pack(side="left")
             ctk.CTkLabel(row, text="TUN", font=ctk.CTkFont(FONT, 22, "bold"), text_color=ACC).pack(side="left")
-        # чистая круглая кнопка питания (без кольца — чтобы не было «овала»)
-        self._icon_off = self._power_icon(MUTED, 64)
-        self._icon_on = self._power_icon("#ffffff", 64)
-        self.power = ctk.CTkButton(right, text="", image=self._icon_off,
-                                   width=132, height=132, corner_radius=66,
-                                   fg_color=CARD, hover_color=POWER_HOVER, border_width=2,
-                                   border_color=BORDER, command=self.toggle)
-        self.power.grid(row=1, column=0, pady=16)
+        # реалистичная «водяная» кнопка-сфера + кадры свечения для анимации
+        self._orb_off = self._make_orb(False, size=160)
+        self._orb_frames = [self._make_orb(True, g, size=160)
+                            for g in (0.55, 0.7, 0.85, 1.0, 0.85, 0.7)]
+        self._orb_idx = 0
+        self.power = ctk.CTkButton(right, text="", image=self._orb_off,
+                                   width=176, height=176, corner_radius=88,
+                                   fg_color=BG, hover_color=BG, border_width=0,
+                                   command=self.toggle)
+        self.power.grid(row=1, column=0, pady=12)
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 15, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(2, 2))
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12), text_color=MUTED)
@@ -682,6 +684,57 @@ class JeffTUN:
                                 "connection", "network is unreachable", "ssl")):
             return "Нет интернета или сервер недоступен"
         return "Не удалось выполнить"
+
+    def _make_orb(self, on, glow=1.0, size=150):
+        """Рисует реалистичную «водяную» кнопку-сферу с неоновым символом питания.
+        on=True — синее свечение; on=False — бледно-серая."""
+        try:
+            from PIL import Image, ImageDraw, ImageFilter
+        except Exception:
+            return self._power_icon("#ffffff" if on else MUTED, 64)
+        S = size * 3
+        cx = cy = S // 2
+        R = int(S * 0.40)
+        if on:
+            core = (46, 150, 255); rim = (8, 34, 96); glowc = (70, 175, 255); sym = (230, 248, 255)
+        else:
+            core = (120, 140, 172); rim = (26, 40, 62); glowc = (70, 92, 125); sym = (205, 215, 230)
+        im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        # внешнее свечение
+        g = Image.new("RGBA", (S, S), (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
+        pad = int(S * 0.05)
+        gd.ellipse([cx - R - pad, cy - R - pad, cx + R + pad, cy + R + pad],
+                   fill=glowc + (int((150 if on else 70) * glow),))
+        im = Image.alpha_composite(im, g.filter(ImageFilter.GaussianBlur(S * 0.055)))
+        # сфера: радиальный градиент (ярче к центру)
+        sph = Image.new("RGBA", (S, S), (0, 0, 0, 0)); sd = ImageDraw.Draw(sph)
+        steps = 64
+        for i in range(steps):
+            t = i / steps
+            r = int(R * (1 - t))
+            col = tuple(int(rim[j] + (core[j] - rim[j]) * (t ** 1.3)) for j in range(3))
+            sd.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col + (255,))
+        im = Image.alpha_composite(im, sph)
+        # ободок-стекло
+        rd = ImageDraw.Draw(im)
+        rd.ellipse([cx - R, cy - R, cx + R, cy + R], outline=(200, 225, 255, 90), width=int(S * 0.012))
+        # глянцевый блик сверху
+        hl = Image.new("RGBA", (S, S), (0, 0, 0, 0)); hd = ImageDraw.Draw(hl)
+        hd.ellipse([cx - int(R * 0.62), cy - int(R * 0.85), cx + int(R * 0.62), cy - int(R * 0.05)],
+                   fill=(255, 255, 255, 70))
+        im = Image.alpha_composite(im, hl.filter(ImageFilter.GaussianBlur(S * 0.03)))
+        # символ питания + свечение
+        smb = Image.new("RGBA", (S, S), (0, 0, 0, 0)); md = ImageDraw.Draw(smb)
+        w = int(S * 0.030); spad = int(S * 0.32)
+        md.arc([spad, spad, S - spad, S - spad], start=-60, end=240, fill=sym + (255,), width=w)
+        md.line([(cx, int(S * 0.26)), (cx, int(S * 0.50))], fill=sym + (255,), width=w)
+        if on:
+            gsm = smb.filter(ImageFilter.GaussianBlur(S * 0.018))
+            im = Image.alpha_composite(im, gsm)
+            im = Image.alpha_composite(im, gsm)
+        im = Image.alpha_composite(im, smb)
+        im = im.resize((size, size), Image.LANCZOS)
+        return ctk.CTkImage(im, size=(size, size))
 
     def _power_icon(self, color, size=72):
         """Рисует символ питания (кольцо с разрывом + вертикальная черта)."""
@@ -957,34 +1010,25 @@ class JeffTUN:
         try: set_system_proxy(True)
         except Exception: pass
         self.connected = True
-        self.power.configure(fg_color=OK, hover_color="#28b866", image=self._icon_on, border_color=OK)
         self.status.configure(text="Подключено", text_color=OK)
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self.cur_lbl.configure(text=nm)
         self._start_pulse()
 
     def _start_pulse(self):
-        # плавная «дышащая» анимация кнопки, пока подключено
-        self._pulse_t = 0.0
+        # анимация «дыхания» свечения: циклично меняем кадры синей сферы
+        self._orb_idx = 0
         self._pulse()
 
     def _pulse(self):
         if not self.connected:
             return
-        import math
-        # синусоида → плавное «дыхание» между тёмно- и ярко-зелёным
-        k = (math.sin(self._pulse_t) + 1) / 2      # 0..1
-        lo = (0x22, 0xb4, 0x66); hi = (0x52, 0xf0, 0x9a)
-        r = int(lo[0] + (hi[0] - lo[0]) * k)
-        g = int(lo[1] + (hi[1] - lo[1]) * k)
-        b = int(lo[2] + (hi[2] - lo[2]) * k)
-        c = f"#{r:02x}{g:02x}{b:02x}"
         try:
-            self.power.configure(fg_color=c, border_color=c)
+            self.power.configure(image=self._orb_frames[self._orb_idx % len(self._orb_frames)])
         except Exception:
             pass
-        self._pulse_t += 0.20
-        self._pulse_after = self.root.after(45, self._pulse)
+        self._orb_idx += 1
+        self._pulse_after = self.root.after(140, self._pulse)
 
     def disconnect(self):
         try: set_system_proxy(False)
@@ -999,7 +1043,7 @@ class JeffTUN:
                 self.root.after_cancel(self._pulse_after); self._pulse_after = None
         except Exception:
             pass
-        self.power.configure(fg_color=CARD, hover_color=POWER_HOVER, image=self._icon_off, border_color=BORDER)
+        self.power.configure(image=self._orb_off)
         self.status.configure(text="Отключено", text_color=MUTED)
 
     # ── Сохранение ──
