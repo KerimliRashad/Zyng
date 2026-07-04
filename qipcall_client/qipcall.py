@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "1.2"
+APP_VERSION = "2.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -28,25 +28,25 @@ SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
-# Тёмно-СИНЯЯ минималистичная тема
-BG      = "#0a0e1a"   # общий фон — глубокий тёмно-синий
-SIDE    = "#0a0e1a"
-PANEL   = "#0c1120"   # средняя панель
-CARD    = "#141b2e"   # карточки
-CARD2   = "#1e2942"   # выбранная/вторичная
-BORDER  = "#22304c"   # тонкие рамки
-ACC     = "#3b82f6"   # яркий синий-акцент
-ACC_D   = "#2f6be0"
-TEXT    = "#eaf0fb"
-MUTED   = "#8794b3"
-OK      = "#34d17a"
-WARN    = "#f5c451"
-DANGER  = "#ff5c5c"
+# Тёмно-СЕРАЯ минималистичная тема
+BG      = "#16181c"   # общий фон — тёмно-серый
+SIDE    = "#16181c"
+PANEL   = "#191c21"   # средняя панель
+CARD    = "#22262d"   # карточки
+CARD2   = "#2d323b"   # выбранная/вторичная
+BORDER  = "#363c46"   # тонкие рамки
+ACC     = "#5c6675"   # спокойный серо-стальной акцент
+ACC_D   = "#4c5563"
+TEXT    = "#e6e8ec"
+MUTED   = "#8a9099"
+OK      = "#7f8a99"   # «включено» — обычный серый, не яркий зелёный
+WARN    = "#c9a24b"
+DANGER  = "#c65b5b"
 # Спец-цвета
-SUBCARD   = "#122444"
-SUBBORDER = "#284a86"
-UPDCARD   = "#0f2a3a"
-POWER_HOVER = "#141b2e"
+SUBCARD   = "#232830"
+SUBBORDER = "#39414c"
+UPDCARD   = "#232830"
+POWER_HOVER = "#2d323b"
 
 
 def resource_path(name):
@@ -1155,7 +1155,7 @@ class JeffTUN:
         self.connected = True
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self._update_current(nm)
-        self.power.configure(fg_color=OK, hover_color="#2bb768", image=self._picon_on, border_color=OK)
+        self.power.configure(fg_color=ACC, hover_color=ACC_D, image=self._picon_on, border_color=ACC)
         self._connect_time = time.time()
         self._tick()
 
