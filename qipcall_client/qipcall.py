@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.5.3"
+APP_VERSION = "5.5.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -64,11 +64,15 @@ def resource_path(name):
 # ══ ПАРСИНГ КЛЮЧЕЙ ═══════════════════════════════════════════════════════════
 def parse_link(link):
     link = link.strip()
-    if link.startswith("vless://"):  return _parse_vless(link)
-    if link.startswith("vmess://"):  return _parse_vmess(link)
-    if link.startswith("trojan://"): return _parse_trojan(link)
-    if link.startswith("ss://"):     return _parse_ss(link)
-    raise ValueError("Нужен ключ vless / vmess / trojan / ss")
+    if link.startswith("vless://"):    return _parse_vless(link)
+    if link.startswith("vmess://"):    return _parse_vmess(link)
+    if link.startswith("trojan://"):   return _parse_trojan(link)
+    if link.startswith("ss://"):       return _parse_ss(link)
+    if link.startswith(("socks://", "socks5://")): return _parse_socks(link)
+    if link.startswith(("wireguard://", "wg://")): return _parse_wireguard(link)
+    if link.startswith(("hysteria2://", "hy2://")):
+        raise ValueError("Hysteria2 требует ядро sing-box — пока не поддерживается")
+    raise ValueError("Нужен ключ vless / vmess / trojan / ss / socks5 / wireguard")
 
 
 def link_host_port(link):
@@ -130,6 +134,12 @@ def clean_name(name):
 def proto_line(link):
     try:
         scheme = link.split("://", 1)[0].upper()
+        if link.startswith(("wireguard://", "wg://")):
+            return "WIREGUARD · UDP"
+        if link.startswith(("socks://", "socks5://")):
+            return "SOCKS5 · TCP"
+        if link.startswith(("hysteria2://", "hy2://")):
+            return "HYSTERIA2 · QUIC"
         if link.startswith("vmess://"):
             raw = link[8:]; raw += "=" * (-len(raw) % 4)
             obj = json.loads(base64.b64decode(raw).decode())
@@ -207,6 +217,44 @@ def _parse_ss(link):
     host, port = server.split(":"); port = int(port.split("/")[0].split("?")[0])
     return {"protocol": "shadowsocks", "settings": {"servers": [{"address": host, "port": port,
             "method": method, "password": password}]}, "tag": "proxy"}
+
+
+def _parse_socks(link):
+    u = urlparse(link)
+    user = pwd = ""
+    if u.username:
+        # socks://base64(user:pass)@host:port  или  socks://user:pass@host:port
+        if u.password is not None:
+            user, pwd = unquote(u.username), unquote(u.password)
+        else:
+            try:
+                dec = base64.b64decode(u.username + "=" * (-len(u.username) % 4)).decode()
+                if ":" in dec: user, pwd = dec.split(":", 1)
+            except Exception:
+                user = unquote(u.username)
+    server = {"address": u.hostname, "port": u.port or 1080}
+    if user:
+        server["users"] = [{"user": user, "pass": pwd}]
+    return {"protocol": "socks", "settings": {"servers": [server]}, "tag": "proxy"}
+
+
+def _parse_wireguard(link):
+    u = urlparse(link); p = parse_qs(u.query)
+    priv = unquote(u.username or "") or p.get("privatekey", p.get("secretkey", [""]))[0]
+    pub = p.get("publickey", p.get("peerpublickey", p.get("pubkey", [""])))[0]
+    addr = p.get("address", p.get("ip", ["10.0.0.2/32"]))[0]
+    addrs = [a.split("/")[0] for a in addr.split(",") if a]
+    out = {"protocol": "wireguard",
+           "settings": {"secretKey": priv, "address": addrs or ["10.0.0.2"],
+                        "peers": [{"publicKey": pub, "endpoint": f"{u.hostname}:{u.port or 51820}"}]},
+           "tag": "proxy"}
+    mtu = p.get("mtu", [""])[0]
+    if mtu.isdigit(): out["settings"]["mtu"] = int(mtu)
+    res = p.get("reserved", [""])[0]
+    if res:
+        try: out["settings"]["reserved"] = [int(x) for x in res.split(",") if x.strip().isdigit()]
+        except Exception: pass
+    return out
 
 
 def build_xray_config(outbound):
@@ -559,7 +607,8 @@ class JeffTUN:
     def _add_manual(self, keys):
         existing = set(self.manual_links)
         # принимаем только настоящие ключи, http(s)-ссылки сюда не попадают
-        ok = ("vless://", "vmess://", "trojan://", "ss://")
+        ok = ("vless://", "vmess://", "trojan://", "ss://", "socks://", "socks5://",
+              "wireguard://", "wg://", "hysteria2://", "hy2://")
         added = [k for k in keys if k.startswith(ok) and k not in existing]
         self.manual_links += added
         self.active_tab = "all"
