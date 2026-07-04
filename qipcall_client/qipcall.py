@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -595,6 +595,11 @@ class JeffTUN:
                                    fg_color=BG, hover_color=BG, border_width=0,
                                    command=self.toggle)
         self.power.grid(row=1, column=0, pady=(10, 4))
+        # таймер прямо внутри кнопки (появляется при подключении)
+        self.timer_lbl = ctk.CTkLabel(right, text="", width=88, height=26, fg_color="transparent",
+                                      corner_radius=13, text_color="#ffffff",
+                                      font=ctk.CTkFont(FONT, 14, "bold"))
+        self.timer_lbl.place(in_=self.power, relx=0.5, rely=0.72, anchor="center")
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 0))
         # текущий сервер (флаг + имя)
@@ -763,9 +768,10 @@ class JeffTUN:
         cx = cy = S // 2
         R = int(S * 0.40)
         if on:
-            core = (46, 150, 255); rim = (8, 34, 96); glowc = (70, 175, 255); sym = (230, 248, 255)
+            # индиго под акцент приложения (#6c7bff)
+            core = (108, 123, 255); rim = (30, 30, 96); glowc = (124, 140, 255); sym = (240, 242, 255)
         else:
-            core = (120, 140, 172); rim = (26, 40, 62); glowc = (70, 92, 125); sym = (205, 215, 230)
+            core = (120, 128, 168); rim = (26, 32, 58); glowc = (70, 80, 125); sym = (208, 214, 235)
         im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
         # внешнее свечение
         g = Image.new("RGBA", (S, S), (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
@@ -1157,12 +1163,13 @@ class JeffTUN:
             pass
 
     def _tick(self):
-        """Таймер подключения: «Подключено  00:33:12»."""
+        """Таймер подключения прямо внутри кнопки: 00:33:12."""
         if not self.connected or not self._connect_time:
             return
         s = int(time.time() - self._connect_time)
         hhmmss = f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
-        self.status.configure(text=f"Подключено   {hhmmss}", text_color=OK)
+        self.timer_lbl.configure(text=hhmmss, fg_color="#2b2f6b")
+        self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
     def _start_pulse(self):
@@ -1196,6 +1203,7 @@ class JeffTUN:
             except Exception:
                 pass
         self.power.configure(image=self._orb_off)
+        self.timer_lbl.configure(text="", fg_color="transparent")
         self.status.configure(text="Отключено", text_color=MUTED)
 
     # ── Сохранение ──
