@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0.4"
+APP_VERSION = "2.0.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -512,7 +512,7 @@ class JeffTUN:
         self._ping_lbls = {}
         self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("760x560"); root.minsize(700, 520)
+        root.title(APP_NAME); root.geometry("720x560"); root.minsize(680, 520)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -520,30 +520,15 @@ class JeffTUN:
         except Exception:
             pass
 
-        # три колонки как в Happ: иконки | серверы | кнопка.
-        # uniform → серверы и кнопка ВСЕГДА одинаковой ширины (кнопка не сужается от вкладок)
+        # две колонки без боковой панели: серверы | кнопка (равной ширины через uniform)
+        root.grid_columnconfigure(0, weight=1, uniform="main")
         root.grid_columnconfigure(1, weight=1, uniform="main")
-        root.grid_columnconfigure(2, weight=1, uniform="main")
         root.grid_rowconfigure(0, weight=1)
-
-        # ── ЛЕВАЯ ПАНЕЛЬ ИКОНОК (как в Happ) ──
-        side = ctk.CTkFrame(root, width=58, fg_color=SIDE, corner_radius=0)
-        side.grid(row=0, column=0, sticky="nsw"); side.grid_propagate(False)
-        self.side = side
-        def sicon(txt, cmd, active=False):
-            ctk.CTkButton(side, text=txt, width=40, height=40, corner_radius=12,
-                          fg_color=(CARD if active else "transparent"), hover_color=CARD,
-                          text_color=(ACC if active else MUTED), font=ctk.CTkFont(FONT, 18),
-                          command=cmd).pack(pady=6)
-        ctk.CTkLabel(side, text="", height=8).pack()
-        sicon("⊕", self.paste_key)
-        sicon("🌐", lambda: None, active=True)
-        ctk.CTkLabel(side, text="", height=1).pack(expand=True, fill="y")
-        sicon("ⓘ", self._about)
+        self.side = None
 
         # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
         mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
-        mid.grid(row=0, column=1, sticky="nsew")
+        mid.grid(row=0, column=0, sticky="nsew")
         mid.grid_rowconfigure(3, weight=1); mid.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(mid, text="Серверы", font=ctk.CTkFont(FONT, 24, "bold"),
                      text_color=TEXT).grid(row=0, column=0, sticky="w", padx=20, pady=(18, 8))
@@ -578,7 +563,7 @@ class JeffTUN:
 
         # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
         right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
-        right.grid(row=0, column=2, sticky="nsew")
+        right.grid(row=0, column=1, sticky="nsew")
         right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(6, weight=1)
         right.grid_columnconfigure(0, weight=1)
         # логотип сверху
