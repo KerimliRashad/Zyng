@@ -44,6 +44,8 @@ jobs:
             --collect-all customtkinter `
             --add-binary "xray.exe;." `
             --add-data "logo_white.png;." `
+            --add-data "orb_on.png;." `
+            --add-data "orb_off.png;." `
             --add-data "icon.ico;." `
             --add-data "flags;flags" `
             qipcall.py
@@ -136,6 +138,8 @@ jobs:
             --collect-all customtkinter \
             --add-binary "xray:." \
             --add-data "logo_white.png:." \
+            --add-data "orb_on.png:." \
+            --add-data "orb_off.png:." \
             --add-data "flags:flags" \
             qipcall.py
       - name: Publish release (jefftun)

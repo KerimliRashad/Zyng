@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.0"
+APP_VERSION = "3.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -512,7 +512,7 @@ class JeffTUN:
         self._ping_lbls = {}
         self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("720x560"); root.minsize(680, 520)
+        root.title(APP_NAME); root.geometry("760x570"); root.minsize(700, 530)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -543,8 +543,14 @@ class JeffTUN:
         ctk.CTkButton(srow, text="🔄", width=42, height=42, corner_radius=13, fg_color=CARD,
                       hover_color=CARD2, text_color=TEXT, border_width=0,
                       font=ctk.CTkFont(FONT, 15), command=self.update_sub).pack(side="left", padx=(6, 0))
-        self.tabs_frame = ctk.CTkFrame(mid, fg_color="transparent")
+        # вкладки подписок — горизонтальная прокрутка, чтобы вмещались любые их количества
+        self.tabs_frame = ctk.CTkScrollableFrame(mid, fg_color="transparent", orientation="horizontal",
+                                                 height=40)
         self.tabs_frame.grid(row=2, column=0, sticky="ew", padx=14, pady=(8, 0))
+        try:
+            self.tabs_frame._scrollbar.grid_forget()
+        except Exception:
+            pass
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
@@ -583,10 +589,10 @@ class JeffTUN:
             pass
         if self._logo_ref is None:
             ctk.CTkLabel(h, text="JEFF", font=ctk.CTkFont(FONT, 26, "bold"), text_color=ACC).pack()
-        # кнопка-сфера
-        self._orb_off = self._make_orb(False, size=170)
-        self._orb_frames = [self._make_orb(True, g, size=170)
-                            for g in (0.55, 0.7, 0.85, 1.0, 0.85, 0.7)]
+        # кнопка-сфера: реальные картинки-пузыри (вкл/выкл), иначе рисуем сами
+        self._orb_off = self._orb_image(False, 1.0, 172) or self._make_orb(False, size=172)
+        self._orb_frames = [self._orb_image(True, b, 172) or self._make_orb(True, b, size=172)
+                            for b in (0.78, 0.9, 1.0, 1.12, 1.0, 0.9)]
         self._orb_idx = 0
         self.power = ctk.CTkButton(right, text="", image=self._orb_off,
                                    width=186, height=186, corner_radius=93,
@@ -754,6 +760,21 @@ class JeffTUN:
             return "Нет интернета или сервер недоступен"
         return "Не удалось выполнить"
 
+    def _orb_image(self, on, bright=1.0, size=172):
+        """Загружает картинку-пузырь (orb_on.png / orb_off.png) с яркостью для анимации."""
+        try:
+            from PIL import Image, ImageEnhance
+            p = resource_path("orb_on.png" if on else "orb_off.png")
+            if not os.path.exists(p):
+                return None
+            im = Image.open(p).convert("RGBA")
+            if bright != 1.0:
+                im = ImageEnhance.Brightness(im).enhance(bright)
+            im = im.resize((size, size), Image.LANCZOS)
+            return ctk.CTkImage(im, size=(size, size))
+        except Exception:
+            return None
+
     def _make_orb(self, on, glow=1.0, size=150):
         """Рисует реалистичную «водяную» кнопку-сферу с неоновым символом питания.
         on=True — синее свечение; on=False — бледно-серая."""
@@ -892,16 +913,16 @@ class JeffTUN:
     def render_tabs(self):
         for w in self.tabs_frame.winfo_children():
             w.destroy()
-        # вкладки показываем только если есть что переключать
-        if not self.subs and not self.manual_links:
-            return
         tabs = [("all", "Все")]
         if self.manual_links:
             tabs.append(("manual", "Ключи"))
         for s in self.subs:
             tabs.append((s["url"], s.get("title") or "Подписка"))
+        # прячем панель вкладок, если переключать нечего
         if len(tabs) <= 1:
+            self.tabs_frame.grid_remove()
             return
+        self.tabs_frame.grid()
         def short(t):
             t = "".join(c for c in t if c.isprintable())
             return t if len(t) <= 12 else t[:11] + "…"
