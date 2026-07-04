@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.3"
+APP_VERSION = "6.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -374,7 +374,7 @@ SUB_USER_AGENTS = [
 
 def _fetch_sub_once(url, ua, ctx):
     req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
+    with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
         data = r.read().decode("utf-8", "ignore").strip()
         title = r.headers.get("Profile-Title", "")
         userinfo = r.headers.get("Subscription-Userinfo", "")
@@ -698,18 +698,26 @@ class JeffTUN:
         else:
             self.subs.append({"url": url, "title": _sub_title(url)})
         self.sub_url = url
-        self._flash("Загружаю подписку…", MUTED); self.root.update()
-        try:
-            links, info = fetch_subscription(url)
-            self.sub_cache[url] = {"links": links, "info": info}
-            for s in self.subs:
-                if s["url"] == url and info.get("title"):
-                    s["title"] = info["title"]
-            self.active_tab = url; self.selected_idx = 0
-            self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
-            self._flash(f"Серверов: {len(links)} ✓", OK if links else DANGER)
-        except Exception as e:
-            self._flash(self._friendly_err(e), WARN)
+        self.active_tab = url
+        self.render_tabs()
+        self._flash("Загружаю подписку…", MUTED)
+        # ЗАГРУЗКА В ФОНЕ — интерфейс не зависает
+        def worker():
+            try:
+                links, info = fetch_subscription(url)
+                def done():
+                    self.sub_cache[url] = {"links": links, "info": info}
+                    for s in self.subs:
+                        if s["url"] == url and info.get("title"):
+                            s["title"] = info["title"]
+                    self.selected_idx = 0
+                    self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
+                    self._flash(f"Серверов: {len(links)} ✓" if links else "Подписка пустая",
+                                OK if links else WARN)
+                self.root.after(0, done)
+            except Exception as e:
+                self.root.after(0, lambda: self._flash(self._friendly_err(e), WARN))
+        threading.Thread(target=worker, daemon=True).start()
 
     def _flash(self, txt, color=MUTED):
         self.status.configure(text=txt, text_color=color)
@@ -1191,23 +1199,36 @@ class JeffTUN:
         self._pull_all_subs(reconnect=True)
 
     def _pull_all_subs(self, reconnect=False):
-        self._flash("Обновление подписок…", MUTED); self.root.update()
-        ok = 0
-        for s in self.subs:
-            try:
-                links, info = fetch_subscription(s["url"])
-                if links:
-                    self.sub_cache[s["url"]] = {"links": links, "info": info}
-                    if info.get("title"): s["title"] = info["title"]
-                    ok += 1
-            except Exception:
-                pass
-        self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
-        if ok:
-            self._flash(f"Обновлено подписок: {ok}", OK)
-        else:
-            self._flash("Нет интернета или подписки недоступны", WARN)
-        if reconnect and self.connected: self.disconnect(); self.connect()
+        if getattr(self, "_subs_updating", False):
+            return
+        self._subs_updating = True
+        self._flash("Обновление подписок…", MUTED)
+        subs = list(self.subs)
+        # ВСЁ в фоне — интерфейс не зависает, ключи можно вставлять параллельно
+        def worker():
+            results = {}
+            for s in subs:
+                try:
+                    links, info = fetch_subscription(s["url"])
+                    if links:
+                        results[s["url"]] = (links, info)
+                except Exception:
+                    pass
+            def done():
+                self._subs_updating = False
+                for url, (links, info) in results.items():
+                    self.sub_cache[url] = {"links": links, "info": info}
+                    for s in self.subs:
+                        if s["url"] == url and info.get("title"):
+                            s["title"] = info["title"]
+                self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
+                if results:
+                    self._flash(f"Обновлено подписок: {len(results)}", OK)
+                else:
+                    self._flash("Нет интернета или подписки недоступны", WARN)
+                if reconnect and self.connected: self.disconnect(); self.connect()
+            self.root.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
 
     # ── Обновление приложения ──
     def check_update(self, periodic=True):
