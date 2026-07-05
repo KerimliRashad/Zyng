@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -101,6 +101,9 @@ def _outbound_hostport(ob):
 def link_host_port(link):
     link = link.strip()
     try:
+        if link.startswith("sb://"):
+            ob = _parse_sblink(link)
+            return ob.get("server"), int(ob.get("server_port", 443) or 443)
         if link.startswith("json://"):
             return _outbound_hostport(_parse_jsonlink(link))
         if link.startswith("vmess://"):
@@ -158,6 +161,9 @@ def clean_name(name):
 
 def proto_line(link):
     try:
+        if link.startswith("sb://"):
+            ob = _parse_sblink(link)
+            return f"{(ob.get('type') or 'HYSTERIA2').upper()} | SB"
         if link.startswith("json://"):
             ob = _parse_jsonlink(link)
             return f"{(ob.get('protocol') or 'VLESS').upper()} | JSON"
@@ -228,7 +234,47 @@ def _singbox_to_xray(ob):
         if ob.get("username"):
             srv["users"] = [{"user": ob.get("username", ""), "pass": ob.get("password", "")}]
         return {"protocol": "socks", "settings": {"servers": [srv]}, "tag": "proxy"}
-    return None   # hysteria2/tuic/wireguard-singbox и т.п. — xray не тянет
+    return None   # hysteria2/tuic и т.п. — xray не тянет, пойдут через sing-box
+
+
+# Типы sing-box, которые xray НЕ умеет, но умеет само ядро sing-box
+SB_ONLY_TYPES = ("hysteria2", "hysteria", "tuic")
+
+
+def _sb_outbound(ob):
+    """Готовит sing-box outbound (tag=proxy) для прямого запуска через sing-box."""
+    if not ob.get("server"):
+        return None
+    o = dict(ob)
+    o["tag"] = "proxy"
+    o.pop("detour", None)
+    return o
+
+
+def _hy2_url_to_sb(link):
+    """hysteria2://password@host:port?sni=..&insecure=1#name → sb://<base64 sing-box outbound>."""
+    frag = link.split("#", 1)[1] if "#" in link else ""
+    u = urlparse(link); p = parse_qs(u.query)
+    ob = {"type": "hysteria2", "server": u.hostname, "server_port": u.port or 443,
+          "password": unquote(u.username or "") or unquote(u.password or "")}
+    sni = p.get("sni", p.get("peer", [""]))[0]
+    insecure = p.get("insecure", ["0"])[0] in ("1", "true")
+    ob["tls"] = {"enabled": True, "server_name": sni or u.hostname, "insecure": insecure}
+    obfs = p.get("obfs", [""])[0]
+    if obfs:
+        ob["obfs"] = {"type": obfs, "password": p.get("obfs-password", p.get("obfs_password", [""]))[0]}
+    ob["tag"] = "proxy"
+    b64 = base64.b64encode(json.dumps(ob, ensure_ascii=False).encode()).decode()
+    return f"sb://{b64}#{quote(unquote(frag) or (u.hostname or 'Hysteria2'))}"
+
+
+def _parse_sblink(link):
+    """sb://<base64 sing-box outbound> — готовый sing-box outbound из подписки."""
+    raw = link[5:].split("#", 1)[0]
+    raw += "=" * (-len(raw) % 4)
+    ob = json.loads(base64.b64decode(raw).decode("utf-8", "ignore"))
+    ob = dict(ob); ob["tag"] = "proxy"
+    return ob
 
 
 def _extract_json_servers(text):
@@ -251,19 +297,26 @@ def _extract_json_servers(text):
         for ob in (obs or []):
             if not isinstance(ob, dict):
                 continue
-            xob = None
+            xob = None; sbob = None
             if ob.get("protocol"):                       # xray-формат
                 if (ob.get("protocol") or "").lower() in ("vless", "vmess", "trojan", "shadowsocks", "socks"):
                     if _outbound_hostport(ob)[0]:
                         xob = dict(ob); xob["tag"] = "proxy"
             elif ob.get("type"):                         # sing-box-формат
-                xob = _singbox_to_xray(ob)
-            if not xob:
+                if (ob.get("type") or "").lower() in SB_ONLY_TYPES:   # hysteria2/tuic → ядро sing-box
+                    sbob = _sb_outbound(ob)
+                else:
+                    xob = _singbox_to_xray(ob)
+            if not xob and not sbob:
                 continue
             idx += 1
             nm = ob.get("tag") or name or f"Server {idx}"
-            b64 = base64.b64encode(json.dumps(xob, ensure_ascii=False).encode()).decode()
-            out.append(f"json://{b64}#{quote(nm)}")
+            if sbob:
+                b64 = base64.b64encode(json.dumps(sbob, ensure_ascii=False).encode()).decode()
+                out.append(f"sb://{b64}#{quote(nm)}")
+            else:
+                b64 = base64.b64encode(json.dumps(xob, ensure_ascii=False).encode()).decode()
+                out.append(f"json://{b64}#{quote(nm)}")
     return out
 
 
@@ -376,6 +429,19 @@ def build_xray_config(outbound):
             "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}},
                          {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"}],
             "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}]}
+
+
+def build_singbox_config(outbound):
+    """Конфиг sing-box: socks+http инбаунды на тех же портах, что и xray."""
+    return {
+        "log": {"level": "warn"},
+        "inbounds": [
+            {"type": "socks", "tag": "socks-in", "listen": "127.0.0.1", "listen_port": SOCKS_PORT},
+            {"type": "http", "tag": "http-in", "listen": "127.0.0.1", "listen_port": HTTP_PORT},
+        ],
+        "outbounds": [outbound, {"type": "direct", "tag": "direct"}],
+        "route": {"final": "proxy"},
+    }
 
 
 # ══ СИСТЕМНЫЙ ПРОКСИ ═════════════════════════════════════════════════════════
@@ -784,7 +850,9 @@ class JeffTUN:
         # принимаем только настоящие ключи, http(s)-ссылки сюда не попадают
         ok = ("vless://", "vmess://", "trojan://", "ss://", "socks://", "socks5://",
               "wireguard://", "wg://", "hysteria2://", "hy2://")
-        added = [k for k in keys if k.startswith(ok) and k not in existing]
+        # hysteria2:// → sb:// (запуск через ядро sing-box)
+        keys = [(_hy2_url_to_sb(k) if k.startswith(("hysteria2://", "hy2://")) else k) for k in keys]
+        added = [k for k in keys if k.startswith(ok + ("sb://",)) and k not in existing]
         self.manual_links += added
         self.active_tab = "all"
         self.selected_idx = 0
@@ -1285,19 +1353,31 @@ class JeffTUN:
         link = self._current_link()
         if not link:
             self._flash("Добавь и выбери сервер", DANGER); return
+        use_sb = link.strip().startswith("sb://")
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         try:
-            outbound = parse_link(link)
+            if use_sb:                                    # hysteria2 / tuic → ядро sing-box
+                outbound = _parse_sblink(link)
+                engine = resource_path("sing-box.exe" if os.name == "nt" else "sing-box")
+                if not os.path.exists(engine):
+                    self._flash("Не найден sing-box", DANGER); return
+                cfg = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_singbox.json")
+                with open(cfg, "w", encoding="utf-8") as f:
+                    json.dump(build_singbox_config(outbound), f)
+                cmd = [engine, "run", "-c", cfg]
+            else:
+                outbound = parse_link(link)
+                engine = resource_path("xray.exe" if os.name == "nt" else "xray")
+                if not os.path.exists(engine):
+                    self._flash("Не найден xray", DANGER); return
+                cfg = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
+                with open(cfg, "w", encoding="utf-8") as f:
+                    json.dump(build_xray_config(outbound), f)
+                cmd = [engine, "run", "-config", cfg]
         except Exception as e:
             self._flash(f"Неверный ключ: {e}", DANGER); return
-        xray = resource_path("xray.exe" if os.name == "nt" else "xray")
-        if not os.path.exists(xray):
-            self._flash("Не найден xray", DANGER); return
-        cfg = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
-        with open(cfg, "w", encoding="utf-8") as f:
-            json.dump(build_xray_config(outbound), f)
         try:
-            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-            self.proc = subprocess.Popen([xray, "run", "-config", cfg],
+            self.proc = subprocess.Popen(cmd,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         except Exception as e:
             self._flash(f"Ядро: {e}", DANGER); return
@@ -1397,7 +1477,14 @@ class JeffTUN:
             for s in self.subs:
                 links += self.sub_cache.get(s["url"], {}).get("links", [])
             self.sub_info = self.sub_cache.get(self.subs[-1]["url"], {}).get("info", {}) if self.subs else {}
-        self.links = links
+        # raw hysteria2:// из подписок/ключей → sb:// (ядро sing-box)
+        norm = []
+        for k in links:
+            if k.startswith(("hysteria2://", "hy2://")):
+                try: k = _hy2_url_to_sb(k)
+                except Exception: continue
+            norm.append(k)
+        self.links = norm
         if self.selected_idx >= len(self.links):
             self.selected_idx = max(0, len(self.links) - 1)
 

@@ -27,6 +27,15 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile xray.zip
           Expand-Archive -Path xray.zip -DestinationPath xray_bin -Force
           Copy-Item xray_bin/xray.exe qipcall_client/xray.exe
+      - name: Download sing-box (Windows 64-bit)
+        shell: pwsh
+        run: |
+          $json = Invoke-RestMethod "https://api.github.com/repos/SagerNet/sing-box/releases/latest"
+          $asset = $json.assets | Where-Object { $_.name -match "windows-amd64.*\.zip$" } | Select-Object -First 1
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile sb.zip
+          Expand-Archive -Path sb.zip -DestinationPath sb_bin -Force
+          $exe = Get-ChildItem -Recurse sb_bin -Filter sing-box.exe | Select-Object -First 1
+          Copy-Item $exe.FullName qipcall_client/sing-box.exe
       - name: Download flags
         shell: bash
         run: |
@@ -43,6 +52,7 @@ jobs:
             --icon "icon.ico" `
             --collect-all customtkinter `
             --add-binary "xray.exe;." `
+            --add-binary "sing-box.exe;." `
             --add-data "logo_white.png;." `
             --add-data "orb_on.png;." `
             --add-data "orb_off.png;." `
@@ -115,6 +125,14 @@ jobs:
           mkdir -p xray_bin && unzip -o xray.zip -d xray_bin
           cp xray_bin/xray qipcall_client/xray
           chmod +x qipcall_client/xray
+      - name: Download sing-box (Linux 64-bit)
+        run: |
+          url=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest \
+            | grep browser_download_url | grep 'linux-amd64.tar.gz' | grep -v abi | head -1 | cut -d'"' -f4)
+          curl -L -o sb.tar.gz "$url"
+          mkdir -p sb_bin && tar -xzf sb.tar.gz -C sb_bin
+          cp "$(find sb_bin -name sing-box -type f | head -1)" qipcall_client/sing-box
+          chmod +x qipcall_client/sing-box
       - name: Download flags
         run: |
           mkdir -p qipcall_client/flags
@@ -128,6 +146,7 @@ jobs:
             --name "JeffTUN-linux" \
             --collect-all customtkinter \
             --add-binary "xray:." \
+            --add-binary "sing-box:." \
             --add-data "logo_white.png:." \
             --add-data "orb_on.png:." \
             --add-data "orb_off.png:." \

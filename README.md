@@ -19,7 +19,8 @@
 ![Shadowsocks](https://img.shields.io/badge/Shadowsocks-db61a2?style=for-the-badge)
 ![SOCKS5](https://img.shields.io/badge/SOCKS5-e0574a?style=for-the-badge)
 ![WireGuard](https://img.shields.io/badge/WireGuard-f0883e?style=for-the-badge)
-![Hysteria2](https://img.shields.io/badge/Hysteria2-soon-6e7681?style=for-the-badge)
+![Hysteria2](https://img.shields.io/badge/Hysteria2-sing--box-2ea043?style=for-the-badge)
+![TUIC](https://img.shields.io/badge/TUIC-sing--box-2ea043?style=for-the-badge)
 
 - **VLESS** — с поддержкой REALITY и XTLS Vision
 - **VMess** — ws / grpc / tcp, TLS
@@ -27,7 +28,7 @@
 - **Shadowsocks** — AEAD
 - **SOCKS5** — с авторизацией и без
 - **WireGuard** — на ядре xray
-- **Hysteria2** — в разработке (требует ядро sing-box)
+- **Hysteria2 / TUIC** — на ядре sing-box (встроено в приложение)
 
 ## Возможности
 
