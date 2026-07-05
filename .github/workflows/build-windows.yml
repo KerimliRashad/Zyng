@@ -66,7 +66,8 @@ jobs:
           name: JeffTUN VPN
           files: qipcall_client/dist/JeffTUN.exe
           body: |
-            <h2 align="center">JeffTUN VPN 🦈</h2>
+            <p align="center"><img src="https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/jeff_banner.png" width="440" alt="JeffTUN"></p>
+            <h2 align="center">JeffTUN VPN</h2>
             <p align="center">Вставь ключ <code>vless:// · vmess:// · trojan:// · ss://</code> или ссылку-подписку — и нажми «Подключиться».</p>
 
             <table>

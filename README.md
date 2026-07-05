@@ -1,4 +1,5 @@
-<h1 align="center">JeffTUN VPN 🦈</h1>
+<p align="center"><img src="qipcall_client/jeff_banner.png" width="460" alt="JeffTUN"></p>
+<h1 align="center">JeffTUN VPN</h1>
 <p align="center">Быстрый VPN с обходом блокировок на ядре <b>xray-core</b>. Вставь ключ или ссылку-подписку — и подключайся.</p>
 
 ## Скачать
