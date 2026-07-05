@@ -1,0 +1,13 @@
+{
+  "version": "2.5",
+  "name": "JeffTUN VPN 2.5",
+  "notes": "Подписки sing-box (VLESS+Reality, xhttp, Hysteria2, TUIC) работают на родном ядре sing-box — как в Happ. Новый металлический логотип.",
+  "mandatory": false,
+  "windows": {
+    "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe"
+  },
+  "linux": {
+    "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux"
+  },
+  "releases": "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
+}

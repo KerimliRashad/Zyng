@@ -21,6 +21,7 @@ import customtkinter as ctk
 APP_NAME = "JeffTUN VPN"
 APP_VERSION = "2.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
+RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
 TELEGRAM_URL = "https://t.me/jeffvpn"
@@ -1541,13 +1542,21 @@ class JeffTUN:
                 ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
                 # cache-buster: raw.githubusercontent кэшируется ~5 мин на CDN,
                 # из-за этого «у одних сразу, у других долго». Обходим кэш.
-                url = VERSION_URL + ("?t=%d" % int(time.time()))
-                req = urllib.request.Request(url, headers={
-                    "User-Agent": "JeffTUN", "Cache-Control": "no-cache", "Pragma": "no-cache"})
-                latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
-                # обновляемся, когда версия в version.txt ОТЛИЧАЕТСЯ (в т.ч. после сброса на 2.0)
+                cb = "?t=%d" % int(time.time())
+                hdr = {"User-Agent": "JeffTUN", "Cache-Control": "no-cache", "Pragma": "no-cache"}
+                latest = ""; notes = ""
+                # 1) манифест RELEASE.json (версия + «что нового»); 2) фолбэк на version.txt
+                try:
+                    req = urllib.request.Request(RELEASE_JSON_URL + cb, headers=hdr)
+                    data = json.loads(urllib.request.urlopen(req, timeout=10, context=ctx).read().decode())
+                    latest = str(data.get("version", "")).strip()
+                    notes = str(data.get("notes", "")).strip()
+                except Exception:
+                    req = urllib.request.Request(VERSION_URL + cb, headers=hdr)
+                    latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
+                # обновляемся, когда версия ОТЛИЧАЕТСЯ (в т.ч. после сброса на 2.0)
                 if latest and latest != APP_VERSION:
-                    self.root.after(0, lambda: self._show_update(latest))
+                    self.root.after(0, lambda l=latest, n=notes: self._show_update(l, n))
             except Exception:
                 pass
         threading.Thread(target=worker, daemon=True).start()
@@ -1561,17 +1570,22 @@ class JeffTUN:
         try: return [int(x) for x in a.split(".")] > [int(x) for x in b.split(".")]
         except Exception: return a != b
 
-    def _show_update(self, latest):
+    def _show_update(self, latest, notes=""):
         self._latest = latest
         if self.update_bar: return
         self.update_bar = ctk.CTkFrame(self.root, fg_color=UPDCARD, corner_radius=14, border_width=1, border_color=OK)
         self.update_bar.place(relx=0.5, rely=0.02, anchor="n")
-        self._ulbl = ctk.CTkLabel(self.update_bar, text=f"🎉 Новая версия {latest}",
+        top = ctk.CTkFrame(self.update_bar, fg_color="transparent"); top.pack(fill="x")
+        self._ulbl = ctk.CTkLabel(top, text=f"🎉 Новая версия {latest}",
                                   font=ctk.CTkFont(FONT, 12, "bold"), text_color="#1a8f43")
-        self._ulbl.pack(side="left", padx=14, pady=8)
-        ctk.CTkButton(self.update_bar, text="Обновить", width=90, height=28, corner_radius=14,
+        self._ulbl.pack(side="left", padx=14, pady=(8, 4))
+        ctk.CTkButton(top, text="Обновить", width=90, height=28, corner_radius=14,
                       fg_color=OK, hover_color="#28b14a", text_color="#08160c",
                       font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
+        if notes:
+            ctk.CTkLabel(self.update_bar, text=notes, font=ctk.CTkFont(FONT, 10),
+                         text_color=MUTED, wraplength=360, justify="left").pack(
+                         side="top", anchor="w", padx=14, pady=(0, 8))
 
     def do_self_update(self):
         # macOS-сборки больше нет — на Mac (и в dev-режиме) открываем страницу релиза
