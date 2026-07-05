@@ -77,6 +77,20 @@ def parse_link(link):
     raise ValueError("Нужен ключ vless / vmess / trojan / ss / socks5 / wireguard")
 
 
+def _changelog_text(data):
+    """Собирает читаемый список изменений из RELEASE.json changelog (added/fixed/known)."""
+    cl = data.get("changelog") or {}
+    if not isinstance(cl, dict):
+        return ""
+    lines = []
+    for key, head in (("added", "✨ Добавлено"), ("fixed", "🛠 Исправлено"), ("known", "⚠️ Известно")):
+        items = cl.get(key) or []
+        if isinstance(items, list) and items:
+            lines.append(head + ":")
+            lines += ["  • " + str(x) for x in items]
+    return "\n".join(lines)
+
+
 def _parse_jsonlink(link):
     """json://<base64 outbound> — готовый xray-outbound из JSON-подписки."""
     raw = link[7:].split("#", 1)[0]
@@ -1550,7 +1564,7 @@ class JeffTUN:
                     req = urllib.request.Request(RELEASE_JSON_URL + cb, headers=hdr)
                     data = json.loads(urllib.request.urlopen(req, timeout=10, context=ctx).read().decode())
                     latest = str(data.get("version", "")).strip()
-                    notes = str(data.get("notes", "")).strip()
+                    notes = _changelog_text(data) or str(data.get("notes", "")).strip()
                 except Exception:
                     req = urllib.request.Request(VERSION_URL + cb, headers=hdr)
                     latest = urllib.request.urlopen(req, timeout=10, context=ctx).read().decode().strip()
