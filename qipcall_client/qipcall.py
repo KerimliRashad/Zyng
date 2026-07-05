@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.4"
+APP_VERSION = "2.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -240,6 +240,11 @@ def _singbox_to_xray(ob):
 # Типы sing-box, которые xray НЕ умеет, но умеет само ядро sing-box
 SB_ONLY_TYPES = ("hysteria2", "hysteria", "tuic")
 
+# Все прокси-типы sing-box: подписку sing-box запускаем через её родное ядро
+# БЕЗ конвертации (как в Happ) — так vless+reality+xhttp/hysteria2/tuic работают 1-в-1.
+SB_PROXY_TYPES = ("vless", "vmess", "trojan", "shadowsocks", "socks", "http",
+                  "hysteria", "hysteria2", "tuic", "wireguard", "shadowtls", "anytls")
+
 
 def _sb_outbound(ob):
     """Готовит sing-box outbound (tag=proxy) для прямого запуска через sing-box."""
@@ -302,11 +307,9 @@ def _extract_json_servers(text):
                 if (ob.get("protocol") or "").lower() in ("vless", "vmess", "trojan", "shadowsocks", "socks"):
                     if _outbound_hostport(ob)[0]:
                         xob = dict(ob); xob["tag"] = "proxy"
-            elif ob.get("type"):                         # sing-box-формат
-                if (ob.get("type") or "").lower() in SB_ONLY_TYPES:   # hysteria2/tuic → ядро sing-box
+            elif ob.get("type"):                         # sing-box-формат → ядро sing-box (без конвертации)
+                if (ob.get("type") or "").lower() in SB_PROXY_TYPES:
                     sbob = _sb_outbound(ob)
-                else:
-                    xob = _singbox_to_xray(ob)
             if not xob and not sbob:
                 continue
             idx += 1
