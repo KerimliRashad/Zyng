@@ -1,19 +1,21 @@
 {
-  "version": "2.5",
-  "name": "JeffTUN VPN 2.5",
+  "version": "2.6",
+  "name": "JeffTUN VPN 2.6",
   "channel": "stable",
   "mandatory": false,
-  "notes": "Подписки sing-box (VLESS+Reality, xhttp, Hysteria2, TUIC) работают на родном ядре sing-box — как в Happ. Новый металлический логотип.",
+  "notes": "Умная маршрутизация (RU-сайты напрямую), режим TUN на весь ПК и тест реальной скорости — как в v2rayN.",
   "changelog": {
     "added": [
-      "Встроенное ядро sing-box — Hysteria2 и TUIC теперь подключаются",
-      "Металлический логотип JEFF в шапке и приложении"
+      "Умная маршрутизация: локальные и RU-сайты идут напрямую, остальное через VPN",
+      "Режим TUN — VPN на всю систему (все приложения), через ядро sing-box",
+      "Тест реальной скорости загрузки (Мбит/с) через активное соединение"
     ],
     "fixed": [
-      "Подписки в формате sing-box (VLESS+Reality, xhttp) больше не пустые и подключаются",
-      "Подписка hysvpn работает полностью, как в Happ"
+      "Подписки sing-box (VLESS+Reality, xhttp, Hysteria2, TUIC) работают на родном ядре"
     ],
-    "known": []
+    "known": [
+      "Режим TUN требует запуска приложения от имени администратора"
+    ]
   },
   "windows": {
     "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe"

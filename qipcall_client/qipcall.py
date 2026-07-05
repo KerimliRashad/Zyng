@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.5"
+APP_VERSION = "2.6"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -442,14 +442,45 @@ def _parse_wireguard(link):
     return out
 
 
-def build_xray_config(outbound):
-    return {"log": {"loglevel": "warning"},
-            "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}},
-                         {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"}],
-            "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}]}
+def _xray_routing(prefs):
+    """Умная маршрутизация xray: локальные и RU-адреса напрямую, остальное через VPN.
+    Требует geoip.dat/geosite.dat рядом с ядром (XRAY_LOCATION_ASSET)."""
+    if not (prefs or {}).get("route_smart"):
+        return None
+    return {"domainStrategy": "IPIfNonMatch", "rules": [
+        {"type": "field", "ip": ["geoip:private", "geoip:ru"], "outboundTag": "direct"},
+        {"type": "field", "domain": ["geosite:category-ru", "geosite:private"], "outboundTag": "direct"},
+    ]}
 
 
-def build_singbox_config(outbound):
+def _singbox_route(prefs, final="proxy"):
+    """Маршрутизация sing-box: приватные сети и RU напрямую через удалённые rule-set."""
+    route = {"final": final}
+    if (prefs or {}).get("route_smart"):
+        route["rules"] = [
+            {"ip_is_private": True, "outbound": "direct"},
+            {"rule_set": ["geoip-ru", "geosite-ru"], "outbound": "direct"},
+        ]
+        route["rule_set"] = [
+            {"type": "remote", "tag": "geoip-ru", "format": "binary", "download_detour": "direct",
+             "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs"},
+            {"type": "remote", "tag": "geosite-ru", "format": "binary", "download_detour": "direct",
+             "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.srs"},
+        ]
+    return route
+
+
+def build_xray_config(outbound, prefs=None):
+    cfg = {"log": {"loglevel": "warning"},
+           "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}},
+                        {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"}],
+           "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}]}
+    r = _xray_routing(prefs)
+    if r: cfg["routing"] = r
+    return cfg
+
+
+def build_singbox_config(outbound, prefs=None):
     """Конфиг sing-box: socks+http инбаунды на тех же портах, что и xray."""
     return {
         "log": {"level": "warn"},
@@ -458,7 +489,25 @@ def build_singbox_config(outbound):
             {"type": "http", "tag": "http-in", "listen": "127.0.0.1", "listen_port": HTTP_PORT},
         ],
         "outbounds": [outbound, {"type": "direct", "tag": "direct"}],
-        "route": {"final": "proxy"},
+        "route": _singbox_route(prefs),
+    }
+
+
+def build_tun_config(prefs=None):
+    """TUN-режим: sing-box перехватывает ВЕСЬ трафик системы и гонит его в наш
+    локальный socks-прокси (xray/sing-box). Требует прав администратора."""
+    return {
+        "log": {"level": "warn"},
+        "inbounds": [{
+            "type": "tun", "tag": "tun-in", "interface_name": "jefftun",
+            "address": ["172.19.0.1/30"], "mtu": 1500,
+            "auto_route": True, "strict_route": True, "stack": "system",
+        }],
+        "outbounds": [
+            {"type": "socks", "tag": "proxy", "server": "127.0.0.1", "server_port": SOCKS_PORT, "version": "5"},
+            {"type": "direct", "tag": "direct"},
+        ],
+        "route": _singbox_route(prefs),
     }
 
 
@@ -836,9 +885,13 @@ class JeffTUN:
         self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=TEXT)
         self.cur_lbl.grid(row=5, column=0, pady=(2, 0))
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=6, column=0, pady=(8, 6))
-        ctk.CTkButton(bottom, text="Тест пинга", width=160, height=36, corner_radius=18,
+        brow = ctk.CTkFrame(bottom, fg_color="transparent"); brow.pack(pady=(0, 8))
+        ctk.CTkButton(brow, text="Тест пинга", width=110, height=36, corner_radius=18,
                       fg_color=ACC, hover_color=ACC_D, text_color="white",
-                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(pady=(0, 8))
+                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(brow, text="⚡ Скорость", width=110, height=36, corner_radius=18,
+                      fg_color=CARD2, hover_color=BORDER, text_color=TEXT,
+                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.speed_test).pack(side="left")
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 8))
         foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn",
@@ -1373,34 +1426,56 @@ class JeffTUN:
             self._flash("Добавь и выбери сервер", DANGER); return
         use_sb = link.strip().startswith("sb://")
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        env = dict(os.environ)
+        cfgdir = os.path.dirname(CONFIG_FILE)
         try:
             if use_sb:                                    # hysteria2 / tuic → ядро sing-box
                 outbound = _parse_sblink(link)
                 engine = resource_path("sing-box.exe" if os.name == "nt" else "sing-box")
                 if not os.path.exists(engine):
                     self._flash("Не найден sing-box", DANGER); return
-                cfg = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_singbox.json")
+                cfg = os.path.join(cfgdir, ".jeffton_singbox.json")
                 with open(cfg, "w", encoding="utf-8") as f:
-                    json.dump(build_singbox_config(outbound), f)
+                    json.dump(build_singbox_config(outbound, self.prefs), f)
                 cmd = [engine, "run", "-c", cfg]
             else:
                 outbound = parse_link(link)
                 engine = resource_path("xray.exe" if os.name == "nt" else "xray")
                 if not os.path.exists(engine):
                     self._flash("Не найден xray", DANGER); return
-                cfg = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_xray.json")
+                # geoip.dat/geosite.dat лежат рядом с ядром — укажем ядру, где их искать
+                env["XRAY_LOCATION_ASSET"] = os.path.dirname(engine)
+                cfg = os.path.join(cfgdir, ".jeffton_xray.json")
                 with open(cfg, "w", encoding="utf-8") as f:
-                    json.dump(build_xray_config(outbound), f)
+                    json.dump(build_xray_config(outbound, self.prefs), f)
                 cmd = [engine, "run", "-config", cfg]
         except Exception as e:
             self._flash(f"Неверный ключ: {e}", DANGER); return
         try:
-            self.proc = subprocess.Popen(cmd,
+            self.proc = subprocess.Popen(cmd, env=env,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         except Exception as e:
             self._flash(f"Ядро: {e}", DANGER); return
-        try: set_system_proxy(True)
-        except Exception: pass
+        # TUN-режим: весь трафик системы через sing-box tun → наш локальный socks
+        self.tun_proc = None
+        if self.prefs.get("tun_mode"):
+            sb = resource_path("sing-box.exe" if os.name == "nt" else "sing-box")
+            if os.path.exists(sb):
+                try:
+                    tcfg = os.path.join(cfgdir, ".jeffton_tun.json")
+                    with open(tcfg, "w", encoding="utf-8") as f:
+                        json.dump(build_tun_config(self.prefs), f)
+                    self.tun_proc = subprocess.Popen([sb, "run", "-c", tcfg], env=env,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+                    time.sleep(0.6)
+                    if self.tun_proc.poll() is not None:   # упал — скорее всего нет прав админа
+                        self.tun_proc = None
+                        self._flash("TUN не запущен — запусти от администратора", WARN)
+                except Exception:
+                    self.tun_proc = None
+        if not self.tun_proc:                              # прокси-режим (или TUN не поднялся)
+            try: set_system_proxy(True)
+            except Exception: pass
         self.connected = True
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self._update_current(nm)
@@ -1432,6 +1507,10 @@ class JeffTUN:
     def disconnect(self):
         try: set_system_proxy(False)
         except Exception: pass
+        if getattr(self, "tun_proc", None):
+            try: self.tun_proc.terminate()
+            except Exception: pass
+            self.tun_proc = None
         if self.proc:
             try: self.proc.terminate()
             except Exception: pass
@@ -1751,6 +1830,11 @@ class JeffTUN:
         choice(c, "Тип IP", "ip_type", ["IPv4", "IPv6", "Авто"], "IPv4")
         sw(c, "Фрагментирование", "fragment", False)
         sw(c, "Разрешить LAN", "lan", False)
+        c = section("МАРШРУТИЗАЦИЯ")
+        sw(c, "Умная (RU-сайты напрямую)", "route_smart", False,
+           cmd=lambda _v: self._reconnect_note())
+        sw(c, "Режим TUN — весь ПК (нужен админ)", "tun_mode", False,
+           cmd=lambda _v: self._reconnect_note())
         c = section("ДАННЫЕ")
         link(c, "🗑 Сброс (удалить ключи)", self._reset_key, color=DANGER)
         c = section("ПОДРОБНЕЕ")
@@ -1765,6 +1849,37 @@ class JeffTUN:
         self.sub_url = ""; self.active_tab = "all"; self.selected_idx = 0; self.render_servers()
         try: os.remove(CONFIG_FILE)
         except Exception: pass
+
+    def _reconnect_note(self):
+        if self.connected:
+            self._flash("Переподключись, чтобы применить", WARN)
+
+    def speed_test(self):
+        """Реальный тест скорости загрузки через активное соединение (Мбит/с)."""
+        if not self.connected:
+            self._flash("Сначала подключись", WARN); return
+        self._flash("Замеряю скорость…", MUTED)
+        def worker():
+            try:
+                import ssl
+                proxy = f"http://127.0.0.1:{HTTP_PORT}"
+                handler = urllib.request.ProxyHandler({"http": proxy, "https": proxy})
+                ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+                opener = urllib.request.build_opener(handler, urllib.request.HTTPSHandler(context=ctx))
+                url = "https://speed.cloudflare.com/__down?bytes=10000000"   # 10 МБ
+                t0 = time.time(); got = 0
+                with opener.open(urllib.request.Request(url, headers={"User-Agent": "JeffTUN"}), timeout=30) as r:
+                    while True:
+                        chunk = r.read(65536)
+                        if not chunk: break
+                        got += len(chunk)
+                        if time.time() - t0 > 12: break     # хватит для оценки
+                dt = max(0.001, time.time() - t0)
+                mbps = (got * 8) / dt / 1_000_000
+                self.root.after(0, lambda: self._flash(f"⚡ Скорость: {mbps:.1f} Мбит/с", OK))
+            except Exception:
+                self.root.after(0, lambda: self._flash("Не удалось замерить скорость", DANGER))
+        threading.Thread(target=worker, daemon=True).start()
 
     def _about(self):
         messagebox.showinfo("О приложении", f"JeffTUN VPN v{APP_VERSION}\n\nБыстрый VPN с обходом блокировок.\n"

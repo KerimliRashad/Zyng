@@ -36,6 +36,17 @@ jobs:
           Expand-Archive -Path sb.zip -DestinationPath sb_bin -Force
           $exe = Get-ChildItem -Recurse sb_bin -Filter sing-box.exe | Select-Object -First 1
           Copy-Item $exe.FullName qipcall_client/sing-box.exe
+      - name: Download routing data (geoip/geosite)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"   -OutFile qipcall_client/geoip.dat
+          Invoke-WebRequest "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -OutFile qipcall_client/geosite.dat
+      - name: Download wintun (для TUN-режима)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://www.wintun.net/builds/wintun-0.14.1.zip" -OutFile wintun.zip
+          Expand-Archive -Path wintun.zip -DestinationPath wintun_bin -Force
+          Copy-Item wintun_bin/wintun/bin/amd64/wintun.dll qipcall_client/wintun.dll
       - name: Download flags
         shell: bash
         run: |
@@ -53,6 +64,9 @@ jobs:
             --collect-all customtkinter `
             --add-binary "xray.exe;." `
             --add-binary "sing-box.exe;." `
+            --add-binary "wintun.dll;." `
+            --add-data "geoip.dat;." `
+            --add-data "geosite.dat;." `
             --add-data "logo_white.png;." `
             --add-data "orb_on.png;." `
             --add-data "orb_off.png;." `
@@ -134,6 +148,10 @@ jobs:
           mkdir -p sb_bin && tar -xzf sb.tar.gz -C sb_bin
           cp "$(find sb_bin -name sing-box -type f | head -1)" qipcall_client/sing-box
           chmod +x qipcall_client/sing-box
+      - name: Download routing data (geoip/geosite)
+        run: |
+          curl -L -o qipcall_client/geoip.dat   "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
+          curl -L -o qipcall_client/geosite.dat "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
       - name: Download flags
         run: |
           mkdir -p qipcall_client/flags
@@ -148,6 +166,8 @@ jobs:
             --collect-all customtkinter \
             --add-binary "xray:." \
             --add-binary "sing-box:." \
+            --add-data "geoip.dat:." \
+            --add-data "geosite.dat:." \
             --add-data "logo_white.png:." \
             --add-data "orb_on.png:." \
             --add-data "orb_off.png:." \
