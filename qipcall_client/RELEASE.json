@@ -1,17 +1,16 @@
 {
-  "version": "2.7",
-  "name": "JeffTUN VPN 2.7",
+  "version": "2.8",
+  "name": "JeffTUN VPN 2.8",
   "channel": "stable",
   "mandatory": false,
-  "notes": "Теперь подключаются подписки Clash / Clash.Meta (YAML) и ключи tuic:// и hysteria:// — поддержаны почти все форматы подписок.",
+  "notes": "Поддержка ключей и подписок Outline: ssconf:// и формат SIP008. Теперь подключаются почти все виды подписок.",
   "changelog": {
     "added": [
-      "Подписки Clash / Clash.Meta (YAML) — VMess, VLESS, Trojan, SS, Hysteria2, TUIC, SOCKS",
-      "Прямые ключи tuic:// и hysteria:// (v1) — через ядро sing-box",
-      "Умная маршрутизация, режим TUN на весь ПК и тест скорости (из 2.6)"
+      "Ключи Outline: ssconf:// (динамический ключ доступа)",
+      "Онлайн-конфиг SIP008 (Outline и ss-панели) — список серверов и одиночный ключ"
     ],
     "fixed": [
-      "Больше форматов подписок распознаются и подключаются: base64, plain, xray-JSON, sing-box-JSON, Clash-YAML"
+      "Ещё больше форматов подписок распознаются: base64, plain, xray-JSON, sing-box-JSON, Clash-YAML, SIP008"
     ],
     "known": [
       "Режим TUN требует запуска приложения от имени администратора"

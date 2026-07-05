@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.7"
+APP_VERSION = "2.8"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -480,6 +480,32 @@ def _extract_json_servers(text):
         if not isinstance(cfg, dict):
             continue
         name = cfg.get("remarks") or cfg.get("remark") or cfg.get("ps") or cfg.get("name") or ""
+        # SIP008 online-config (Outline и ss-панели): {"servers":[{server,server_port,method,password,...}]}
+        srv = cfg.get("servers")
+        if isinstance(srv, list) and srv and isinstance(srv[0], dict) and srv[0].get("method") and not cfg.get("outbounds"):
+            for s in srv:
+                if not (s.get("server") and s.get("method")):
+                    continue
+                sb = {"type": "shadowsocks", "server": s.get("server"),
+                      "server_port": int(s.get("server_port", 8388) or 8388),
+                      "method": s.get("method"), "password": s.get("password", ""), "tag": "proxy"}
+                if s.get("plugin"):
+                    sb["plugin"] = s.get("plugin"); sb["plugin_opts"] = s.get("plugin_opts", "")
+                idx += 1
+                nm = s.get("remarks") or s.get("name") or name or f"Server {idx}"
+                b64 = base64.b64encode(json.dumps(sb, ensure_ascii=False).encode()).decode()
+                out.append(f"sb://{b64}#{quote(nm)}")
+            continue
+        # одиночный ss-конфиг Outline: {"server","server_port","method","password"}
+        if cfg.get("method") and cfg.get("server") and not cfg.get("type") and not cfg.get("protocol"):
+            sb = {"type": "shadowsocks", "server": cfg.get("server"),
+                  "server_port": int(cfg.get("server_port", 8388) or 8388),
+                  "method": cfg.get("method"), "password": cfg.get("password", ""), "tag": "proxy"}
+            idx += 1
+            nm = name or cfg.get("server") or f"Server {idx}"
+            b64 = base64.b64encode(json.dumps(sb, ensure_ascii=False).encode()).decode()
+            out.append(f"sb://{b64}#{quote(nm)}")
+            continue
         obs = cfg.get("outbounds")
         if not obs and (cfg.get("protocol") or cfg.get("type")):
             obs = [cfg]
@@ -795,7 +821,16 @@ SUB_USER_AGENTS = [
 ]
 
 
+def _norm_sub_url(url):
+    """Outline: ssconf://host/path — это на самом деле https://host/path (SIP008)."""
+    u = (url or "").strip()
+    if u.startswith("ssconf://"):
+        return "https://" + u[len("ssconf://"):]
+    return u
+
+
 def _fetch_sub_once(url, ua, ctx):
+    url = _norm_sub_url(url)
     req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
     with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
         raw = r.read().decode("utf-8", "ignore").strip()
@@ -1108,7 +1143,8 @@ class JeffTUN:
         if not v:
             return
         # ссылка-подписка → отдельным разделом, а не как «битый ключ»
-        if v.startswith("http://") or v.startswith("https://"):
+        # (ssconf:// — динамический ключ Outline, тоже подписка)
+        if v.startswith(("http://", "https://", "ssconf://")):
             self._add_sub_url(v); return
         if "://" in v:
             n = self._add_manual([v])
