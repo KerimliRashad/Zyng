@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.2.2"
+APP_VERSION = "2.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -167,8 +167,72 @@ def proto_line(link):
         return "VLESS | JSON"
 
 
+def _singbox_stream(ob):
+    """streamSettings (xray) из sing-box tls/transport."""
+    tls = ob.get("tls") or {}
+    tr = ob.get("transport") or {}
+    net = (tr.get("type") or "tcp").lower()
+    net = {"http": "http", "httpupgrade": "httpupgrade", "ws": "ws", "grpc": "grpc",
+           "quic": "quic", "xhttp": "xhttp", "": "tcp", "tcp": "tcp"}.get(net, net)
+    ss = {"network": net}
+    reality = tls.get("reality") or {}
+    fp = ((tls.get("utls") or {}).get("fingerprint")) or "chrome"
+    sni = tls.get("server_name") or (tr.get("host") if isinstance(tr.get("host"), str) else "") or ob.get("server")
+    if reality.get("enabled") or reality.get("public_key"):
+        ss["security"] = "reality"
+        ss["realitySettings"] = {"serverName": sni, "fingerprint": fp,
+                                 "publicKey": reality.get("public_key", ""),
+                                 "shortId": reality.get("short_id", ""), "spiderX": ""}
+    elif tls.get("enabled"):
+        ss["security"] = "tls"
+        ss["tlsSettings"] = {"serverName": sni, "fingerprint": fp,
+                             "allowInsecure": bool(tls.get("insecure"))}
+    if net == "ws":
+        host = tr.get("headers", {}).get("Host") or tr.get("host") or ""
+        ss["wsSettings"] = {"path": tr.get("path", "/"), "headers": {"Host": host} if host else {}}
+    elif net == "grpc":
+        ss["grpcSettings"] = {"serviceName": tr.get("service_name", "")}
+    elif net in ("http",):
+        ss["httpSettings"] = {"path": tr.get("path", "/"),
+                              "host": ([tr.get("host")] if isinstance(tr.get("host"), str) else tr.get("host", []))}
+    elif net in ("httpupgrade", "xhttp"):
+        ss[("xhttpSettings" if net == "xhttp" else "httpupgradeSettings")] = {
+            "path": tr.get("path", "/"), "host": tr.get("host", "")}
+    return ss
+
+
+def _singbox_to_xray(ob):
+    """Конвертирует sing-box outbound → xray outbound. None если не поддерживается (hysteria2 и пр.)."""
+    t = (ob.get("type") or "").lower()
+    host = ob.get("server"); port = int(ob.get("server_port", 443) or 443)
+    if not host:
+        return None
+    if t == "vless":
+        return {"protocol": "vless", "settings": {"vnext": [{"address": host, "port": port,
+                "users": [{"id": ob.get("uuid", ""), "encryption": "none", "flow": ob.get("flow", "")}]}]},
+                "streamSettings": _singbox_stream(ob), "tag": "proxy"}
+    if t == "vmess":
+        return {"protocol": "vmess", "settings": {"vnext": [{"address": host, "port": port,
+                "users": [{"id": ob.get("uuid", ""), "alterId": int(ob.get("alter_id", 0) or 0),
+                           "security": ob.get("security", "auto")}]}]},
+                "streamSettings": _singbox_stream(ob), "tag": "proxy"}
+    if t == "trojan":
+        return {"protocol": "trojan", "settings": {"servers": [{"address": host, "port": port,
+                "password": ob.get("password", "")}]},
+                "streamSettings": _singbox_stream(ob), "tag": "proxy"}
+    if t == "shadowsocks":
+        return {"protocol": "shadowsocks", "settings": {"servers": [{"address": host, "port": port,
+                "method": ob.get("method", "aes-128-gcm"), "password": ob.get("password", "")}]}, "tag": "proxy"}
+    if t == "socks":
+        srv = {"address": host, "port": port}
+        if ob.get("username"):
+            srv["users"] = [{"user": ob.get("username", ""), "pass": ob.get("password", "")}]
+        return {"protocol": "socks", "settings": {"servers": [srv]}, "tag": "proxy"}
+    return None   # hysteria2/tuic/wireguard-singbox и т.п. — xray не тянет
+
+
 def _extract_json_servers(text):
-    """Подписка вернула Xray JSON-конфиг(и) → достаём прокси-outbound'ы как серверы.
+    """Достаёт серверы из JSON-подписки: xray-формат (protocol/vnext) И sing-box (type/server).
     Возвращает список псевдо-ссылок json://<base64>#имя."""
     out = []
     try:
@@ -182,20 +246,23 @@ def _extract_json_servers(text):
             continue
         name = cfg.get("remarks") or cfg.get("remark") or cfg.get("ps") or cfg.get("name") or ""
         obs = cfg.get("outbounds")
-        if not obs and cfg.get("protocol"):
-            obs = [cfg]                      # это уже сам outbound
+        if not obs and (cfg.get("protocol") or cfg.get("type")):
+            obs = [cfg]
         for ob in (obs or []):
             if not isinstance(ob, dict):
                 continue
-            proto = (ob.get("protocol") or "").lower()
-            if proto not in ("vless", "vmess", "trojan", "shadowsocks", "socks"):
-                continue
-            host, _ = _outbound_hostport(ob)
-            if not host:
+            xob = None
+            if ob.get("protocol"):                       # xray-формат
+                if (ob.get("protocol") or "").lower() in ("vless", "vmess", "trojan", "shadowsocks", "socks"):
+                    if _outbound_hostport(ob)[0]:
+                        xob = dict(ob); xob["tag"] = "proxy"
+            elif ob.get("type"):                         # sing-box-формат
+                xob = _singbox_to_xray(ob)
+            if not xob:
                 continue
             idx += 1
-            nm = name or f"{proto.upper()} {idx}"
-            b64 = base64.b64encode(json.dumps(ob, ensure_ascii=False).encode()).decode()
+            nm = ob.get("tag") or name or f"Server {idx}"
+            b64 = base64.b64encode(json.dumps(xob, ensure_ascii=False).encode()).decode()
             out.append(f"json://{b64}#{quote(nm)}")
     return out
 
