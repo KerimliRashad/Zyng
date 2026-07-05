@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.2.1"
+APP_VERSION = "2.2.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -441,21 +441,21 @@ def _fetch_sub_once(url, ua, ctx):
         pass
     # 1) JSON-подписка (готовый xray-конфиг, как у incy/K-VPN)
     for c in candidates:
-        cs = c.lstrip()
-        if cs[:1] in ("{", "["):
-            js = _extract_json_servers(cs)
-            if js:
-                return js, title, userinfo
-    # 2) обычные ссылки vless:// и т.п.
-    data = raw
-    for c in candidates:
-        if "://" in c:
-            data = c; break
-    links = [ln.strip() for ln in data.splitlines() if "://" in ln]
+        js = _extract_json_servers(c.strip().lstrip("﻿"))
+        if js:
+            return js, title, userinfo
+    # 2) обычные ссылки — ТОЛЬКО настоящие протоколы (не http/https/мусор из JSON)
+    VALID = ("vless://", "vmess://", "trojan://", "ss://", "socks://", "socks5://",
+             "wireguard://", "wg://", "hysteria2://", "hy2://")
     def _is_stub(l):
         low = unquote(l).lower()
         return ("app not supported" in low) or ("not supported" in low) or ("unsupported" in low)
-    links = [l for l in links if not _is_stub(l)]
+    links = []
+    for c in candidates:
+        for ln in c.splitlines():
+            ln = ln.strip()
+            if ln.startswith(VALID) and not _is_stub(ln) and ln not in links:
+                links.append(ln)
     return links, title, userinfo
 
 
@@ -616,14 +616,17 @@ class JeffTUN:
         ctk.CTkButton(srow, text="🔄", width=42, height=42, corner_radius=13, fg_color=CARD,
                       hover_color=CARD2, text_color=TEXT, border_width=0,
                       font=ctk.CTkFont(FONT, 15), command=self.update_sub).pack(side="left", padx=(6, 0))
-        # вкладки подписок — горизонтальная прокрутка, чтобы вмещались любые их количества
-        self.tabs_frame = ctk.CTkScrollableFrame(mid, fg_color="transparent", orientation="horizontal",
-                                                 height=40)
-        self.tabs_frame.grid(row=2, column=0, sticky="ew", padx=14, pady=(8, 0))
-        try:
-            self.tabs_frame._scrollbar.grid_forget()
-        except Exception:
-            pass
+        # выбор источника (подписки/ключи) — выпадающий список, влезает на любом экране
+        self.tabs_frame = ctk.CTkFrame(mid, fg_color="transparent")
+        self.tabs_frame.grid(row=2, column=0, sticky="ew", padx=16, pady=(8, 0))
+        self._tab_map = {}
+        self.tab_menu = ctk.CTkOptionMenu(self.tabs_frame, values=["Все"], width=200, height=32,
+                                          corner_radius=10, fg_color=CARD, button_color=CARD2,
+                                          button_hover_color=BORDER, text_color=TEXT,
+                                          dropdown_fg_color=CARD, dropdown_text_color=TEXT,
+                                          dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 12, "bold"),
+                                          command=self._on_tab_menu)
+        self.tab_menu.pack(side="left")
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
@@ -981,28 +984,36 @@ class JeffTUN:
     def toggle_side(self):
         pass  # левой панели больше нет
 
+    def _on_tab_menu(self, label):
+        key = self._tab_map.get(label)
+        if key is not None:
+            self.switch_tab(key)
+
     def render_tabs(self):
-        for w in self.tabs_frame.winfo_children():
-            w.destroy()
         tabs = [("all", "Все")]
         if self.manual_links:
-            tabs.append(("manual", "Ключи"))
+            tabs.append(("manual", "Мои ключи"))
         for s in self.subs:
             tabs.append((s["url"], s.get("title") or "Подписка"))
-        # прячем панель вкладок, если переключать нечего
+        # прячем выбор, если переключать нечего
         if len(tabs) <= 1:
             self.tabs_frame.grid_remove()
             return
         self.tabs_frame.grid()
-        def short(t):
-            t = "".join(c for c in t if c.isprintable())
-            return t if len(t) <= 12 else t[:11] + "…"
+        # уникальные подписи для выпадающего списка
+        self._tab_map = {}
+        values = []
         for key, label in tabs:
-            act = (self.active_tab == key)
-            ctk.CTkButton(self.tabs_frame, text=short(label), height=30, corner_radius=15,
-                          fg_color=(ACC if act else CARD), hover_color=(ACC_D if act else CARD2),
-                          text_color=("white" if act else MUTED), font=ctk.CTkFont(FONT, 11, "bold"),
-                          command=lambda k=key: self.switch_tab(k)).pack(side="left", padx=(0, 6), pady=2)
+            lab = "".join(c for c in label if c.isprintable()).strip() or "Подписка"
+            base = lab; i = 2
+            while lab in self._tab_map:
+                lab = f"{base} ({i})"; i += 1
+            self._tab_map[lab] = key
+            values.append(lab)
+        self.tab_menu.configure(values=values)
+        # текущее значение
+        cur = next((l for l, k in self._tab_map.items() if k == self.active_tab), values[0])
+        self.tab_menu.set(cur)
 
     # ── Список серверов ──
     def render_servers(self):
