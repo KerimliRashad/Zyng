@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -971,8 +971,8 @@ class JeffTUN:
                 continue
             code = country_of(raw); sel = (i == self.selected_idx)
             bg = CARD2 if sel else CARD
-            row = tk.Frame(self.server_list, bg=bg, height=40)
-            row.pack(fill="x", pady=1); row.pack_propagate(False)
+            row = tk.Frame(self.server_list, bg=bg, height=46)
+            row.pack(fill="x", pady=4); row.pack_propagate(False)
             ph = self._flag_tk(code)
             if ph:
                 badge = tk.Label(row, image=ph, bg=bg)
