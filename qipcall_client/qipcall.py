@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.2"
+APP_VERSION = "2.2.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
 DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
@@ -64,6 +64,7 @@ def resource_path(name):
 # ══ ПАРСИНГ КЛЮЧЕЙ ═══════════════════════════════════════════════════════════
 def parse_link(link):
     link = link.strip()
+    if link.startswith("json://"):     return _parse_jsonlink(link)
     if link.startswith("vless://"):    return _parse_vless(link)
     if link.startswith("vmess://"):    return _parse_vmess(link)
     if link.startswith("trojan://"):   return _parse_trojan(link)
@@ -75,9 +76,33 @@ def parse_link(link):
     raise ValueError("Нужен ключ vless / vmess / trojan / ss / socks5 / wireguard")
 
 
+def _parse_jsonlink(link):
+    """json://<base64 outbound> — готовый xray-outbound из JSON-подписки."""
+    raw = link[7:].split("#", 1)[0]
+    raw += "=" * (-len(raw) % 4)
+    ob = json.loads(base64.b64decode(raw).decode("utf-8", "ignore"))
+    ob = dict(ob); ob["tag"] = "proxy"
+    return ob
+
+
+def _outbound_hostport(ob):
+    """Адрес:порт из xray-outbound (vnext для vless/vmess, servers для trojan/ss/socks)."""
+    try:
+        st = ob.get("settings", {})
+        if st.get("vnext"):
+            v = st["vnext"][0]; return v.get("address"), int(v.get("port", 443))
+        if st.get("servers"):
+            s = st["servers"][0]; return s.get("address"), int(s.get("port", 443))
+    except Exception:
+        pass
+    return None, None
+
+
 def link_host_port(link):
     link = link.strip()
     try:
+        if link.startswith("json://"):
+            return _outbound_hostport(_parse_jsonlink(link))
         if link.startswith("vmess://"):
             raw = link[8:]; raw += "=" * (-len(raw) % 4)
             obj = json.loads(base64.b64decode(raw).decode())
@@ -133,10 +158,46 @@ def clean_name(name):
 
 def proto_line(link):
     try:
+        if link.startswith("json://"):
+            ob = _parse_jsonlink(link)
+            return f"{(ob.get('protocol') or 'VLESS').upper()} | JSON"
         scheme = link.split("://", 1)[0].upper()
         return f"{scheme} | JSON"
     except Exception:
         return "VLESS | JSON"
+
+
+def _extract_json_servers(text):
+    """Подписка вернула Xray JSON-конфиг(и) → достаём прокси-outbound'ы как серверы.
+    Возвращает список псевдо-ссылок json://<base64>#имя."""
+    out = []
+    try:
+        obj = json.loads(text)
+    except Exception:
+        return out
+    configs = obj if isinstance(obj, list) else [obj]
+    idx = 0
+    for cfg in configs:
+        if not isinstance(cfg, dict):
+            continue
+        name = cfg.get("remarks") or cfg.get("remark") or cfg.get("ps") or cfg.get("name") or ""
+        obs = cfg.get("outbounds")
+        if not obs and cfg.get("protocol"):
+            obs = [cfg]                      # это уже сам outbound
+        for ob in (obs or []):
+            if not isinstance(ob, dict):
+                continue
+            proto = (ob.get("protocol") or "").lower()
+            if proto not in ("vless", "vmess", "trojan", "shadowsocks", "socks"):
+                continue
+            host, _ = _outbound_hostport(ob)
+            if not host:
+                continue
+            idx += 1
+            nm = name or f"{proto.upper()} {idx}"
+            b64 = base64.b64encode(json.dumps(ob, ensure_ascii=False).encode()).decode()
+            out.append(f"json://{b64}#{quote(nm)}")
+    return out
 
 
 def _stream(params, net, security):
@@ -368,17 +429,29 @@ SUB_USER_AGENTS = [
 def _fetch_sub_once(url, ua, ctx):
     req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
     with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
-        data = r.read().decode("utf-8", "ignore").strip()
+        raw = r.read().decode("utf-8", "ignore").strip()
         title = r.headers.get("Profile-Title", "")
         userinfo = r.headers.get("Subscription-Userinfo", "")
+    # варианты: как есть и base64-декод
+    candidates = [raw]
     try:
-        dec = base64.b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", "ignore")
-        if "://" in dec:
-            data = dec
+        dec = base64.b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8", "ignore")
+        candidates.append(dec)
     except Exception:
         pass
+    # 1) JSON-подписка (готовый xray-конфиг, как у incy/K-VPN)
+    for c in candidates:
+        cs = c.lstrip()
+        if cs[:1] in ("{", "["):
+            js = _extract_json_servers(cs)
+            if js:
+                return js, title, userinfo
+    # 2) обычные ссылки vless:// и т.п.
+    data = raw
+    for c in candidates:
+        if "://" in c:
+            data = c; break
     links = [ln.strip() for ln in data.splitlines() if "://" in ln]
-    # отсеиваем серверы-заглушки «App not supported» (имя может быть URL-кодировано, %20)
     def _is_stub(l):
         low = unquote(l).lower()
         return ("app not supported" in low) or ("not supported" in low) or ("unsupported" in low)
