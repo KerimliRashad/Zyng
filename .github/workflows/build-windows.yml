@@ -19,7 +19,7 @@ jobs:
           python-version: '3.8'   # последняя версия Python с поддержкой Windows 7
       - name: Install deps
         # версии пакетов, ещё поддерживающие Python 3.8
-        run: pip install "pyinstaller==6.6.0" "customtkinter==5.2.2" "pillow<11" "darkdetect"
+        run: pip install "pyinstaller==6.6.0" "customtkinter==5.2.2" "pillow<11" "darkdetect" "pyyaml"
       - name: Download xray-core (Windows 64-bit)
         shell: pwsh
         run: |
@@ -62,6 +62,7 @@ jobs:
             --name "JeffTUN" `
             --icon "icon.ico" `
             --collect-all customtkinter `
+            --hidden-import yaml `
             --add-binary "xray.exe;." `
             --add-binary "sing-box.exe;." `
             --add-binary "wintun.dll;." `
@@ -133,7 +134,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk
-          pip install pyinstaller customtkinter pillow
+          pip install pyinstaller customtkinter pillow pyyaml
       - name: Download xray-core (Linux 64-bit)
         run: |
           curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
@@ -164,6 +165,7 @@ jobs:
           pyinstaller --noconfirm --onefile \
             --name "JeffTUN-linux" \
             --collect-all customtkinter \
+            --hidden-import yaml \
             --add-binary "xray:." \
             --add-binary "sing-box:." \
             --add-data "geoip.dat:." \

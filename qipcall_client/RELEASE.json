@@ -1,17 +1,17 @@
 {
-  "version": "2.6",
-  "name": "JeffTUN VPN 2.6",
+  "version": "2.7",
+  "name": "JeffTUN VPN 2.7",
   "channel": "stable",
   "mandatory": false,
-  "notes": "Умная маршрутизация (RU-сайты напрямую), режим TUN на весь ПК и тест реальной скорости — как в v2rayN.",
+  "notes": "Теперь подключаются подписки Clash / Clash.Meta (YAML) и ключи tuic:// и hysteria:// — поддержаны почти все форматы подписок.",
   "changelog": {
     "added": [
-      "Умная маршрутизация: локальные и RU-сайты идут напрямую, остальное через VPN",
-      "Режим TUN — VPN на всю систему (все приложения), через ядро sing-box",
-      "Тест реальной скорости загрузки (Мбит/с) через активное соединение"
+      "Подписки Clash / Clash.Meta (YAML) — VMess, VLESS, Trojan, SS, Hysteria2, TUIC, SOCKS",
+      "Прямые ключи tuic:// и hysteria:// (v1) — через ядро sing-box",
+      "Умная маршрутизация, режим TUN на весь ПК и тест скорости (из 2.6)"
     ],
     "fixed": [
-      "Подписки sing-box (VLESS+Reality, xhttp, Hysteria2, TUIC) работают на родном ядре"
+      "Больше форматов подписок распознаются и подключаются: base64, plain, xray-JSON, sing-box-JSON, Clash-YAML"
     ],
     "known": [
       "Режим TUN требует запуска приложения от имени администратора"

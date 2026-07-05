@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.6"
+APP_VERSION = "2.7"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -286,6 +286,175 @@ def _hy2_url_to_sb(link):
     ob["tag"] = "proxy"
     b64 = base64.b64encode(json.dumps(ob, ensure_ascii=False).encode()).decode()
     return f"sb://{b64}#{quote(unquote(frag) or (u.hostname or 'Hysteria2'))}"
+
+
+def _sb_link(ob, name):
+    """Упаковывает готовый sing-box outbound в псевдо-ссылку sb://<base64>#name."""
+    ob = dict(ob); ob["tag"] = "proxy"
+    b64 = base64.b64encode(json.dumps(ob, ensure_ascii=False).encode()).decode()
+    return f"sb://{b64}#{quote(name or ob.get('server') or 'Server')}"
+
+
+def _tuic_url_to_sb(link):
+    """tuic://uuid:password@host:port?sni=&alpn=&congestion_control=#name → sb://."""
+    frag = link.split("#", 1)[1] if "#" in link else ""
+    u = urlparse(link); p = parse_qs(u.query)
+    ob = {"type": "tuic", "server": u.hostname, "server_port": u.port or 443,
+          "uuid": unquote(u.username or ""), "password": unquote(u.password or "")}
+    sni = p.get("sni", p.get("peer", [""]))[0]
+    ob["tls"] = {"enabled": True, "server_name": sni or u.hostname,
+                 "insecure": p.get("allow_insecure", p.get("insecure", ["0"]))[0] in ("1", "true")}
+    alpn = p.get("alpn", [""])[0]
+    if alpn: ob["tls"]["alpn"] = [a for a in alpn.split(",") if a]
+    cc = p.get("congestion_control", p.get("congestion_controller", [""]))[0]
+    if cc: ob["congestion_control"] = cc
+    urm = p.get("udp_relay_mode", [""])[0]
+    if urm: ob["udp_relay_mode"] = urm
+    return _sb_link(ob, unquote(frag) or u.hostname or "TUIC")
+
+
+def _hysteria_url_to_sb(link):
+    """hysteria://host:port?auth=&peer=&insecure=&upmbps=&downmbps=#name (v1) → sb://."""
+    frag = link.split("#", 1)[1] if "#" in link else ""
+    u = urlparse(link); p = parse_qs(u.query)
+    ob = {"type": "hysteria", "server": u.hostname, "server_port": u.port or 443}
+    auth = p.get("auth", p.get("auth_str", [""]))[0]
+    if auth: ob["auth_str"] = auth
+    up = p.get("upmbps", p.get("up_mbps", [""]))[0]; down = p.get("downmbps", p.get("down_mbps", [""]))[0]
+    if up.isdigit(): ob["up_mbps"] = int(up)
+    if down.isdigit(): ob["down_mbps"] = int(down)
+    obfs = p.get("obfs", [""])[0]
+    if obfs: ob["obfs"] = obfs
+    sni = p.get("peer", p.get("sni", [""]))[0]
+    ob["tls"] = {"enabled": True, "server_name": sni or u.hostname,
+                 "insecure": p.get("insecure", ["0"])[0] in ("1", "true")}
+    alpn = p.get("alpn", [""])[0]
+    if alpn: ob["tls"]["alpn"] = [a for a in alpn.split(",") if a]
+    return _sb_link(ob, unquote(frag) or u.hostname or "Hysteria")
+
+
+def _clash_stream(p):
+    """Возвращает (tls_dict, transport_dict) для sing-box из Clash-прокси."""
+    tls = None
+    sni_present = bool(p.get("servername") or p.get("sni") or p.get("server-name"))
+    if (p.get("tls") or p.get("reality-opts") or sni_present
+            or str(p.get("type", "")).lower() in ("trojan", "hysteria", "hysteria2", "tuic")):
+        tls = {"enabled": True}
+        sni = p.get("servername") or p.get("sni") or p.get("server-name") or p.get("server")
+        if sni: tls["server_name"] = sni
+        if p.get("skip-cert-verify") or p.get("insecure"):
+            tls["insecure"] = True
+        alpn = p.get("alpn")
+        if alpn: tls["alpn"] = alpn if isinstance(alpn, list) else [alpn]
+        fp = p.get("client-fingerprint")
+        if fp: tls["utls"] = {"enabled": True, "fingerprint": fp}
+        ro = p.get("reality-opts") or {}
+        if ro:
+            tls["reality"] = {"enabled": True, "public_key": ro.get("public-key", ""),
+                              "short_id": ro.get("short-id", "")}
+    transport = None
+    net = str(p.get("network", "")).lower()
+    if net == "ws":
+        wo = p.get("ws-opts") or {}
+        transport = {"type": "ws", "path": wo.get("path", p.get("ws-path", "/"))}
+        host = (wo.get("headers") or {}).get("Host") or (wo.get("headers") or {}).get("host")
+        if host: transport["headers"] = {"Host": host}
+    elif net == "grpc":
+        go = p.get("grpc-opts") or {}
+        transport = {"type": "grpc", "service_name": go.get("grpc-service-name", "")}
+    elif net in ("http", "h2"):
+        ho = p.get("http-opts") or p.get("h2-opts") or {}
+        transport = {"type": "http", "path": (ho.get("path") or ["/"])[0] if isinstance(ho.get("path"), list) else ho.get("path", "/")}
+    return tls, transport
+
+
+def _clash_to_sb(p):
+    """Clash/Clash.Meta прокси (dict) → sing-box outbound. None если тип не поддержан."""
+    if not isinstance(p, dict): return None
+    t = str(p.get("type", "")).lower()
+    server = p.get("server"); port = p.get("port")
+    if not server or not port: return None
+    try: port = int(port)
+    except Exception: return None
+    ob = {"type": t, "server": server, "server_port": port}
+    tls, transport = _clash_stream(p)
+    if t == "vmess":
+        ob.update({"uuid": p.get("uuid", ""), "alter_id": int(p.get("alterId", p.get("alter-id", 0)) or 0),
+                   "security": p.get("cipher", "auto")})
+    elif t == "vless":
+        ob["uuid"] = p.get("uuid", "")
+        if p.get("flow"): ob["flow"] = p.get("flow")
+    elif t == "trojan":
+        ob["password"] = p.get("password", "")
+    elif t in ("ss", "shadowsocks"):
+        ob["type"] = "shadowsocks"; ob["method"] = p.get("cipher", "aes-128-gcm"); ob["password"] = p.get("password", ""); tls = None
+    elif t == "hysteria2":
+        ob["password"] = p.get("password", p.get("auth", ""))
+        if p.get("obfs"): ob["obfs"] = {"type": p.get("obfs"), "password": p.get("obfs-password", "")}
+    elif t == "hysteria":
+        if p.get("auth-str") or p.get("auth_str") or p.get("auth"): ob["auth_str"] = p.get("auth-str") or p.get("auth_str") or p.get("auth")
+        if str(p.get("up", "")).replace("Mbps", "").strip().isdigit(): ob["up_mbps"] = int(str(p.get("up")).replace("Mbps", "").strip())
+        if str(p.get("down", "")).replace("Mbps", "").strip().isdigit(): ob["down_mbps"] = int(str(p.get("down")).replace("Mbps", "").strip())
+        if p.get("obfs"): ob["obfs"] = p.get("obfs")
+    elif t == "tuic":
+        ob["uuid"] = p.get("uuid", ""); ob["password"] = p.get("password", "")
+        if p.get("congestion-controller"): ob["congestion_control"] = p.get("congestion-controller")
+        if p.get("udp-relay-mode"): ob["udp_relay_mode"] = p.get("udp-relay-mode")
+    elif t in ("socks5", "socks"):
+        ob["type"] = "socks"; ob["version"] = "5"
+        if p.get("username"): ob["username"] = p.get("username"); ob["password"] = p.get("password", "")
+        tls = None
+    elif t == "http":
+        if p.get("username"): ob["username"] = p.get("username"); ob["password"] = p.get("password", "")
+    else:
+        return None
+    if tls: ob["tls"] = tls
+    if transport: ob["transport"] = transport
+    return ob
+
+
+def _extract_clash_servers(text):
+    """Достаёт серверы из Clash/Clash.Meta YAML-подписки → список sb://-ссылок."""
+    if "proxies:" not in text:
+        return []
+    proxies = None
+    try:
+        import yaml
+        data = yaml.safe_load(text)
+        if isinstance(data, dict):
+            proxies = data.get("proxies")
+    except Exception:
+        proxies = _yaml_proxies_fallback(text)
+    if not proxies and proxies is not None:
+        pass
+    if proxies is None:
+        proxies = _yaml_proxies_fallback(text)
+    out = []
+    for p in (proxies or []):
+        ob = _clash_to_sb(p)
+        if ob:
+            out.append(_sb_link(ob, p.get("name") or ob.get("server")))
+    return out
+
+
+def _yaml_proxies_fallback(text):
+    """Мини-парсер proxies без PyYAML: берём только inline-записи вида '- {k: v, ...}'."""
+    import re as _re
+    res = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not (s.startswith("- {") and s.endswith("}")):
+            continue
+        body = s[3:-1]
+        d = {}
+        for part in _re.split(r",(?![^\[]*\])", body):
+            if ":" not in part: continue
+            k, v = part.split(":", 1)
+            k = k.strip().strip('"\''); v = v.strip().strip('"\'')
+            if v.lower() in ("true", "false"): v = (v.lower() == "true")
+            d[k] = v
+        if d.get("server"): res.append(d)
+    return res
 
 
 def _parse_sblink(link):
@@ -639,14 +808,19 @@ def _fetch_sub_once(url, ua, ctx):
         candidates.append(dec)
     except Exception:
         pass
-    # 1) JSON-подписка (готовый xray-конфиг, как у incy/K-VPN)
+    # 1) JSON-подписка (готовый xray/sing-box конфиг, как у incy/K-VPN)
     for c in candidates:
         js = _extract_json_servers(c.strip().lstrip("﻿"))
         if js:
             return js, title, userinfo
-    # 2) обычные ссылки — ТОЛЬКО настоящие протоколы (не http/https/мусор из JSON)
+    # 2) Clash / Clash.Meta YAML-подписка (proxies:) → через ядро sing-box
+    for c in candidates:
+        cl = _extract_clash_servers(c.strip().lstrip("﻿"))
+        if cl:
+            return cl, title, userinfo
+    # 3) обычные ссылки — ТОЛЬКО настоящие протоколы (не http/https/мусор из JSON)
     VALID = ("vless://", "vmess://", "trojan://", "ss://", "socks://", "socks5://",
-             "wireguard://", "wg://", "hysteria2://", "hy2://")
+             "wireguard://", "wg://", "hysteria2://", "hy2://", "hysteria://", "tuic://")
     def _is_stub(l):
         low = unquote(l).lower()
         return ("app not supported" in low) or ("not supported" in low) or ("unsupported" in low)
@@ -920,9 +1094,7 @@ class JeffTUN:
         existing = set(self.manual_links)
         # принимаем только настоящие ключи, http(s)-ссылки сюда не попадают
         ok = ("vless://", "vmess://", "trojan://", "ss://", "socks://", "socks5://",
-              "wireguard://", "wg://", "hysteria2://", "hy2://")
-        # hysteria2:// → sb:// (запуск через ядро sing-box)
-        keys = [(_hy2_url_to_sb(k) if k.startswith(("hysteria2://", "hy2://")) else k) for k in keys]
+              "wireguard://", "wg://", "hysteria2://", "hy2://", "hysteria://", "tuic://")
         added = [k for k in keys if k.startswith(ok + ("sb://",)) and k not in existing]
         self.manual_links += added
         self.active_tab = "all"
@@ -1574,12 +1746,15 @@ class JeffTUN:
             for s in self.subs:
                 links += self.sub_cache.get(s["url"], {}).get("links", [])
             self.sub_info = self.sub_cache.get(self.subs[-1]["url"], {}).get("info", {}) if self.subs else {}
-        # raw hysteria2:// из подписок/ключей → sb:// (ядро sing-box)
+        # raw hysteria2/hysteria/tuic ключи → sb:// (ядро sing-box)
         norm = []
         for k in links:
-            if k.startswith(("hysteria2://", "hy2://")):
-                try: k = _hy2_url_to_sb(k)
-                except Exception: continue
+            try:
+                if k.startswith(("hysteria2://", "hy2://")): k = _hy2_url_to_sb(k)
+                elif k.startswith("hysteria://"):            k = _hysteria_url_to_sb(k)
+                elif k.startswith("tuic://"):                k = _tuic_url_to_sb(k)
+            except Exception:
+                continue
             norm.append(k)
         self.links = norm
         if self.selected_idx >= len(self.links):
