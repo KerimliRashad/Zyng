@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.0"
+APP_VERSION = "4.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -55,6 +55,9 @@ UPD_C   = "#4a6aa5"   # обновление — спокойный синий
 UPD_CD  = "#3d5788"
 SPEED_C  = "#d1a44a"  # скорость — тёплый золотой
 SPEED_CD = "#b98f3c"
+
+# Максимум серверов на подписку — защита от зависания на «толстых» подписках
+MAX_SERVERS = 400
 
 
 def resource_path(name):
@@ -1277,6 +1280,8 @@ class JeffTUN:
         def worker():
             try:
                 links, info = fetch_subscription(url)
+                if len(links) > MAX_SERVERS:               # защита от зависания
+                    links = links[:MAX_SERVERS]
                 def done():
                     self.sub_cache[url] = {"links": links, "info": info}
                     for s in self.subs:
@@ -1524,23 +1529,26 @@ class JeffTUN:
         for w in self.server_list.winfo_children():
             w.destroy()
         q = (self.search.get() if getattr(self, "search", None) else "").lower().strip()
-        # Карточка подписки (тариф/остаток/дни) + кнопка удаления подписки
-        if self.sub_info and self.subs:
-            si = self.sub_info
-            # какую подписку удалять: активную вкладку, иначе последнюю
-            del_url = self.active_tab if any(s["url"] == self.active_tab for s in self.subs) else self.subs[-1]["url"]
+        # Карточка подписки с кнопкой удаления — показываем ВСЕГДА, когда активна
+        # вкладка-подписка (даже если она пустая), иначе её нельзя было бы удалить.
+        cur_sub = next((s for s in self.subs if s["url"] == self.active_tab), None)
+        show_sub = cur_sub or (self.sub_info and self.subs)
+        if show_sub:
+            si = self.sub_info or {}
+            del_url = cur_sub["url"] if cur_sub else self.subs[-1]["url"]
+            title = (cur_sub.get("title") if cur_sub else None) or si.get("title") or "Подписка"
             card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
                                 border_width=0)
             card.pack(fill="x", pady=(0, 8))
             top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(12, 2))
-            ctk.CTkLabel(top, text=si.get("title", "VPN"),
-                         font=ctk.CTkFont(FONT, 15, "bold"), text_color="#ffffff", anchor="w").pack(side="left")
-            ctk.CTkButton(top, text="✕", width=26, height=26, corner_radius=13,
-                          fg_color="transparent", hover_color=DANGER, text_color="#ffffff",
-                          font=ctk.CTkFont(FONT, 13, "bold"),
+            ctk.CTkLabel(top, text=title, font=ctk.CTkFont(FONT, 15, "bold"),
+                         text_color="#ffffff", anchor="w").pack(side="left")
+            ctk.CTkButton(top, text="✕  удалить", width=90, height=28, corner_radius=13,
+                          fg_color=DANGER, hover_color="#a84848", text_color="#ffffff",
+                          font=ctk.CTkFont(FONT, 12, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
-            # только объём/срок — без даты и описаний
-            ctk.CTkLabel(card, text=f"{si.get('traffic','∞')}   ·   {si.get('expire','')}",
+            info_txt = f"{si.get('traffic','∞')}   ·   {si.get('expire','')}" if si else "нажми «Обновить», если пусто"
+            ctk.CTkLabel(card, text=info_txt,
                          font=ctk.CTkFont(FONT, 12, "bold"), text_color="#ffffff",
                          anchor="w").pack(anchor="w", padx=14, pady=(0, 12))
         if not self.links:
@@ -1934,7 +1942,8 @@ class JeffTUN:
             except Exception:
                 continue
             norm.append(k)
-        self.links = norm
+        # жёсткий предел — иначе «толстая» подписка (тысячи серверов) вешает интерфейс
+        self.links = norm[:MAX_SERVERS]
         if self.selected_idx >= len(self.links):
             self.selected_idx = max(0, len(self.links) - 1)
 
@@ -1967,7 +1976,7 @@ class JeffTUN:
             def done():
                 self._subs_updating = False
                 for url, (links, info) in results.items():
-                    self.sub_cache[url] = {"links": links, "info": info}
+                    self.sub_cache[url] = {"links": links[:MAX_SERVERS], "info": info}
                     for s in self.subs:
                         if s["url"] == url and info.get("title"):
                             s["title"] = info["title"]
