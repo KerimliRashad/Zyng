@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.2"
+APP_VERSION = "4.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -164,6 +164,17 @@ COUNTRY_CODES = {
     "amsterdam": "NL", "frankfurt": "DE", "helsinki": "FI", "paris": "FR", "warsaw": "PL",
     "stockholm": "SE", "vienna": "AT", "zurich": "CH", "tokyo": "JP", "seoul": "KR",
     "istanbul": "TR", "madrid": "ES", "milan": "IT", "toronto": "CA", "silicon": "US",
+    # русские названия
+    "москва": "RU", "россия": "RU", "спб": "RU", "питер": "RU", "петербург": "RU",
+    "франкфурт": "DE", "германия": "DE", "нидерланды": "NL", "амстердам": "NL",
+    "финляндия": "FI", "хельсинки": "FI", "польша": "PL", "варшава": "PL",
+    "швеция": "SE", "стокгольм": "SE", "франция": "FR", "париж": "FR", "турция": "TR",
+    "стамбул": "TR", "сша": "US", "америка": "US", "англия": "GB", "лондон": "GB",
+    "япония": "JP", "токио": "JP", "сингапур": "SG", "канада": "CA", "испания": "ES",
+    "италия": "IT", "швейцария": "CH", "австрия": "AT", "казахстан": "KZ",
+    "украина": "UA", "латвия": "LV", "эстония": "EE", "литва": "LT", "корея": "KR",
+    "индия": "IN", "оаэ": "AE", "дубай": "AE", "грузия": "GE", "армения": "AM",
+    "норвегия": "NO", "дания": "DK", "чехия": "CZ", "бразилия": "BR",
 }
 
 # Флаги-эмодзи по коду страны
@@ -1086,7 +1097,7 @@ class JeffTUN:
         self._ping_lbls = {}
         self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("640x500"); root.minsize(600, 460)
+        root.title(APP_NAME); root.geometry("700x520"); root.minsize(640, 470)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -1116,9 +1127,9 @@ class JeffTUN:
                                           dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 14, "bold"),
                                           command=self._on_tab_menu)
         self.tab_menu.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(srow, text="🔄 Обновить", width=124, height=44, corner_radius=14,
+        ctk.CTkButton(srow, text="🔄", width=48, height=44, corner_radius=14,
                       fg_color=UPD_C, hover_color=UPD_CD, text_color="white",
-                      font=ctk.CTkFont(FONT, 14, "bold"), command=self.update_sub).pack(side="left", padx=(8, 0))
+                      font=ctk.CTkFont(FONT, 17), command=self.update_sub).pack(side="left", padx=(8, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
@@ -1558,7 +1569,9 @@ class JeffTUN:
                 badge = tk.Label(row, text="🌐", bg=bg, font=(FONT, 17))
             badge.pack(side="left", padx=(14, 12))
             m = tk.Frame(row, bg=bg); m.pack(side="left", fill="both", expand=True)
-            l1 = tk.Label(m, text=name, bg=bg, fg=TEXT, font=(FONT, 11, "bold"), anchor="w")
+            # длинные имена обрезаем многоточием, чтобы влезали в строку
+            disp = name if len(name) <= 22 else name[:21] + "…"
+            l1 = tk.Label(m, text=disp, bg=bg, fg=TEXT, font=(FONT, 10, "bold"), anchor="w")
             l1.pack(anchor="w", pady=(7, 0))
             l2 = tk.Label(m, text=proto_line(ln), bg=bg, fg=MUTED, font=(FONT, 8), anchor="w")
             l2.pack(anchor="w")
