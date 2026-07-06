@@ -42,11 +42,11 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename TEXT NOT NULL,
-    original_name TEXT NOT NULL,
-    size INTEGER NOT NULL,
+    filename TEXT NOT NULL DEFAULT '',
+    original_name TEXT NOT NULL DEFAULT '',
+    size INTEGER NOT NULL DEFAULT 0,
     folder TEXT DEFAULT '',
-    uploaded_by TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL DEFAULT '',
     uploaded_at INTEGER DEFAULT (strftime('%s','now')),
     downloads INTEGER DEFAULT 0
   );
@@ -64,6 +64,29 @@ db.exec(`
     expires INTEGER NOT NULL
   );
 `);
+
+// ─── DB Migration (handle old schema) ────────────────────────────────────────
+function colExists(table, col) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === col);
+}
+try {
+  // files table migrations
+  if (!colExists('files', 'filename')) {
+    db.exec("ALTER TABLE files ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
+    if (colExists('files', 'stored_name')) db.exec("UPDATE files SET filename = stored_name WHERE filename = ''");
+  }
+  if (!colExists('files', 'uploaded_at')) {
+    db.exec("ALTER TABLE files ADD COLUMN uploaded_at INTEGER DEFAULT 0");
+    if (colExists('files', 'created_at')) db.exec("UPDATE files SET uploaded_at = strftime('%s', created_at) WHERE uploaded_at = 0");
+  }
+  if (!colExists('files', 'downloads')) db.exec("ALTER TABLE files ADD COLUMN downloads INTEGER DEFAULT 0");
+  if (!colExists('files', 'folder')) db.exec("ALTER TABLE files ADD COLUMN folder TEXT DEFAULT ''");
+  // otp_codes migration
+  if (!colExists('otp_codes', 'expires')) {
+    db.exec("DROP TABLE IF EXISTS otp_codes");
+    db.exec("CREATE TABLE otp_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, code TEXT NOT NULL, expires INTEGER NOT NULL)");
+  }
+} catch(e) { console.error('Migration error:', e.message); }
 
 // Seed admin
 const adminRow = db.prepare('SELECT id FROM users WHERE username=?').get(ADMIN_USER);
@@ -460,13 +483,20 @@ async function uploadFiles(files, paths) {
     }
   });
   xhr.addEventListener('load', () => {
-    if (xhr.status === 200) { pt.textContent = 'Загружено успешно!'; setTimeout(() => location.reload(), 1000); }
+    uploading = false;
+    if (xhr.status === 200) { pt.textContent = '✓ Загружено успешно!'; pf.style.background = 'var(--accent)'; setTimeout(() => location.reload(), 1200); }
     else { pt.textContent = 'Ошибка: ' + xhr.status; pf.style.background = 'var(--danger)'; }
   });
-  xhr.addEventListener('error', () => { pt.textContent = 'Ошибка соединения'; pf.style.background = 'var(--danger)'; });
+  xhr.addEventListener('error', () => { pt.textContent = 'Ошибка соединения'; pf.style.background = 'var(--danger)'; uploading = false; });
   xhr.open('POST', '/upload');
+  uploading = true;
   xhr.send(fd);
 }
+
+let uploading = false;
+window.addEventListener('beforeunload', e => {
+  if (uploading) { e.preventDefault(); e.returnValue = 'Загрузка ещё идёт! Вы уверены?'; return e.returnValue; }
+});
 </script>`, user));
 });
 
