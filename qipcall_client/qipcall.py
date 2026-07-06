@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.0"
+APP_VERSION = "3.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1788,22 +1788,30 @@ class JeffTUN:
         self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
-    # «Сердцебиение» кнопки при подключении: два быстрых удара, пауза, повтор
-    _PULSE_SEQ = [2, 5, 9, 6, 3, 5, 9, 6, 3, 2, 2, 2, 2, 2, 2, 2]
-    _PULSE_COL = {9: "#aab6ff", 6: "#8590e0", 5: "#6f7ace"}
+    @staticmethod
+    def _lerp_hex(a, b, t):
+        a = a.lstrip("#"); b = b.lstrip("#")
+        ar, ag, ab = int(a[0:2], 16), int(a[2:4], 16), int(a[4:6], 16)
+        br, bg, bb = int(b[0:2], 16), int(b[2:4], 16), int(b[4:6], 16)
+        r = int(ar + (br - ar) * t); g = int(ag + (bg - ag) * t); bl = int(ab + (bb - ab) * t)
+        return f"#{r:02x}{g:02x}{bl:02x}"
 
-    def _pulse(self, i=0):
+    def _pulse(self, phase=0.0):
+        """Плавное «дыхание» кнопки при подключении (мягкая синусоида, без рывков)."""
         if not self.connected:
             try: self.power.configure(border_width=2, border_color=ACC)
             except Exception: pass
             return
-        w = self._PULSE_SEQ[i % len(self._PULSE_SEQ)]
-        col = self._PULSE_COL.get(w, ACC)
+        import math
+        val = (math.sin(phase) + 1) / 2.0           # 0..1 плавно
+        w = int(round(2 + val * 4))                  # ширина ободка 2..6
+        col = self._lerp_hex(ACC, "#9aa6f0", val)    # мягкий перелив цвета
         try:
             self.power.configure(border_width=w, border_color=col)
         except Exception:
             pass
-        self._pulse_after = self.root.after(95, lambda: self._pulse((i + 1) % len(self._PULSE_SEQ)))
+        # шаг 40 мс, ~3 с на полный цикл вдох-выдох — спокойно и плавно
+        self._pulse_after = self.root.after(40, lambda: self._pulse(phase + 0.085))
 
     def disconnect(self):
         try: set_system_proxy(False)
