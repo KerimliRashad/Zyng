@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.9"
+APP_VERSION = "3.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -140,7 +140,23 @@ COUNTRY_CODES = {
     "latvia": "LV", "estonia": "EE", "lithuania": "LT", "switzerland": "CH",
     "austria": "AT", "hongkong": "HK", "hong kong": "HK", "korea": "KR", "india": "IN",
     "uae": "AE", "dubai": "AE", "kazakhstan": "KZ", "georgia": "GE",
-    "malayzia": "MY", "malaysia": "MY",
+    "malayzia": "MY",
+    # расширенный список стран
+    "norway": "NO", "denmark": "DK", "iceland": "IS", "ireland": "IE", "belgium": "BE",
+    "portugal": "PT", "greece": "GR", "czech": "CZ", "czechia": "CZ", "slovakia": "SK",
+    "hungary": "HU", "romania": "RO", "bulgaria": "BG", "serbia": "RS", "croatia": "HR",
+    "slovenia": "SI", "moldova": "MD", "belarus": "BY", "armenia": "AM", "azerbaijan": "AZ",
+    "cyprus": "CY", "luxembourg": "LU", "malta": "MT", "brazil": "BR", "mexico": "MX",
+    "argentina": "AR", "chile": "CL", "colombia": "CO", "peru": "PE", "china": "CN",
+    "taiwan": "TW", "vietnam": "VN", "thailand": "TH", "indonesia": "ID", "philippines": "PH",
+    "australia": "AU", "new zealand": "NZ", "israel": "IL", "saudi": "SA", "qatar": "QA",
+    "bahrain": "BH", "kuwait": "KW", "oman": "OM", "egypt": "EG", "south africa": "ZA",
+    "nigeria": "NG", "morocco": "MA", "iran": "IR", "iraq": "IQ", "pakistan": "PK",
+    "bangladesh": "BD", "srilanka": "LK", "nepal": "NP", "uzbekistan": "UZ",
+    "kyrgyzstan": "KG", "tajikistan": "TJ", "turkmenistan": "TM", "mongolia": "MN",
+    "amsterdam": "NL", "frankfurt": "DE", "helsinki": "FI", "paris": "FR", "warsaw": "PL",
+    "stockholm": "SE", "vienna": "AT", "zurich": "CH", "tokyo": "JP", "seoul": "KR",
+    "istanbul": "TR", "madrid": "ES", "milan": "IT", "toronto": "CA", "silicon": "US",
 }
 
 # Флаги-эмодзи по коду страны
@@ -1498,6 +1514,7 @@ class JeffTUN:
             self.empty_lbl.pack(pady=40)
             return
         self._ping_lbls = {}
+        self._rows = {}
         # Лёгкие tk-строки вместо CTk — прокрутка в разы быстрее (нет canvas на каждый виджет)
         for i, ln in enumerate(self.links):
             raw = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
@@ -1512,8 +1529,8 @@ class JeffTUN:
             if ph:
                 badge = tk.Label(row, image=ph, bg=bg)
             else:
-                badge = tk.Label(row, text=code, bg=ACC, fg="white",
-                                 font=(FONT, 9, "bold"), width=3)
+                # нет картинки флага — показываем эмодзи-глобус (рисуется на всех ОС)
+                badge = tk.Label(row, text="🌐", bg=bg, font=(FONT, 17))
             badge.pack(side="left", padx=(14, 12))
             m = tk.Frame(row, bg=bg); m.pack(side="left", fill="both", expand=True)
             l1 = tk.Label(m, text=name, bg=bg, fg=TEXT, font=(FONT, 11, "bold"), anchor="w")
@@ -1527,6 +1544,8 @@ class JeffTUN:
             chev = tk.Label(row, text=("✓" if sel else "›"), bg=bg,
                             fg=(OK if sel else MUTED), font=(FONT, 12, "bold"))
             chev.pack(side="right", padx=(4, 8))
+            # запоминаем виджеты строки — чтобы менять выделение без полной перерисовки (плавно)
+            self._rows[i] = {"bg": [row, m, badge, l1, l2, pl], "chev": chev}
             for w in (row, m, badge, l1, l2, pl, chev):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
                 w.bind("<MouseWheel>", self._wheel)
@@ -1541,8 +1560,27 @@ class JeffTUN:
         col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
         return f"{ms} мс", col
 
+    def _recolor_row(self, i, sel):
+        r = getattr(self, "_rows", {}).get(i)
+        if not r:
+            return
+        bg = CARD2 if sel else CARD
+        try:
+            for w in r["bg"]:
+                w.configure(bg=bg)
+            r["chev"].configure(bg=bg, text=("✓" if sel else "›"), fg=(OK if sel else MUTED))
+        except Exception:
+            pass
+
     def select_server(self, idx):
-        self.selected_idx = idx; self.render_servers()
+        prev = self.selected_idx
+        self.selected_idx = idx
+        # плавно: перекрашиваем только старую и новую строку, без полной перерисовки списка
+        if getattr(self, "_rows", None) and idx in self._rows:
+            self._recolor_row(prev, False)
+            self._recolor_row(idx, True)
+        else:
+            self.render_servers()
         nm = clean_name(unquote(self.links[idx].split("#", 1)[1])) if "#" in self.links[idx] else f"Сервер {idx+1}"
         self._update_current(nm)
         self.do_ping()
@@ -1727,6 +1765,7 @@ class JeffTUN:
         self.power.configure(fg_color=ACC, hover_color=ACC_D, image=self._picon_on, border_color=ACC)
         self._connect_time = time.time()
         self._tick()
+        self._pulse()
 
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
@@ -1749,6 +1788,23 @@ class JeffTUN:
         self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
+    # «Сердцебиение» кнопки при подключении: два быстрых удара, пауза, повтор
+    _PULSE_SEQ = [2, 5, 9, 6, 3, 5, 9, 6, 3, 2, 2, 2, 2, 2, 2, 2]
+    _PULSE_COL = {9: "#aab6ff", 6: "#8590e0", 5: "#6f7ace"}
+
+    def _pulse(self, i=0):
+        if not self.connected:
+            try: self.power.configure(border_width=2, border_color=ACC)
+            except Exception: pass
+            return
+        w = self._PULSE_SEQ[i % len(self._PULSE_SEQ)]
+        col = self._PULSE_COL.get(w, ACC)
+        try:
+            self.power.configure(border_width=w, border_color=col)
+        except Exception:
+            pass
+        self._pulse_after = self.root.after(95, lambda: self._pulse((i + 1) % len(self._PULSE_SEQ)))
+
     def disconnect(self):
         try: set_system_proxy(False)
         except Exception: pass
@@ -1765,9 +1821,12 @@ class JeffTUN:
         try:
             if getattr(self, "_tick_after", None):
                 self.root.after_cancel(self._tick_after); self._tick_after = None
+            if getattr(self, "_pulse_after", None):
+                self.root.after_cancel(self._pulse_after); self._pulse_after = None
         except Exception:
             pass
-        self.power.configure(fg_color=CARD, hover_color=CARD2, image=self._picon_off, border_color=BORDER)
+        self.power.configure(fg_color=CARD, hover_color=CARD2, image=self._picon_off,
+                             border_color=BORDER, border_width=2)
         self.timer_lbl.configure(text="")
         self.status.configure(text="Отключено", text_color=MUTED)
 

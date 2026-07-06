@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p qipcall_client/flags
-          for cc in fr de fi us my nl ru gb pl se tr jp sg ca es it ua lv ee lt ch at hk kr in ae kz ge; do
+          for cc in fr de fi us my nl ru gb pl se tr jp sg ca es it ua lv ee lt ch at hk kr in ae kz ge no dk is ie be pt gr cz sk hu ro bg rs hr si md by am az cy lu mt br mx ar cl co pe cn tw vn th id ph au nz il sa qa bh kw om eg za ng ma ir iq pk bd lk np uz kg tj tm mn; do
             curl -sL "https://flagcdn.com/w80/$cc.png" -o "qipcall_client/flags/$cc.png" || true
           done
       - name: Build EXE
@@ -156,7 +156,7 @@ jobs:
       - name: Download flags
         run: |
           mkdir -p qipcall_client/flags
-          for cc in fr de fi us my nl ru gb pl se tr jp sg ca es it ua lv ee lt ch at hk kr in ae kz ge; do
+          for cc in fr de fi us my nl ru gb pl se tr jp sg ca es it ua lv ee lt ch at hk kr in ae kz ge no dk is ie be pt gr cz sk hu ro bg rs hr si md by am az cy lu mt br mx ar cl co pe cn tw vn th id ph au nz il sa qa bh kw om eg za ng ma ir iq pk bd lk np uz kg tj tm mn; do
             curl -sL "https://flagcdn.com/w80/$cc.png" -o "qipcall_client/flags/$cc.png" || true
           done
       - name: Build Linux binary
