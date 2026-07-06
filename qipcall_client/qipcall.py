@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.1"
+APP_VERSION = "3.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1024,13 +1024,45 @@ def tcp_ping(host, port, timeout=4.0):
     return best
 
 
-# красивый системный шрифт под каждую ОС (SF Pro на Windows нет → был некрасивый фолбэк)
+# красивый системный шрифт под каждую ОС
 if os.name == "nt":
     FONT = "Segoe UI"
 elif sys.platform == "darwin":
     FONT = "SF Pro Display"
 else:
     FONT = "DejaVu Sans"
+
+
+def _register_custom_font():
+    """Подключает встроенный современный шрифт Inter. Если не вышло — остаётся
+    системный (Segoe UI и т.п.), интерфейс не ломается."""
+    global FONT
+    try:
+        p = resource_path("Inter.ttf")
+        if not os.path.exists(p):
+            return
+        if os.name == "nt":
+            import ctypes
+            FR_PRIVATE = 0x10
+            if ctypes.windll.gdi32.AddFontResourceExW(ctypes.c_wchar_p(p), FR_PRIVATE, 0):
+                FONT = "Inter"
+        else:
+            # Linux/mac: копируем в пользовательские шрифты и обновляем кеш
+            import shutil
+            dst_dir = os.path.join(os.path.expanduser("~"), ".fonts")
+            os.makedirs(dst_dir, exist_ok=True)
+            dst = os.path.join(dst_dir, "Inter.ttf")
+            if not os.path.exists(dst):
+                shutil.copyfile(p, dst)
+                try: subprocess.run(["fc-cache", "-f", dst_dir], check=False,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception: pass
+            FONT = "Inter"
+    except Exception:
+        pass
+
+
+_register_custom_font()
 
 
 # ══ ПРИЛОЖЕНИЕ ═══════════════════════════════════════════════════════════════
@@ -1072,26 +1104,21 @@ class JeffTUN:
         mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
         mid.grid(row=0, column=0, sticky="nsew")
         mid.grid_rowconfigure(2, weight=1); mid.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(mid, text="Серверы", font=ctk.CTkFont(FONT, 24, "bold"),
-                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=20, pady=(18, 10))
-        # один аккуратный ряд: выбор подписки + цветные кнопки Пинг / Обновить
+        # один аккуратный ряд: выбор подписки + кнопка Обновить (заголовок и Пинг убраны)
         self.search = None  # поиск убран
-        srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 6))
+        srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18, pady=(20, 8))
         self.tabs_frame = srow
         self._tab_map = {}
-        self.tab_menu = ctk.CTkOptionMenu(srow, values=["Все"], height=42,
+        self.tab_menu = ctk.CTkOptionMenu(srow, values=["Все"], height=44,
                                           corner_radius=14, fg_color=CARD, button_color=CARD2,
                                           button_hover_color=BORDER, text_color=TEXT,
                                           dropdown_fg_color=CARD, dropdown_text_color=TEXT,
-                                          dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 13, "bold"),
+                                          dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 14, "bold"),
                                           command=self._on_tab_menu)
         self.tab_menu.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(srow, text="📶 Пинг", width=78, height=42, corner_radius=14,
-                      fg_color=PING_C, hover_color=PING_CD, text_color="white",
-                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(8, 0))
-        ctk.CTkButton(srow, text="🔄", width=48, height=42, corner_radius=14,
+        ctk.CTkButton(srow, text="🔄 Обновить", width=124, height=44, corner_radius=14,
                       fg_color=UPD_C, hover_color=UPD_CD, text_color="white",
-                      font=ctk.CTkFont(FONT, 16), command=self.update_sub).pack(side="left", padx=(8, 0))
+                      font=ctk.CTkFont(FONT, 14, "bold"), command=self.update_sub).pack(side="left", padx=(8, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)

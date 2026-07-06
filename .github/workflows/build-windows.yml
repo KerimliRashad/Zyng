@@ -47,6 +47,10 @@ jobs:
           Invoke-WebRequest "https://www.wintun.net/builds/wintun-0.14.1.zip" -OutFile wintun.zip
           Expand-Archive -Path wintun.zip -DestinationPath wintun_bin -Force
           Copy-Item wintun_bin/wintun/bin/amd64/wintun.dll qipcall_client/wintun.dll
+      - name: Download font (Inter)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf" -OutFile qipcall_client/Inter.ttf
       - name: Download flags
         shell: bash
         run: |
@@ -68,6 +72,7 @@ jobs:
             --add-binary "wintun.dll;." `
             --add-data "geoip.dat;." `
             --add-data "geosite.dat;." `
+            --add-data "Inter.ttf;." `
             --add-data "logo_white.png;." `
             --add-data "orb_on.png;." `
             --add-data "orb_off.png;." `
@@ -153,6 +158,9 @@ jobs:
         run: |
           curl -L -o qipcall_client/geoip.dat   "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
           curl -L -o qipcall_client/geosite.dat "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
+      - name: Download font (Inter)
+        run: |
+          curl -L -o qipcall_client/Inter.ttf "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
       - name: Download flags
         run: |
           mkdir -p qipcall_client/flags
@@ -170,6 +178,7 @@ jobs:
             --add-binary "sing-box:." \
             --add-data "geoip.dat:." \
             --add-data "geosite.dat:." \
+            --add-data "Inter.ttf:." \
             --add-data "logo_white.png:." \
             --add-data "orb_on.png:." \
             --add-data "orb_off.png:." \
