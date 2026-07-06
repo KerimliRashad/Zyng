@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "2.8"
+APP_VERSION = "2.9"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -829,9 +829,46 @@ def _norm_sub_url(url):
     return u
 
 
+def _hwid():
+    """Стабильный идентификатор устройства (HWID). Панели с лимитом устройств
+    (Remnawave/Happ-совместимые) требуют его, иначе отдают заглушку вместо серверов."""
+    path = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_hwid")
+    try:
+        with open(path, encoding="utf-8") as f:
+            h = f.read().strip()
+            if h:
+                return h
+    except Exception:
+        pass
+    import uuid
+    h = str(uuid.uuid4())
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(h)
+    except Exception:
+        pass
+    return h
+
+
+def _sub_headers(ua):
+    """Заголовки запроса подписки, включая HWID (как шлёт Happ)."""
+    osname = "Windows" if os.name == "nt" else ("macOS" if sys.platform == "darwin" else "Linux")
+    try:
+        import platform as _pf; osver = _pf.release()
+    except Exception:
+        osver = ""
+    return {
+        "User-Agent": ua, "Accept": "*/*",
+        "x-hwid": _hwid(),
+        "x-device-os": osname,
+        "x-ver-os": osver,
+        "x-device-model": "JeffTUN " + APP_VERSION,
+    }
+
+
 def _fetch_sub_once(url, ua, ctx):
     url = _norm_sub_url(url)
-    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
+    req = urllib.request.Request(url, headers=_sub_headers(ua))
     with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
         raw = r.read().decode("utf-8", "ignore").strip()
         title = r.headers.get("Profile-Title", "")
