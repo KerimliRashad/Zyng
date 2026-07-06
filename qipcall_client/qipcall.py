@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "3.0.1"
+APP_VERSION = "3.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -48,6 +48,13 @@ SUBCARD   = "#232830"
 SUBBORDER = "#39414c"
 UPDCARD   = "#232830"
 POWER_HOVER = "#2d323b"
+# Цветные кнопки действий (пинг / обновление)
+PING_C  = "#2f7d6b"   # пинг — приглушённый бирюзово-зелёный
+PING_CD = "#276657"
+UPD_C   = "#4a6aa5"   # обновление — спокойный синий
+UPD_CD  = "#3d5788"
+SPEED_C  = "#d1a44a"  # скорость — тёплый золотой
+SPEED_CD = "#b98f3c"
 
 
 def resource_path(name):
@@ -1064,31 +1071,27 @@ class JeffTUN:
         # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
         mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
         mid.grid(row=0, column=0, sticky="nsew")
-        mid.grid_rowconfigure(3, weight=1); mid.grid_columnconfigure(0, weight=1)
+        mid.grid_rowconfigure(2, weight=1); mid.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(mid, text="Серверы", font=ctk.CTkFont(FONT, 24, "bold"),
-                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=20, pady=(18, 8))
-        srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18)
-        self.search = ctk.CTkEntry(srow, placeholder_text="Введите текст для поиска", height=40,
-                                   corner_radius=12, fg_color=CARD, border_width=0, text_color=TEXT)
-        self.search.pack(side="left", fill="x", expand=True)
-        self.search.bind("<KeyRelease>", lambda e: self.render_servers())
-        ctk.CTkButton(srow, text="📶", width=42, height=42, corner_radius=13, fg_color=CARD,
-                      hover_color=CARD2, text_color=TEXT, border_width=0,
-                      font=ctk.CTkFont(FONT, 15), command=self.do_ping).pack(side="left", padx=(6, 0))
-        ctk.CTkButton(srow, text="🔄", width=42, height=42, corner_radius=13, fg_color=CARD,
-                      hover_color=CARD2, text_color=TEXT, border_width=0,
-                      font=ctk.CTkFont(FONT, 15), command=self.update_sub).pack(side="left", padx=(6, 0))
-        # выбор источника (подписки/ключи) — выпадающий список, влезает на любом экране
-        self.tabs_frame = ctk.CTkFrame(mid, fg_color="transparent")
-        self.tabs_frame.grid(row=2, column=0, sticky="ew", padx=16, pady=(8, 0))
+                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=20, pady=(18, 10))
+        # один аккуратный ряд: выбор подписки + цветные кнопки Пинг / Обновить
+        self.search = None  # поиск убран
+        srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 6))
+        self.tabs_frame = srow
         self._tab_map = {}
-        self.tab_menu = ctk.CTkOptionMenu(self.tabs_frame, values=["Все"], width=200, height=32,
-                                          corner_radius=10, fg_color=CARD, button_color=CARD2,
+        self.tab_menu = ctk.CTkOptionMenu(srow, values=["Все"], height=42,
+                                          corner_radius=14, fg_color=CARD, button_color=CARD2,
                                           button_hover_color=BORDER, text_color=TEXT,
                                           dropdown_fg_color=CARD, dropdown_text_color=TEXT,
-                                          dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 12, "bold"),
+                                          dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 13, "bold"),
                                           command=self._on_tab_menu)
-        self.tab_menu.pack(side="left")
+        self.tab_menu.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(srow, text="📶 Пинг", width=78, height=42, corner_radius=14,
+                      fg_color=PING_C, hover_color=PING_CD, text_color="white",
+                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(srow, text="🔄", width=48, height=42, corner_radius=14,
+                      fg_color=UPD_C, hover_color=UPD_CD, text_color="white",
+                      font=ctk.CTkFont(FONT, 16), command=self.update_sub).pack(side="left", padx=(8, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
@@ -1096,11 +1099,11 @@ class JeffTUN:
             self.server_list._scrollbar.grid_forget()
         except Exception:
             pass
-        self.server_list.grid(row=3, column=0, sticky="nsew", padx=14, pady=8)
+        self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
         self.empty_lbl = ctk.CTkLabel(self.server_list,
             text="Добавь ключ или подписку —\nкнопка «Вставить» ниже",
             font=ctk.CTkFont(FONT, 12), text_color=MUTED)
-        brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=4, column=0, sticky="ew", padx=18, pady=(4, 16))
+        brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=3, column=0, sticky="ew", padx=18, pady=(4, 16))
         ctk.CTkButton(brow, text="＋  Вставить ключ / подписку", height=40, corner_radius=20,
                       fg_color=ACC, hover_color=ACC_D, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.paste_key).pack(fill="x", expand=True)
@@ -1148,11 +1151,11 @@ class JeffTUN:
         self.cur_lbl.grid(row=5, column=0, pady=(2, 0))
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=6, column=0, pady=(8, 6))
         brow = ctk.CTkFrame(bottom, fg_color="transparent"); brow.pack(pady=(0, 8))
-        ctk.CTkButton(brow, text="Тест пинга", width=110, height=36, corner_radius=18,
-                      fg_color=ACC, hover_color=ACC_D, text_color="white",
+        ctk.CTkButton(brow, text="📶 Пинг", width=110, height=36, corner_radius=18,
+                      fg_color=PING_C, hover_color=PING_CD, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(0, 6))
         ctk.CTkButton(brow, text="⚡ Скорость", width=110, height=36, corner_radius=18,
-                      fg_color=CARD2, hover_color=BORDER, text_color=TEXT,
+                      fg_color=SPEED_C, hover_color=SPEED_CD, text_color="#1a1207",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.speed_test).pack(side="left")
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 8))
@@ -1462,11 +1465,6 @@ class JeffTUN:
             tabs.append(("manual", "Мои ключи"))
         for s in self.subs:
             tabs.append((s["url"], s.get("title") or "Подписка"))
-        # прячем выбор, если переключать нечего
-        if len(tabs) <= 1:
-            self.tabs_frame.grid_remove()
-            return
-        self.tabs_frame.grid()
         # уникальные подписи для выпадающего списка
         self._tab_map = {}
         values = []
@@ -1487,7 +1485,7 @@ class JeffTUN:
         self.render_tabs()
         for w in self.server_list.winfo_children():
             w.destroy()
-        q = (self.search.get() if hasattr(self, "search") else "").lower().strip()
+        q = (self.search.get() if getattr(self, "search", None) else "").lower().strip()
         # Карточка подписки (тариф/остаток/дни) + кнопка удаления подписки
         if self.sub_info and self.subs:
             si = self.sub_info
