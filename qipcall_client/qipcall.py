@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.1"
+APP_VERSION = "4.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -674,31 +674,50 @@ def _parse_wireguard(link):
     return out
 
 
+# Домены CDN-серверов загрузки Steam — их пускаем напрямую, чтобы игры
+# качались на полной скорости, минуя VPN.
+STEAM_DOMAINS = [
+    "steamcontent.com", "steamstatic.com", "steamcdn-a.akamaihd.net",
+    "steampipe.akamaized.net", "steamserver.net", "steamusercontent.com",
+    "cs.steampowered.com", "dl.steam.clngaa.com", "st.dl.eccdnx.com",
+    "st.dl.bscstorage.net", "steampipe.steamcontent.tnkjmec.com",
+]
+
+
 def _xray_routing(prefs):
-    """Умная маршрутизация xray: локальные и RU-адреса напрямую, остальное через VPN.
+    """Умная маршрутизация xray: локальные/RU и (опц.) Steam напрямую, остальное — VPN.
     Требует geoip.dat/geosite.dat рядом с ядром (XRAY_LOCATION_ASSET)."""
-    if not (prefs or {}).get("route_smart"):
+    prefs = prefs or {}
+    rules = []
+    if prefs.get("steam_direct"):
+        rules.append({"type": "field", "outboundTag": "direct",
+                      "domain": ["domain:" + d for d in STEAM_DOMAINS]})
+    if prefs.get("route_smart"):
+        rules.append({"type": "field", "ip": ["geoip:private", "geoip:ru"], "outboundTag": "direct"})
+        rules.append({"type": "field", "domain": ["geosite:category-ru", "geosite:private"], "outboundTag": "direct"})
+    if not rules:
         return None
-    return {"domainStrategy": "IPIfNonMatch", "rules": [
-        {"type": "field", "ip": ["geoip:private", "geoip:ru"], "outboundTag": "direct"},
-        {"type": "field", "domain": ["geosite:category-ru", "geosite:private"], "outboundTag": "direct"},
-    ]}
+    return {"domainStrategy": "IPIfNonMatch", "rules": rules}
 
 
 def _singbox_route(prefs, final="proxy"):
-    """Маршрутизация sing-box: приватные сети и RU напрямую через удалённые rule-set."""
+    """Маршрутизация sing-box: приватные/RU и (опц.) Steam напрямую."""
+    prefs = prefs or {}
     route = {"final": final}
-    if (prefs or {}).get("route_smart"):
-        route["rules"] = [
-            {"ip_is_private": True, "outbound": "direct"},
-            {"rule_set": ["geoip-ru", "geosite-ru"], "outbound": "direct"},
-        ]
+    rules = []
+    if prefs.get("steam_direct"):
+        rules.append({"domain_suffix": STEAM_DOMAINS, "outbound": "direct"})
+    if prefs.get("route_smart"):
+        rules.append({"ip_is_private": True, "outbound": "direct"})
+        rules.append({"rule_set": ["geoip-ru", "geosite-ru"], "outbound": "direct"})
         route["rule_set"] = [
             {"type": "remote", "tag": "geoip-ru", "format": "binary", "download_detour": "direct",
              "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs"},
             {"type": "remote", "tag": "geosite-ru", "format": "binary", "download_detour": "direct",
              "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.srs"},
         ]
+    if rules:
+        route["rules"] = rules
     return route
 
 
@@ -2208,6 +2227,8 @@ class JeffTUN:
         sw(c, "Разрешить LAN", "lan", False)
         c = section("МАРШРУТИЗАЦИЯ")
         sw(c, "Умная (RU-сайты напрямую)", "route_smart", False,
+           cmd=lambda _v: self._reconnect_note())
+        sw(c, "Steam-загрузки напрямую (быстрые игры)", "steam_direct", False,
            cmd=lambda _v: self._reconnect_note())
         sw(c, "Режим TUN — весь ПК (нужен админ)", "tun_mode", False,
            cmd=lambda _v: self._reconnect_note())
