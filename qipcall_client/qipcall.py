@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.0.1"
+APP_VERSION = "4.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -703,10 +703,23 @@ def _singbox_route(prefs, final="proxy"):
 
 
 def build_xray_config(outbound, prefs=None):
+    prefs = prefs or {}
+    # TLS-фрагментация (обход DPI): режем ClientHello и гоним прокси через
+    # freedom-аутбаунд с fragment. Работает для vless/vmess/trojan/ss на ядре xray.
+    if prefs.get("fragment"):
+        import copy
+        outbound = copy.deepcopy(outbound)               # не трогаем исходный outbound
+        ss = outbound.setdefault("streamSettings", {})
+        ss.setdefault("sockopt", {})["dialerProxy"] = "fragment"
+        outbounds = [outbound, {"protocol": "freedom", "tag": "direct"},
+                     {"tag": "fragment", "protocol": "freedom",
+                      "settings": {"fragment": {"packets": "tlshello", "length": "100-200", "interval": "10-20"}}}]
+    else:
+        outbounds = [outbound, {"protocol": "freedom", "tag": "direct"}]
     cfg = {"log": {"loglevel": "warning"},
            "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}},
                         {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"}],
-           "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}]}
+           "outbounds": outbounds}
     r = _xray_routing(prefs)
     if r: cfg["routing"] = r
     return cfg
@@ -2190,7 +2203,8 @@ class JeffTUN:
                       progress_color=ACC).pack(side="right")
         c = section("ТУННЕЛЬ")
         choice(c, "Тип IP", "ip_type", ["IPv4", "IPv6", "Авто"], "IPv4")
-        sw(c, "Фрагментирование", "fragment", False)
+        sw(c, "Фрагментация TLS (обход DPI)", "fragment", False,
+           cmd=lambda _v: self._reconnect_note())
         sw(c, "Разрешить LAN", "lan", False)
         c = section("МАРШРУТИЗАЦИЯ")
         sw(c, "Умная (RU-сайты напрямую)", "route_smart", False,
