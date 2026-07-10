@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.3"
+APP_VERSION = "4.3.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1204,10 +1204,11 @@ class JeffTUN:
         if self._logo_ref is None:
             ctk.CTkLabel(h, text="JEFF", font=ctk.CTkFont(FONT, 26, "bold"), text_color=ACC).pack()
         # тумблер-переключатель (как iOS/W3Schools switch) вместо круглой кнопки
-        self.toggle_w, self.toggle_h = 158, 80
+        self.toggle_w, self.toggle_h = 108, 54
+        self._tgl_pos = 0.0                              # 0 = выкл, 1 = вкл (для анимации)
         self.toggle_cv = tk.Canvas(right, width=self.toggle_w, height=self.toggle_h,
                                    bg=BG, highlightthickness=0, bd=0, cursor="hand2")
-        self.toggle_cv.grid(row=1, column=0, pady=(14, 6))
+        self.toggle_cv.grid(row=1, column=0, pady=(18, 8))
         self.toggle_cv.bind("<Button-1>", lambda e: self.toggle())
         self._draw_toggle()
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
@@ -1463,6 +1464,12 @@ class JeffTUN:
         except Exception:
             return None
 
+    @staticmethod
+    def _lerp_hex(a, b, t):
+        a = a.lstrip("#"); b = b.lstrip("#"); t = max(0.0, min(1.0, t))
+        vals = [int(int(a[i:i+2], 16) + (int(b[i:i+2], 16) - int(a[i:i+2], 16)) * t) for i in (0, 2, 4)]
+        return "#%02x%02x%02x" % tuple(vals)
+
     def _pill(self, cv, x0, y0, x1, y1, fill):
         """Рисует «пилюлю» (скруглённый прямоугольник) на Canvas."""
         d = y1 - y0
@@ -1471,21 +1478,42 @@ class JeffTUN:
         cv.create_rectangle(x0 + d / 2, y0, x1 - d / 2, y1, fill=fill, outline=fill)
 
     def _draw_toggle(self):
-        """Перерисовывает тумблер под текущее состояние (вкл/выкл)."""
+        """Рисует тумблер по текущей позиции анимации self._tgl_pos (0..1)."""
         cv = getattr(self, "toggle_cv", None)
         if cv is None:
             return
         cv.delete("all")
         W, H = self.toggle_w, self.toggle_h
-        m = 6
-        on = self.connected
-        track = ACC if on else CARD2                      # вкл — стальной акцент (не яркий)
+        m = 5
+        p = getattr(self, "_tgl_pos", 0.0)
+        track = self._lerp_hex(CARD2, ACC, p)            # плавный перелив дорожки
         self._pill(cv, m, m, W - m, H - m, track)
-        d = (H - 2 * m) - 12                              # диаметр бегунка
-        ky0 = m + 6
-        kx0 = (W - m - 6 - d) if on else (m + 6)
-        knob = "#ffffff" if on else "#9fb0d0"
+        d = (H - 2 * m) - 8                              # диаметр бегунка
+        ky0 = m + 4
+        off_x = m + 4
+        on_x = W - m - 4 - d
+        kx0 = off_x + (on_x - off_x) * p                 # плавное скольжение
+        knob = self._lerp_hex("#9fb0d0", "#ffffff", p)
+        # лёгкая тень бегунка для объёма
+        cv.create_oval(kx0 + 1, ky0 + 2, kx0 + d + 1, ky0 + d + 2, fill=track, outline=track)
         cv.create_oval(kx0, ky0, kx0 + d, ky0 + d, fill=knob, outline=knob)
+
+    def _animate_toggle(self):
+        """Плавно перегоняет бегунок в целевое состояние (ease-out)."""
+        target = 1.0 if self.connected else 0.0
+        try:
+            if getattr(self, "_tgl_after", None):
+                self.root.after_cancel(self._tgl_after); self._tgl_after = None
+        except Exception:
+            pass
+        def step():
+            diff = target - self._tgl_pos
+            if abs(diff) < 0.02:
+                self._tgl_pos = target; self._draw_toggle(); return
+            self._tgl_pos += diff * 0.30                 # мягкое замедление
+            self._draw_toggle()
+            self._tgl_after = self.root.after(16, step)
+        step()
 
     def _flag_image(self, code):
         if code in self._flag_cache:
@@ -1863,7 +1891,7 @@ class JeffTUN:
         self.connected = True
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self._update_current(nm)
-        self._draw_toggle()
+        self._animate_toggle()
         self._connect_time = time.time()
         self._tick()
 
@@ -1906,7 +1934,7 @@ class JeffTUN:
                 self.root.after_cancel(self._tick_after); self._tick_after = None
         except Exception:
             pass
-        self._draw_toggle()
+        self._animate_toggle()
         self.timer_lbl.configure(text="")
         self.status.configure(text="Отключено", text_color=MUTED)
 
