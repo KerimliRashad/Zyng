@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.2"
+APP_VERSION = "4.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1203,14 +1203,13 @@ class JeffTUN:
             pass
         if self._logo_ref is None:
             ctk.CTkLabel(h, text="JEFF", font=ctk.CTkFont(FONT, 26, "bold"), text_color=ACC).pack()
-        # простая круглая кнопка питания (без анимаций)
-        self._picon_off = self._power_icon("#9fb0d0", 54)
-        self._picon_on = self._power_icon("#ffffff", 54)
-        self.power = ctk.CTkButton(right, text="", image=self._picon_off,
-                                   width=132, height=132, corner_radius=66,
-                                   fg_color=CARD, hover_color=CARD2, border_width=2,
-                                   border_color=BORDER, command=self.toggle)
-        self.power.grid(row=1, column=0, pady=(8, 2))
+        # тумблер-переключатель (как iOS/W3Schools switch) вместо круглой кнопки
+        self.toggle_w, self.toggle_h = 158, 80
+        self.toggle_cv = tk.Canvas(right, width=self.toggle_w, height=self.toggle_h,
+                                   bg=BG, highlightthickness=0, bd=0, cursor="hand2")
+        self.toggle_cv.grid(row=1, column=0, pady=(14, 6))
+        self.toggle_cv.bind("<Button-1>", lambda e: self.toggle())
+        self._draw_toggle()
         self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 0))
         # таймер КРАСИВО ПОД кнопкой (появляется при подключении)
@@ -1463,6 +1462,30 @@ class JeffTUN:
             return ctk.CTkImage(im, size=(size, size))
         except Exception:
             return None
+
+    def _pill(self, cv, x0, y0, x1, y1, fill):
+        """Рисует «пилюлю» (скруглённый прямоугольник) на Canvas."""
+        d = y1 - y0
+        cv.create_oval(x0, y0, x0 + d, y1, fill=fill, outline=fill)
+        cv.create_oval(x1 - d, y0, x1, y1, fill=fill, outline=fill)
+        cv.create_rectangle(x0 + d / 2, y0, x1 - d / 2, y1, fill=fill, outline=fill)
+
+    def _draw_toggle(self):
+        """Перерисовывает тумблер под текущее состояние (вкл/выкл)."""
+        cv = getattr(self, "toggle_cv", None)
+        if cv is None:
+            return
+        cv.delete("all")
+        W, H = self.toggle_w, self.toggle_h
+        m = 6
+        on = self.connected
+        track = ACC if on else CARD2                      # вкл — стальной акцент (не яркий)
+        self._pill(cv, m, m, W - m, H - m, track)
+        d = (H - 2 * m) - 12                              # диаметр бегунка
+        ky0 = m + 6
+        kx0 = (W - m - 6 - d) if on else (m + 6)
+        knob = "#ffffff" if on else "#9fb0d0"
+        cv.create_oval(kx0, ky0, kx0 + d, ky0 + d, fill=knob, outline=knob)
 
     def _flag_image(self, code):
         if code in self._flag_cache:
@@ -1840,10 +1863,9 @@ class JeffTUN:
         self.connected = True
         nm = clean_name(unquote(link.split("#", 1)[1])) if "#" in link else "Сервер"
         self._update_current(nm)
-        self.power.configure(fg_color=ACC, hover_color=ACC_D, image=self._picon_on, border_color=ACC)
+        self._draw_toggle()
         self._connect_time = time.time()
         self._tick()
-        self._pulse()
 
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
@@ -1866,31 +1888,6 @@ class JeffTUN:
         self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
-    @staticmethod
-    def _lerp_hex(a, b, t):
-        a = a.lstrip("#"); b = b.lstrip("#")
-        ar, ag, ab = int(a[0:2], 16), int(a[2:4], 16), int(a[4:6], 16)
-        br, bg, bb = int(b[0:2], 16), int(b[2:4], 16), int(b[4:6], 16)
-        r = int(ar + (br - ar) * t); g = int(ag + (bg - ag) * t); bl = int(ab + (bb - ab) * t)
-        return f"#{r:02x}{g:02x}{bl:02x}"
-
-    def _pulse(self, phase=0.0):
-        """Плавное «дыхание» кнопки при подключении (мягкая синусоида, без рывков)."""
-        if not self.connected:
-            try: self.power.configure(border_width=2, border_color=ACC)
-            except Exception: pass
-            return
-        import math
-        val = (math.sin(phase) + 1) / 2.0           # 0..1 плавно
-        w = int(round(2 + val * 4))                  # ширина ободка 2..6
-        col = self._lerp_hex(ACC, "#9aa6f0", val)    # мягкий перелив цвета
-        try:
-            self.power.configure(border_width=w, border_color=col)
-        except Exception:
-            pass
-        # шаг 40 мс, ~3 с на полный цикл вдох-выдох — спокойно и плавно
-        self._pulse_after = self.root.after(40, lambda: self._pulse(phase + 0.085))
-
     def disconnect(self):
         try: set_system_proxy(False)
         except Exception: pass
@@ -1907,12 +1904,9 @@ class JeffTUN:
         try:
             if getattr(self, "_tick_after", None):
                 self.root.after_cancel(self._tick_after); self._tick_after = None
-            if getattr(self, "_pulse_after", None):
-                self.root.after_cancel(self._pulse_after); self._pulse_after = None
         except Exception:
             pass
-        self.power.configure(fg_color=CARD, hover_color=CARD2, image=self._picon_off,
-                             border_color=BORDER, border_width=2)
+        self._draw_toggle()
         self.timer_lbl.configure(text="")
         self.status.configure(text="Отключено", text_color=MUTED)
 
