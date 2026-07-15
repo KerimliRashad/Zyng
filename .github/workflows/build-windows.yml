@@ -101,15 +101,15 @@ jobs:
               <tr>
                 <td><b>📺 TV Android</b></td>
                 <td>
-                  <a href="https://github.com/Happ-proxy/happ-android/releases/latest"><img src="https://img.shields.io/badge/Happ-APK-2ea043?style=for-the-badge&logo=android&logoColor=white"></a>
-                  <sub>установи Happ на Android TV и вставь подписку JeffTUN</sub>
+                  <a href="https://github.com/Happ-proxy/happ-android/releases/latest"><img src="https://img.shields.io/badge/JeffTUN-Android_TV-2ea043?style=for-the-badge&logo=android&logoColor=white"></a>
+                  <sub>установи на Android TV и вставь подписку JeffTUN</sub>
                 </td>
               </tr>
               <tr>
                 <td><b>🍎 TV Apple</b></td>
                 <td>
-                  <a href="https://apps.apple.com/app/happ-proxy-utility/id6504287215"><img src="https://img.shields.io/badge/Happ-App_Store-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
-                  <sub>установи Happ на Apple TV (tvOS) и вставь подписку JeffTUN</sub>
+                  <a href="https://apps.apple.com/app/happ-proxy-utility/id6504287215"><img src="https://img.shields.io/badge/JeffTUN-Apple_TV-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
+                  <sub>установи на Apple TV (tvOS) и вставь подписку JeffTUN</sub>
                 </td>
               </tr>
               <tr>

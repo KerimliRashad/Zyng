@@ -8,8 +8,8 @@
 |-----------|--------|
 | 🪟 **Windows** (7 / 8 / 10 / 11) | [JeffTUN.exe](https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe) |
 | 🐧 **Linux** (x64) | [JeffTUN-linux](https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux) |
-| 📺 **TV Android** | [Happ (APK)](https://github.com/Happ-proxy/happ-android/releases/latest) — установи на Android TV и вставь подписку JeffTUN |
-| 🍎 **TV Apple** | [Happ (App Store)](https://apps.apple.com/app/happ-proxy-utility/id6504287215) — установи на Apple TV (tvOS) и вставь подписку JeffTUN |
+| 📺 **TV Android** | [JeffTUN для Android TV](https://github.com/Happ-proxy/happ-android/releases/latest) — установи и вставь подписку JeffTUN |
+| 🍎 **TV Apple** | [JeffTUN для Apple TV](https://apps.apple.com/app/happ-proxy-utility/id6504287215) — установи на Apple TV (tvOS) и вставь подписку JeffTUN |
 
 Все релизы: **https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun**
 
