@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.3.1"
+APP_VERSION = "4.4"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -735,9 +735,10 @@ def build_xray_config(outbound, prefs=None):
                       "settings": {"fragment": {"packets": "tlshello", "length": "100-200", "interval": "10-20"}}}]
     else:
         outbounds = [outbound, {"protocol": "freedom", "tag": "direct"}]
+    listen = "0.0.0.0" if prefs.get("lan") else "127.0.0.1"   # «Разрешить LAN» → доступ из локальной сети
     cfg = {"log": {"loglevel": "warning"},
-           "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}},
-                        {"tag": "http", "port": HTTP_PORT, "listen": "127.0.0.1", "protocol": "http"}],
+           "inbounds": [{"tag": "socks", "port": SOCKS_PORT, "listen": listen, "protocol": "socks", "settings": {"udp": True}},
+                        {"tag": "http", "port": HTTP_PORT, "listen": listen, "protocol": "http"}],
            "outbounds": outbounds}
     r = _xray_routing(prefs)
     if r: cfg["routing"] = r
@@ -746,11 +747,13 @@ def build_xray_config(outbound, prefs=None):
 
 def build_singbox_config(outbound, prefs=None):
     """Конфиг sing-box: socks+http инбаунды на тех же портах, что и xray."""
+    prefs = prefs or {}
+    listen = "0.0.0.0" if prefs.get("lan") else "127.0.0.1"
     return {
         "log": {"level": "warn"},
         "inbounds": [
-            {"type": "socks", "tag": "socks-in", "listen": "127.0.0.1", "listen_port": SOCKS_PORT},
-            {"type": "http", "tag": "http-in", "listen": "127.0.0.1", "listen_port": HTTP_PORT},
+            {"type": "socks", "tag": "socks-in", "listen": listen, "listen_port": SOCKS_PORT},
+            {"type": "http", "tag": "http-in", "listen": listen, "listen_port": HTTP_PORT},
         ],
         "outbounds": [outbound, {"type": "direct", "tag": "direct"}],
         "route": _singbox_route(prefs),
@@ -2243,10 +2246,10 @@ class JeffTUN:
                       command=lambda: (setattr(self, "autoconnect", acv.get() == "on"), self.save(silent=True)),
                       progress_color=ACC).pack(side="right")
         c = section("ТУННЕЛЬ")
-        choice(c, "Тип IP", "ip_type", ["IPv4", "IPv6", "Авто"], "IPv4")
         sw(c, "Фрагментация TLS (обход DPI)", "fragment", False,
            cmd=lambda _v: self._reconnect_note())
-        sw(c, "Разрешить LAN", "lan", False)
+        sw(c, "Доступ из локальной сети (LAN)", "lan", False,
+           cmd=lambda _v: self._reconnect_note())
         c = section("МАРШРУТИЗАЦИЯ")
         sw(c, "Умная (RU-сайты напрямую)", "route_smart", False,
            cmd=lambda _v: self._reconnect_note())
