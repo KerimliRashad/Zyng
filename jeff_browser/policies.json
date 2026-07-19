@@ -16,11 +16,6 @@
         }
       ]
     },
-    "Homepage": {
-      "URL": "https://www.google.com",
-      "StartPage": "homepage",
-      "Locked": false
-    },
     "NoDefaultBookmarks": true,
     "Bookmarks": [
       { "Title": "Google",  "URL": "https://www.google.com",  "Placement": "toolbar" },
