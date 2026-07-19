@@ -1,0 +1,77 @@
+name: Build Jeff Browser
+
+on:
+  push:
+    branches: [ claude/icq-messenger-b0bt2n ]
+    paths:
+      - 'jeff_browser/**'
+      - '.github/workflows/build-jeff-browser.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download r3dfox (Firefox-форк для Win7–11)
+        shell: pwsh
+        run: |
+          $rel = Invoke-RestMethod "https://api.github.com/repos/Eclipse-Community/r3dfox/releases/latest"
+          $asset = $rel.assets | Where-Object { $_.name -match "win64.*\.zip$" } | Select-Object -First 1
+          if (-not $asset) { $asset = $rel.assets | Where-Object { $_.name -match "\.zip$" } | Select-Object -First 1 }
+          if (-not $asset) { throw "Не нашёл zip-сборку r3dfox" }
+          Write-Host "Качаю: $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile r3dfox.zip
+          Expand-Archive r3dfox.zip -DestinationPath JeffBrowser -Force
+
+      - name: Внедряем брендинг Jeff + поисковики
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse JeffBrowser -Include firefox.exe,r3dfox.exe,waterfox.exe |
+                 Select-Object -First 1
+          if (-not $exe) { throw "Не нашёл исполняемый файл браузера" }
+          $dir = $exe.Directory.FullName
+          Write-Host "Папка браузера: $dir"
+
+          New-Item -ItemType Directory -Force -Path "$dir\distribution" | Out-Null
+          Copy-Item jeff_browser/policies.json "$dir\distribution\policies.json" -Force
+
+          New-Item -ItemType Directory -Force -Path "$dir\defaults\pref" | Out-Null
+          Copy-Item jeff_browser/autoconfig.js "$dir\defaults\pref\autoconfig.js" -Force
+
+          Copy-Item jeff_browser/mozilla.cfg   "$dir\mozilla.cfg"   -Force
+          Copy-Item jeff_browser/jeff-start.html "$dir\jeff-start.html" -Force
+          Copy-Item jeff_browser/README.md     "$dir\README.txt"    -Force
+
+          # переименовываем главный exe в Jeff.exe (брендинг лаунчера)
+          Copy-Item $exe.FullName "$dir\Jeff.exe" -Force
+
+      - name: Упаковываем портативный архив
+        shell: pwsh
+        run: Compress-Archive -Path JeffBrowser/* -DestinationPath JeffBrowser-win64.zip -Force
+
+      - name: Публикуем релиз (jeffbrowser)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: jeffbrowser
+          name: Jeff Browser 🦈
+          files: JeffBrowser-win64.zip
+          body: |
+            <h2 align="center">Jeff Browser 🦈</h2>
+            <p align="center">Быстрый браузер на движке Firefox (r3dfox). Работает на <b>Windows 7 / 8 / 8.1 / 10 / 11</b>.</p>
+            <p align="center">Поиск <b>Google</b> по умолчанию · Yandex · DuckDuckGo · телеметрия выключена.</p>
+
+            <p align="center">
+              <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jeffbrowser/JeffBrowser-win64.zip"><img src="https://img.shields.io/badge/Jeff_Browser-Windows_x64-2ea043?style=for-the-badge&logo=windows&logoColor=white"></a>
+            </p>
+
+            <blockquote>
+            <b>Как запустить:</b> распакуй архив → запусти <code>Jeff.exe</code>. Установка не нужна (портативный).<br>
+            Windows может показать <b>SmartScreen</b> — «Подробнее» → «Выполнить в любом случае».
+            </blockquote>
+
+            <p align="center"><sub>Движок: r3dfox / Mozilla Firefox (MPL 2.0). Спасибо Eclipse-Community/r3dfox.</sub></p>
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
