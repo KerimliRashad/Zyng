@@ -79,6 +79,27 @@ jobs:
           # переименовываем главный exe в Jeff.exe (брендинг лаунчера)
           Copy-Item $exe.FullName "$dir\Jeff.exe" -Force
 
+          # ── Патч бренда r3dfox → Jeff прямо в упаковке (без пересборки движка) ──
+          try {
+            foreach ($rel in @("browser\omni.ja", "omni.ja")) {
+              $omni = Join-Path $dir $rel
+              if (-not (Test-Path $omni)) { continue }
+              $work = Join-Path $env:RUNNER_TEMP ("omni_" + [IO.Path]::GetRandomFileName())
+              New-Item -ItemType Directory -Force -Path $work | Out-Null
+              7z x $omni "-o$work" -y | Out-Null
+              Get-ChildItem -Recurse $work -Include brand.ftl,brand.properties,brand.dtd -ErrorAction SilentlyContinue | ForEach-Object {
+                $t = Get-Content $_.FullName -Raw
+                $t = $t -replace 'r3dfox','Jeff' -replace 'Eclipse Community','Jeff' -replace 'Eclipse','Jeff'
+                Set-Content $_.FullName -Value $t -NoNewline -Encoding UTF8
+              }
+              Remove-Item $omni -Force
+              Push-Location $work
+              7z a -tzip -mx=0 "$omni" "*" | Out-Null   # store (без сжатия) — Firefox читает
+              Pop-Location
+              Write-Host "Пропатчен бренд в $rel"
+            }
+          } catch { Write-Host "Патч omni.ja пропущен: $_" }
+
       - name: Упаковываем архив и self-extract .exe
         shell: pwsh
         run: |
