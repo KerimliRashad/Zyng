@@ -16,14 +16,41 @@ jobs:
 
       - name: Download r3dfox (Firefox-форк для Win7–11)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $rel = Invoke-RestMethod "https://api.github.com/repos/Eclipse-Community/r3dfox/releases/latest"
-          $asset = $rel.assets | Where-Object { $_.name -match "win64.*\.zip$" } | Select-Object -First 1
-          if (-not $asset) { $asset = $rel.assets | Where-Object { $_.name -match "\.zip$" } | Select-Object -First 1 }
-          if (-not $asset) { throw "Не нашёл zip-сборку r3dfox" }
+          $headers = @{ "User-Agent" = "jeff-browser"; "Authorization" = "token $env:GH_TOKEN" }
+          $releases = Invoke-RestMethod "https://api.github.com/repos/Eclipse-Community/r3dfox/releases?per_page=15" -Headers $headers
+
+          function Pick($pattern) {
+            foreach ($r in $releases) {
+              $a = $r.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1
+              if ($a) { return $a }
+            }
+            return $null
+          }
+
+          # 1) портативный win64 zip/7z; 2) любой win zip/7z; 3) win установщик .exe (распакуем 7-Zip)
+          $asset = Pick("win64.*\.(zip|7z)$")
+          if (-not $asset) { $asset = Pick("win.*\.(zip|7z)$") }
+          $isInstaller = $false
+          if (-not $asset) { $asset = Pick("win64.*\.exe$"); $isInstaller = $true }
+          if (-not $asset) { $asset = Pick("win.*\.exe$"); $isInstaller = $true }
+
+          if (-not $asset) {
+            Write-Host "Ассеты последнего релиза:"; $releases[0].assets | ForEach-Object { Write-Host " - $($_.name)" }
+            throw "Не нашёл сборку r3dfox под Windows"
+          }
+
           Write-Host "Качаю: $($asset.name)"
-          Invoke-WebRequest $asset.browser_download_url -OutFile r3dfox.zip
-          Expand-Archive r3dfox.zip -DestinationPath JeffBrowser -Force
+          Invoke-WebRequest $asset.browser_download_url -OutFile browser.archive -Headers @{ "User-Agent" = "jeff-browser" }
+          New-Item -ItemType Directory -Force -Path JeffBrowser | Out-Null
+          if ($asset.name -match "\.zip$") {
+            Expand-Archive browser.archive -DestinationPath JeffBrowser -Force
+          } else {
+            # .7z или установщик .exe (NSIS) — оба распаковываются 7-Zip
+            7z x browser.archive -oJeffBrowser -y
+          }
 
       - name: Внедряем брендинг Jeff + поисковики
         shell: pwsh
