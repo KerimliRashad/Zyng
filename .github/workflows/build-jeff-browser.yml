@@ -71,19 +71,31 @@ jobs:
           Copy-Item jeff_browser/jeff-start.html "$dir\jeff-start.html" -Force
           Copy-Item jeff_browser/README.md     "$dir\README.txt"    -Force
 
+          # встроенное расширение Jeff «новая вкладка» — прячет логотип r3dfox
+          New-Item -ItemType Directory -Force -Path "$dir\distribution\extensions" | Out-Null
+          Compress-Archive -Path jeff_browser/extension/* -DestinationPath ext.zip -Force
+          Copy-Item ext.zip "$dir\distribution\extensions\jeffnewtab@jeff.xpi" -Force
+
           # переименовываем главный exe в Jeff.exe (брендинг лаунчера)
           Copy-Item $exe.FullName "$dir\Jeff.exe" -Force
 
-      - name: Упаковываем портативный архив
+      - name: Упаковываем архив и self-extract .exe
         shell: pwsh
-        run: Compress-Archive -Path JeffBrowser/* -DestinationPath JeffBrowser-win64.zip -Force
+        run: |
+          Compress-Archive -Path JeffBrowser/* -DestinationPath JeffBrowser-win64.zip -Force
+          7z a -mx=5 JeffBrowser.7z .\JeffBrowser\* | Out-Null
+          $sfx = "C:\Program Files\7-Zip\7z.sfx"
+          & cmd /c "copy /b `"$sfx`"+JeffBrowser.7z JeffBrowser-Setup.exe"
+          if (-not (Test-Path JeffBrowser-Setup.exe)) { throw "Не собрался Setup.exe" }
 
       - name: Публикуем релиз (jeffbrowser)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: jeffbrowser
           name: Jeff Browser 🦈
-          files: JeffBrowser-win64.zip
+          files: |
+            JeffBrowser-win64.zip
+            JeffBrowser-Setup.exe
           body: |
             <h2 align="center">Jeff Browser 🦈</h2>
             <p align="center">Быстрый браузер на движке Firefox (r3dfox). Работает на <b>Windows 7 / 8 / 8.1 / 10 / 11</b>.</p>
@@ -99,6 +111,15 @@ jobs:
             </blockquote>
 
             <p align="center"><sub>Движок: r3dfox / Mozilla Firefox (MPL 2.0). Спасибо Eclipse-Community/r3dfox.</sub></p>
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Добавляем браузер (.exe) на страницу JeffTUN
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: jefftun
+          files: JeffBrowser-Setup.exe
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

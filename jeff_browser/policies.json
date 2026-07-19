@@ -21,6 +21,12 @@
       "StartPage": "homepage",
       "Locked": false
     },
+    "NoDefaultBookmarks": true,
+    "Bookmarks": [
+      { "Title": "Google",  "URL": "https://www.google.com",  "Placement": "toolbar" },
+      { "Title": "YouTube", "URL": "https://www.youtube.com", "Placement": "toolbar" },
+      { "Title": "Yandex",  "URL": "https://yandex.ru",       "Placement": "toolbar" }
+    ],
     "OverrideFirstRunPage": "",
     "OverridePostUpdatePage": "",
     "DisableTelemetry": true,

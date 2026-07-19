@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Jeff</title>
+<style>
+  html,body{height:100%;margin:0;font-family:"Segoe UI",Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 50% -10%,#1b2230,#0f1116);color:#e6e8ec}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px}
+  .logo{font-size:70px;font-weight:900;letter-spacing:8px;
+    background:linear-gradient(#c7d0e0,#7f8a99);-webkit-background-clip:text;background-clip:text;color:transparent}
+  form{display:flex;width:min(640px,86%);background:#22262d;border:1px solid #363c46;border-radius:28px;overflow:hidden}
+  input{flex:1;border:0;background:transparent;color:#e6e8ec;font-size:17px;padding:16px 22px;outline:none}
+  button{border:0;background:#5c6675;color:#fff;font-size:15px;font-weight:700;padding:0 26px;cursor:pointer}
+  .eng{display:flex;gap:20px}
+  .eng a{color:#8a9099;text-decoration:none;font-size:14px}
+  .eng a:hover{color:#e6e8ec}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">JEFF</div>
+    <form action="https://www.google.com/search" method="GET">
+      <input name="q" placeholder="Поиск в Google…" autofocus>
+      <button type="submit">Найти</button>
+    </form>
+    <div class="eng">
+      <a href="https://www.google.com">Google</a>
+      <a href="https://yandex.ru">Yandex</a>
+      <a href="https://duckduckgo.com">DuckDuckGo</a>
+      <a href="https://www.youtube.com">YouTube</a>
+    </div>
+  </div>
+</body>
+</html>
