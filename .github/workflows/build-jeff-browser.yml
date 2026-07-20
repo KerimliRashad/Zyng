@@ -79,6 +79,14 @@ jobs:
           # переименовываем главный exe в Jeff.exe (брендинг лаунчера)
           Copy-Item $exe.FullName "$dir\Jeff.exe" -Force
 
+          # ставим логотип Jeff на иконку exe (rcedit, без пересборки)
+          try {
+            Invoke-WebRequest "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile rcedit.exe
+            & .\rcedit.exe "$dir\Jeff.exe" --set-icon "jeff_browser\jeff.ico"
+            & .\rcedit.exe "$dir\$($exe.Name)" --set-icon "jeff_browser\jeff.ico"
+            Write-Host "Иконка Jeff установлена"
+          } catch { Write-Host "rcedit пропущен: $_" }
+
           # ── Патч бренда r3dfox → Jeff прямо в упаковке (без пересборки движка) ──
           try {
             foreach ($rel in @("browser\omni.ja", "omni.ja")) {
