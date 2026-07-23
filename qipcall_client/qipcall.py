@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.4"
+APP_VERSION = "4.5"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1165,6 +1165,9 @@ class JeffTUN:
                                           dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 14, "bold"),
                                           command=self._on_tab_menu)
         self.tab_menu.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(srow, text="⚡ Авто", width=76, height=44, corner_radius=14,
+                      fg_color=PING_C, hover_color=PING_CD, text_color="white",
+                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.connect_fastest).pack(side="left", padx=(8, 0))
         ctk.CTkButton(srow, text="🔄", width=48, height=44, corner_radius=14,
                       fg_color=UPD_C, hover_color=UPD_CD, text_color="white",
                       font=ctk.CTkFont(FONT, 17), command=self.update_sub).pack(side="left", padx=(8, 0))
@@ -1780,6 +1783,45 @@ class JeffTUN:
             return self.links[self.selected_idx]
         return ""
 
+    def connect_fastest(self):
+        """Пингует все серверы и подключается к самому быстрому."""
+        if not self.links:
+            self._flash("Нет серверов", DANGER); return
+        self._flash("Ищу быстрый сервер…", MUTED)
+        def worker():
+            best = None; bestms = None
+            for i, ln in enumerate(self.links):
+                h, p = link_host_port(ln)
+                if not h:
+                    continue
+                ms = tcp_ping(h, p, timeout=2.5)
+                if ms is not None and (bestms is None or ms < bestms):
+                    bestms = ms; best = i
+            def done():
+                if best is None:
+                    self._flash("Серверы не отвечают", WARN); return
+                self.selected_idx = best
+                nm = clean_name(unquote(self.links[best].split("#", 1)[1])) if "#" in self.links[best] else "Сервер"
+                self._update_current(nm); self.render_servers()
+                if self.connected:
+                    self.disconnect(); self.connect()
+                else:
+                    self.connect()
+                self._flash(f"⚡ Быстрый: {nm} ({bestms} мс)", OK)
+            self.root.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def copy_key(self):
+        """Копирует ссылку выбранного сервера в буфер обмена."""
+        link = self._current_link()
+        if not link:
+            self._flash("Сервер не выбран", WARN); return
+        try:
+            self.root.clipboard_clear(); self.root.clipboard_append(link)
+            self._flash("Ключ скопирован ✓", OK)
+        except Exception:
+            self._flash("Не удалось скопировать", DANGER)
+
     # ── Пинг ── (меряем все серверы разом и показываем в каждой строке)
     def do_ping(self):
         link = self._current_link()
@@ -1910,14 +1952,29 @@ class JeffTUN:
             pass
 
     def _tick(self):
-        """Таймер подключения прямо внутри кнопки: 00:33:12."""
+        """Таймер подключения + сторож автопереподключения."""
         if not self.connected or not self._connect_time:
             return
+        # ядро упало? — авто-переподключение (если включено)
+        if self.proc and self.proc.poll() is not None and self.prefs.get("auto_reconnect", True):
+            self._auto_reconnect(); return
         s = int(time.time() - self._connect_time)
         hhmmss = f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
         self.timer_lbl.configure(text=f"⏱ {hhmmss}")
         self.status.configure(text="Подключено", text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
+
+    def _auto_reconnect(self):
+        if getattr(self, "_reconnecting", False):
+            return
+        self._reconnecting = True
+        self._flash("Соединение потеряно — переподключаюсь…", WARN)
+        self.status.configure(text="Переподключение…", text_color=WARN)
+        self.disconnect()
+        def again():
+            self.connect()
+            self._reconnecting = False
+        self.root.after(1000, again)
 
     def disconnect(self):
         try: set_system_proxy(False)
@@ -2245,6 +2302,7 @@ class JeffTUN:
         ctk.CTkSwitch(arow, text="", variable=acv, onvalue="on", offvalue="off",
                       command=lambda: (setattr(self, "autoconnect", acv.get() == "on"), self.save(silent=True)),
                       progress_color=ACC).pack(side="right")
+        sw(c, "Автопереподключение при обрыве", "auto_reconnect", True)
         c = section("ТУННЕЛЬ")
         sw(c, "Фрагментация TLS (обход DPI)", "fragment", False,
            cmd=lambda _v: self._reconnect_note())
@@ -2258,6 +2316,7 @@ class JeffTUN:
         sw(c, "Режим TUN — весь ПК (нужен админ)", "tun_mode", False,
            cmd=lambda _v: self._reconnect_note())
         c = section("ДАННЫЕ")
+        link(c, "📋 Скопировать текущий ключ", self.copy_key, color=ACC)
         link(c, "🗑 Сброс (удалить ключи)", self._reset_key, color=DANGER)
         c = section("ПОДРОБНЕЕ")
         link(c, f"⬆ Проверить обновление (v{APP_VERSION})", self.do_self_update)
