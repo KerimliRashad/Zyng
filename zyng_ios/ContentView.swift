@@ -40,9 +40,9 @@ func jtDeviceModel() -> String {
 
 func jtHWID() -> String {
     #if canImport(UIKit)
-    return UIDevice.current.identifierForVendor?.uuidString ?? "jefftun-ios"
+    return UIDevice.current.identifierForVendor?.uuidString ?? "zyng-ios"
     #else
-    return "jefftun-mac"
+    return "zyng-mac"
     #endif
 }
 
@@ -144,7 +144,7 @@ private enum JT {
 // MARK: - Главный экран
 
 struct ContentView: View {
-    @AppStorage("jefftun_keys") private var savedRaw: String = ""
+    @AppStorage("zyng_keys") private var savedRaw: String = ""
     @State private var servers: [Server] = []
     @State private var selectedID: UUID?
 
@@ -192,9 +192,9 @@ struct ContentView: View {
                         .fill(LinearGradient(colors:[JT.accent, Color(hex:"7A5CFF")],
                                              startPoint:.topLeading, endPoint:.bottomTrailing))
                         .frame(width: 34, height: 34)
-                    Text("J").font(.system(size: 20, weight: .black)).foregroundColor(.white)
+                    Text("Z").font(.system(size: 20, weight: .black)).foregroundColor(.white)
                 }
-                Text("JeffTUN").font(.system(size: 19, weight: .heavy))
+                Text("Zyng").font(.system(size: 19, weight: .heavy))
                     .foregroundColor(JT.text)
             }
             Spacer()
@@ -509,7 +509,7 @@ struct ContentView: View {
 
     func importSubscription(_ urlStr: String) async -> [Server] {
         guard let url = URL(string: urlStr) else { return [] }
-        let uas = ["Happ/1.0", "v2rayNG/1.8.5", "Streisand", "SFI/2.0", "JeffTUN/1.0"]
+        let uas = ["Happ/1.0", "v2rayNG/1.8.5", "Streisand", "SFI/2.0", "Zyng/1.0"]
         for ua in uas {
             var req = URLRequest(url: url)
             req.timeoutInterval = 15
