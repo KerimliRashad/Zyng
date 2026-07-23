@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zyng — быстрый и приватный VPN</title>
+<meta name="description" content="Zyng — быстрый VPN с современными протоколами. Вставь ключ или подписку и подключайся одним касанием.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235B8CFF'/><text x='50' y='72' font-size='68' font-family='Arial' font-weight='900' fill='white' text-anchor='middle'>Z</text></svg>">
+<style>
+  :root{
+    --bg1:#0E1014; --bg2:#171A20; --card:#1D2129; --stroke:#2E343F;
+    --text:#F2F5FA; --sub:#8A94A6; --accent:#5B8CFF; --accent2:#7A5CFF; --green:#39D98A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--text);
+    min-height:100vh; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:0 20px}
+  header{display:flex; align-items:center; justify-content:space-between; padding:22px 0}
+  .logo{display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px}
+  .logo .mark{
+    width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
+    font-weight:900; font-size:21px;
+  }
+  nav a{color:var(--sub); text-decoration:none; margin-left:22px; font-size:15px; font-weight:600}
+  nav a:hover{color:var(--text)}
+  .hero{text-align:center; padding:70px 0 40px}
+  .hero .orb{
+    width:150px; height:150px; margin:0 auto 28px; border-radius:50%;
+    background:radial-gradient(circle at 50% 40%,#272C36,#1D2129);
+    border:2px solid rgba(91,140,255,.55);
+    box-shadow:0 0 60px rgba(91,140,255,.35); display:grid; place-items:center;
+  }
+  .hero .orb svg{width:52px; height:52px; fill:var(--accent)}
+  .hero h1{font-size:clamp(34px,7vw,58px); font-weight:900; letter-spacing:-1px; line-height:1.05}
+  .hero .grad{background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .hero p{color:var(--sub); font-size:clamp(16px,2.5vw,20px); max-width:600px; margin:18px auto 0}
+  .btns{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:34px}
+  .btn{
+    display:inline-flex; align-items:center; gap:9px; padding:15px 28px; border-radius:15px;
+    font-weight:700; font-size:16px; text-decoration:none; border:1px solid var(--stroke);
+    color:var(--text); background:var(--card); transition:transform .12s ease, border-color .2s
+  }
+  .btn:hover{transform:translateY(-2px); border-color:var(--accent)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; color:#fff}
+  .features{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; padding:50px 0}
+  .feat{background:var(--card); border:1px solid var(--stroke); border-radius:18px; padding:24px}
+  .feat .ico{font-size:26px}
+  .feat h3{margin:12px 0 6px; font-size:18px}
+  .feat p{color:var(--sub); font-size:15px}
+  .cta{
+    text-align:center; background:var(--card); border:1px solid var(--stroke);
+    border-radius:24px; padding:46px 24px; margin:20px 0 60px
+  }
+  .cta h2{font-size:clamp(24px,4vw,34px); font-weight:800}
+  .cta p{color:var(--sub); margin:12px 0 26px}
+  footer{border-top:1px solid var(--stroke); padding:34px 0; color:var(--sub); font-size:14px;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px}
+  footer a{color:var(--sub); text-decoration:none; margin-right:18px}
+  footer a:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span class="mark">Z</span> Zyng</div>
+    <nav>
+      <a href="#features">Возможности</a>
+      <a href="support.html">Поддержка</a>
+      <a href="privacy.html">Конфиденциальность</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="orb">
+      <svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+    </div>
+    <h1>Интернет без границ.<br><span class="grad">Просто. Быстро. Безопасно.</span></h1>
+    <p>Zyng — современный VPN. Вставь ключ или ссылку-подписку и подключайся одним касанием. Никакой рекламы и лишних настроек.</p>
+    <div class="btns">
+      <a class="btn primary" href="#">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1H7a3 3 0 0 0-3 3v16a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3zm-5 21a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8z"/></svg>
+        Скоро в App Store
+      </a>
+      <a class="btn" href="support.html">Поддержка</a>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="feat"><div class="ico">⚡</div><h3>Молниеносно</h3><p>Современные протоколы для стабильной скорости даже при слабом сигнале.</p></div>
+    <div class="feat"><div class="ico">🔒</div><h3>Приватность</h3><p>Мы не ведём журналы твоей активности и не продаём данные третьим лицам.</p></div>
+    <div class="feat"><div class="ico">🌍</div><h3>Серверы мира</h3><p>Добавляй любые ключи и подписки — десятки стран в одном приложении.</p></div>
+    <div class="feat"><div class="ico">✨</div><h3>Простой дизайн</h3><p>Одна большая кнопка. Подключение одним касанием, без сложных меню.</p></div>
+  </section>
+
+  <section class="cta">
+    <h2>Подключайся к Zyng</h2>
+    <p>Красивый и понятный VPN для iPhone. Вставил ключ — и готово.</p>
+    <a class="btn primary" href="#">Скоро в App Store</a>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap" style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px; width:100%">
+    <div>© 2026 Zyng. Все права защищены.</div>
+    <div>
+      <a href="privacy.html">Политика конфиденциальности</a>
+      <a href="support.html">Поддержка</a>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
