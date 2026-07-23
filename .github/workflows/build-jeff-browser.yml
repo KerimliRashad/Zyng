@@ -1,12 +1,7 @@
 name: Build Jeff Browser
 
 on:
-  push:
-    branches: [ claude/icq-messenger-b0bt2n ]
-    paths:
-      - 'jeff_browser/**'
-      - '.github/workflows/build-jeff-browser.yml'
-  workflow_dispatch:
+  workflow_dispatch:   # r3dfox-версия отключена от авто-сборки — теперь основной браузер собственный (build-jeff-browser-app)
 
 jobs:
   windows:
