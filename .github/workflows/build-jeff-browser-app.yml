@@ -57,3 +57,12 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Добавляем браузер (.exe) на страницу JeffTUN
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: jefftun
+          files: jeff_browser_app/JeffBrowser-Setup.exe
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

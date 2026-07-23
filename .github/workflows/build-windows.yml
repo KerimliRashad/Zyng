@@ -113,10 +113,10 @@ jobs:
                 </td>
               </tr>
               <tr>
-                <td><b>🦈 Jeff Browser</b></td>
+                <td><b>🔴 Jeff Browser</b></td>
                 <td>
-                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jeffbrowser/JeffBrowser-win64.zip"><img src="https://img.shields.io/badge/Браузер-Windows_7--11-2ea043?style=for-the-badge&logo=firefox&logoColor=white"></a>
-                  <sub>браузер с поиском Google, работает на Windows 7/8/10/11</sub>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jeffbrowser/JeffBrowser-Setup.exe"><img src="https://img.shields.io/badge/Браузер-Windows-2ea043?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+                  <sub>собственный браузер Jeff с поиском Google (Windows 10/11)</sub>
                 </td>
               </tr>
               <tr>
