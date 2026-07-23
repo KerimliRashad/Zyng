@@ -120,6 +120,13 @@ jobs:
                 </td>
               </tr>
               <tr>
+                <td><b>📱 Zyng для iOS</b></td>
+                <td>
+                  <a href="https://zyng.online"><img src="https://img.shields.io/badge/Zyng-iPhone-5B8CFF?style=for-the-badge&logo=apple&logoColor=white"></a>
+                  <sub>скоро в App Store · сайт <a href="https://zyng.online">zyng.online</a></sub>
+                </td>
+              </tr>
+              <tr>
                 <td><b>🐧 Linux</b></td>
                 <td>
                   <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux"><img src="https://img.shields.io/badge/Binary-x64-2ea043?style=for-the-badge&logo=linux&logoColor=white"></a>
@@ -135,6 +142,10 @@ jobs:
             </blockquote>
 
             <p align="center"><sub>Linux: <code>chmod +x JeffTUN-linux</code> и запускай. Обновления ставятся внутри приложения.</sub></p>
+
+            <p align="center">
+              <a href="https://zyng.online"><img src="https://img.shields.io/badge/🌐_Наш_сайт-zyng.online-5B8CFF?style=for-the-badge"></a>
+            </p>
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
