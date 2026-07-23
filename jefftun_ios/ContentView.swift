@@ -8,7 +8,7 @@ struct Server: Identifiable, Equatable {
     let name: String
     let proto: String
     let flag: String
-    var ping: Int? = nil          // мс, заполняется при пинге
+    var ping: Int? = nil
 }
 
 func flagFor(_ name: String) -> String {
@@ -80,7 +80,7 @@ private enum JT {
     static let stroke  = Color(hex:"2E343F")
     static let text    = Color.white
     static let sub     = Color(hex:"8A94A6")
-    static let accent  = Color(hex:"5B8CFF")      // синий как в v2rayTun
+    static let accent  = Color(hex:"5B8CFF")
     static let green   = Color(hex:"39D98A")
     static let red     = Color(hex:"FF5C5C")
 }
@@ -89,13 +89,13 @@ private enum JT {
 
 struct ContentView: View {
     @AppStorage("jefftun_keys") private var savedRaw: String = ""
-    @AppStorage("jefftun_sel")  private var savedSel: String = ""
     @State private var servers: [Server] = []
     @State private var selectedID: UUID?
 
     @State private var state: ConnState = .off
     @State private var elapsed = 0
     @State private var timer: Timer?
+    @State private var pulse = false
 
     @State private var showAdd = false
     @State private var showList = false
@@ -128,7 +128,6 @@ struct ContentView: View {
         .sheet(isPresented: $showList) { serverListSheet }
     }
 
-    // MARK: Хедер
     private var header: some View {
         HStack {
             HStack(spacing: 8) {
@@ -154,19 +153,16 @@ struct ContentView: View {
         .padding(.horizontal, 20).padding(.top, 8)
     }
 
-    // MARK: Орб (главная кнопка)
     private var orb: some View {
         let color: Color = state == .on ? JT.green : (state == .connecting ? JT.accent : JT.sub)
         return Button {
             tapConnect()
         } label: {
             ZStack {
-                // внешнее свечение
-                Circle().fill(color.opacity(0.14)).frame(width: 250, height: 250)
-                    .blur(radius: 12)
+                Circle().fill(color.opacity(0.14)).frame(width: 250, height: 250).blur(radius: 12)
+                    .scaleEffect(pulse ? 1.06 : 0.94)
                 Circle().stroke(color.opacity(0.25), lineWidth: 1).frame(width: 230, height: 230)
                 Circle().stroke(color.opacity(0.35), lineWidth: 1).frame(width: 190, height: 190)
-                // основной круг
                 Circle()
                     .fill(LinearGradient(colors:[JT.cardHi, JT.card],
                                          startPoint:.topLeading, endPoint:.bottomTrailing))
@@ -184,9 +180,6 @@ struct ContentView: View {
             }
         }
         .buttonStyle(.plain)
-        .scaleEffect(state == .connecting ? 0.97 : 1)
-        .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true),
-                   value: state == .connecting)
     }
 
     private var statusPill: some View {
@@ -210,7 +203,6 @@ struct ContentView: View {
             .foregroundColor(state == .on ? JT.text : JT.sub.opacity(0.5))
     }
 
-    // MARK: Карточка выбранной локации
     private var locationCard: some View {
         Button { showList = true } label: {
             HStack(spacing: 14) {
@@ -253,7 +245,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Лист серверов
     private var serverListSheet: some View {
         ZStack {
             JT.bg1.ignoresSafeArea()
@@ -325,7 +316,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Лист добавления
     private var addSheet: some View {
         ZStack {
             JT.bg1.ignoresSafeArea()
@@ -384,15 +374,17 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Логика подключения (UI; реальный туннель = Network Extension)
     private func tapConnect() {
         guard selected != nil else { showAdd = true; return }
         switch state {
         case .off:
-            state = .connecting
+            withAnimation { state = .connecting }
+            startPulse()
             let gen = UIImpactFeedbackGenerator(style: .medium); gen.impactOccurred()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+                guard state == .connecting else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
+                stopPulse()
                 startTimer()
             }
         case .connecting: break
@@ -402,7 +394,15 @@ struct ContentView: View {
 
     private func disconnect() {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .off }
-        stopTimer(); elapsed = 0
+        stopPulse(); stopTimer(); elapsed = 0
+    }
+
+    private func startPulse() {
+        pulse = false
+        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+    }
+    private func stopPulse() {
+        withAnimation(.easeInOut(duration: 0.2)) { pulse = false }
     }
 
     private func startTimer() {
@@ -415,7 +415,6 @@ struct ContentView: View {
         String(format: "%02d:%02d:%02d", s/3600, (s%3600)/60, s%60)
     }
 
-    // MARK: Добавление ключей / подписок
     func addKey() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { status = "Пусто"; return }
@@ -452,7 +451,6 @@ struct ContentView: View {
         if added > 0 { input = ""; showAdd = false }
     }
 
-    // Загрузка подписки: HWID-заголовки + перебор User-Agent + base64/plain
     func importSubscription(_ urlStr: String) async -> [Server] {
         guard let url = URL(string: urlStr) else { return [] }
         let uas = ["Happ/1.0", "v2rayNG/1.8.5", "Streisand", "SFI/2.0", "JeffTUN/1.0"]
@@ -468,7 +466,6 @@ struct ContentView: View {
                 let (data, _) = try await URLSession.shared.data(for: req)
                 var text = String(data: data, encoding: .utf8) ?? ""
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                // пробуем base64
                 if let d = Data(base64Encoded: padBase64(trimmed)),
                    let dec = String(data: d, encoding: .utf8), dec.contains("://") {
                     text = dec
@@ -484,10 +481,8 @@ struct ContentView: View {
         UIDevice.current.identifierForVendor?.uuidString ?? "jefftun-ios"
     }
 
-    // MARK: Хранение
     func save() {
         savedRaw = servers.map { $0.raw }.joined(separator: "\n")
-        savedSel = selectedID?.uuidString ?? ""
     }
     func load() {
         servers = savedRaw.split(whereSeparator: \.isNewline).compactMap { parseServer(String($0)) }
