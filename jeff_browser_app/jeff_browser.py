@@ -4,18 +4,104 @@
 import sys
 import os
 import json
+import base64
+import tempfile
+import subprocess
 import threading
 import urllib.request
+from urllib.parse import urlparse, parse_qs, unquote
 from PyQt5.QtCore import QUrl, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QDesktopServices
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QToolBar, QLineEdit,
-    QAction, QLabel, QPushButton, QWidget, QHBoxLayout, QMenu
+    QAction, QLabel, QPushButton, QWidget, QHBoxLayout, QVBoxLayout,
+    QMenu, QDialog
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 APP_NAME = "Jeff Browser"
-APP_VERSION = "0.2"
+APP_VERSION = "0.3"
+SOCKS_PORT = 10811   # локальный прокси VPN внутри браузера
+
+
+# ── VPN: разбор ключа vless/vmess/trojan/ss → xray outbound ──────────────────
+def _stream(p, net, sec):
+    ss = {"network": net}
+    if sec == "reality":
+        ss["security"] = "reality"
+        ss["realitySettings"] = {"serverName": p.get("sni", [""])[0], "fingerprint": p.get("fp", ["chrome"])[0],
+                                 "publicKey": p.get("pbk", [""])[0], "shortId": p.get("sid", [""])[0], "spiderX": ""}
+    elif sec == "tls":
+        ss["security"] = "tls"
+        ss["tlsSettings"] = {"serverName": p.get("sni", [p.get("host", [""])[0]])[0],
+                             "fingerprint": p.get("fp", ["chrome"])[0],
+                             "allowInsecure": p.get("allowInsecure", ["0"])[0] in ("1", "true")}
+    if net == "ws":
+        ss["wsSettings"] = {"path": p.get("path", ["/"])[0], "headers": {"Host": p.get("host", [""])[0]} if p.get("host") else {}}
+    elif net == "grpc":
+        ss["grpcSettings"] = {"serviceName": p.get("serviceName", p.get("path", [""]))[0]}
+    return ss
+
+
+def parse_link(link):
+    link = link.strip()
+    if link.startswith("vless://"):
+        u = urlparse(link); p = parse_qs(u.query); net = p.get("type", ["tcp"])[0]; sec = p.get("security", ["none"])[0]
+        return {"protocol": "vless", "settings": {"vnext": [{"address": u.hostname, "port": u.port or 443,
+                "users": [{"id": unquote(u.username or ""), "encryption": "none", "flow": p.get("flow", [""])[0]}]}]},
+                "streamSettings": _stream(p, net, sec), "tag": "proxy"}
+    if link.startswith("vmess://"):
+        raw = link[8:]; raw += "=" * (-len(raw) % 4); o = json.loads(base64.b64decode(raw).decode())
+        net = o.get("net", "tcp"); sec = "tls" if o.get("tls") in ("tls", True, "true") else "none"
+        p = {"path": [o.get("path", "/")], "host": [o.get("host", "")], "sni": [o.get("sni", o.get("host", ""))],
+             "serviceName": [o.get("path", "")]}
+        return {"protocol": "vmess", "settings": {"vnext": [{"address": o.get("add"), "port": int(o.get("port", 443)),
+                "users": [{"id": o.get("id"), "alterId": int(o.get("aid", 0)), "security": "auto"}]}]},
+                "streamSettings": _stream(p, net, sec), "tag": "proxy"}
+    if link.startswith("trojan://"):
+        u = urlparse(link); p = parse_qs(u.query); net = p.get("type", ["tcp"])[0]; sec = p.get("security", ["tls"])[0]
+        return {"protocol": "trojan", "settings": {"servers": [{"address": u.hostname, "port": u.port or 443,
+                "password": unquote(u.username or "")}]}, "streamSettings": _stream(p, net, sec), "tag": "proxy"}
+    if link.startswith("ss://"):
+        body = link[5:].split("#", 1)[0]
+        if "@" in body:
+            ui, server = body.split("@", 1); ui += "=" * (-len(ui) % 4)
+            try: method, password = base64.b64decode(ui).decode().split(":", 1)
+            except Exception: method, password = unquote(ui).split(":", 1)
+        else:
+            body += "=" * (-len(body) % 4); creds, server = base64.b64decode(body).decode().split("@", 1)
+            method, password = creds.split(":", 1)
+        host, port = server.split(":"); port = int(port.split("/")[0].split("?")[0])
+        return {"protocol": "shadowsocks", "settings": {"servers": [{"address": host, "port": port,
+                "method": method, "password": password}]}, "tag": "proxy"}
+    raise ValueError("Нужен ключ vless / vmess / trojan / ss")
+
+
+def build_xray_config(ob, port):
+    return {"log": {"loglevel": "warning"},
+            "inbounds": [{"tag": "socks", "port": port, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": True}}],
+            "outbounds": [ob, {"protocol": "freedom", "tag": "direct"}]}
+
+
+def fetch_first(url):
+    """Из подписки берём первый рабочий ключ vless/vmess/trojan/ss."""
+    import ssl
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    for ua in ("Happ/1.0", "v2rayNG/1.9.5", "Mozilla/5.0"):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": ua})
+            raw = urllib.request.urlopen(req, timeout=8, context=ctx).read().decode("utf-8", "ignore").strip()
+            cands = [raw]
+            try: cands.append(base64.b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8", "ignore"))
+            except Exception: pass
+            for c in cands:
+                for ln in c.splitlines():
+                    ln = ln.strip()
+                    if ln.startswith(("vless://", "vmess://", "trojan://", "ss://")):
+                        return ln
+        except Exception:
+            pass
+    return None
 MANIFEST_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/jeff_browser_app/BROWSER_APP_RELEASE.json"
 RELEASES = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jeffbrowser"
 
@@ -117,7 +203,10 @@ class Browser(QMainWindow):
         nav.addWidget(self.url_bar)
 
         self._add_btn(nav, "＋", lambda: self.add_tab(), "Новая вкладка")
+        self._add_btn(nav, "🛡", self.open_vpn, "VPN — вставь ключ или подписку")
         self._add_btn(nav, "⋮", self.open_menu, "Меню")
+        self.xray_proc = None
+        self.vpn_on = False
 
         # баннер обновления (скрыт по умолчанию)
         self.update_bar = QToolBar(); self.update_bar.setMovable(False)
@@ -193,6 +282,84 @@ class Browser(QMainWindow):
         v = self.current()
         if v: v.setHtml(HOME_HTML, QUrl("https://jeff.home/"))
 
+    # ── VPN внутри браузера ──
+    def open_vpn(self):
+        dlg = QDialog(self); dlg.setWindowTitle("VPN — Jeff"); dlg.setStyleSheet(DARK_QSS)
+        dlg.resize(440, 220)
+        lay = QVBoxLayout(dlg); lay.setContentsMargins(18, 18, 18, 18); lay.setSpacing(12)
+        title = QLabel("VPN в браузере"); title.setStyleSheet("font-size:16px;font-weight:bold;")
+        lay.addWidget(title)
+        hint = QLabel("Вставь ключ vless:// vmess:// trojan:// ss:// или ссылку-подписку https://…")
+        hint.setStyleSheet("color:#8a9099;"); hint.setWordWrap(True); lay.addWidget(hint)
+        field = QLineEdit(); field.setText(getattr(self, "_vpn_key", "")); field.setPlaceholderText("vless://…  или  https://подписка")
+        lay.addWidget(field)
+        self.vpn_status = QLabel("VPN включён ✓" if self.vpn_on else "VPN выключен")
+        self.vpn_status.setStyleSheet("color:%s;font-weight:bold;" % ("#6fbf95" if self.vpn_on else "#8a9099"))
+        lay.addWidget(self.vpn_status)
+        row = QHBoxLayout()
+        on = QPushButton("Включить"); on.setStyleSheet("background:#2ea043;color:#fff;border:0;border-radius:12px;padding:8px 20px;font-weight:bold;")
+        off = QPushButton("Выключить"); off.setStyleSheet("background:#3a3f48;color:#fff;border:0;border-radius:12px;padding:8px 20px;")
+        on.clicked.connect(lambda: self.vpn_connect(field.text()))
+        off.clicked.connect(self.vpn_disconnect)
+        row.addWidget(on); row.addWidget(off); row.addStretch(1); lay.addLayout(row)
+        dlg.exec_()
+
+    def vpn_connect(self, text):
+        text = (text or "").strip()
+        if not text:
+            self.vpn_status.setText("Вставь ключ или подписку"); return
+        self._vpn_key = text
+        self.vpn_status.setText("Подключаюсь…")
+        QApplication.processEvents()
+        try:
+            link = fetch_first(text) if text.startswith("http") else text
+            if not link:
+                self.vpn_status.setText("Подписка пустая или недоступна"); return
+            ob = parse_link(link)
+        except Exception as e:
+            self.vpn_status.setText("Ошибка ключа: " + str(e)); return
+        xray = resource("xray.exe" if os.name == "nt" else "xray")
+        if not os.path.exists(xray):
+            self.vpn_status.setText("Движок xray не найден в сборке"); return
+        self.vpn_disconnect()
+        cfg = os.path.join(tempfile.gettempdir(), ".jeffbrowser_xray.json")
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump(build_xray_config(ob, SOCKS_PORT), f)
+        try:
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            self.xray_proc = subprocess.Popen([xray, "run", "-config", cfg],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+        except Exception as e:
+            self.vpn_status.setText("Ядро не запустилось: " + str(e)); return
+        try:
+            from PyQt5.QtNetwork import QNetworkProxy
+            QNetworkProxy.setApplicationProxy(QNetworkProxy(QNetworkProxy.Socks5Proxy, "127.0.0.1", SOCKS_PORT))
+        except Exception:
+            pass
+        self.vpn_on = True
+        self.vpn_status.setText("VPN включён ✓")
+        self.vpn_status.setStyleSheet("color:#6fbf95;font-weight:bold;")
+        v = self.current()
+        if v: v.reload()
+
+    def vpn_disconnect(self):
+        try:
+            from PyQt5.QtNetwork import QNetworkProxy
+            QNetworkProxy.setApplicationProxy(QNetworkProxy(QNetworkProxy.NoProxy))
+        except Exception:
+            pass
+        if getattr(self, "xray_proc", None):
+            try: self.xray_proc.terminate()
+            except Exception: pass
+            self.xray_proc = None
+        self.vpn_on = False
+        try:
+            if hasattr(self, "vpn_status"):
+                self.vpn_status.setText("VPN выключен")
+                self.vpn_status.setStyleSheet("color:#8a9099;font-weight:bold;")
+        except Exception:
+            pass
+
     def open_menu(self):
         m = QMenu(self)
         m.addAction("Новая вкладка", lambda: self.add_tab())
@@ -238,6 +405,11 @@ class Browser(QMainWindow):
         self._upd_url = url
         self.upd_label.setText(f"🔔 Доступно обновление Jeff Browser {version} — нажми «Скачать»")
         self.update_bar.show()
+
+    def closeEvent(self, e):
+        try: self.vpn_disconnect()
+        except Exception: pass
+        super().closeEvent(e)
 
 
 def main():

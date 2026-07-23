@@ -18,6 +18,12 @@ jobs:
           python-version: '3.8'   # совместимость с Windows 7 (последний Python с Win7)
       - name: Install deps
         run: pip install "pyqt5==5.15.2" "pyqtwebengine==5.15.2" "pyinstaller==6.6.0"
+      - name: Download xray-core (для VPN в браузере)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip" -OutFile xray.zip
+          Expand-Archive xray.zip -DestinationPath xray_bin -Force
+          Copy-Item xray_bin/xray.exe jeff_browser_app/xray.exe
       - name: Build browser
         working-directory: jeff_browser_app
         shell: pwsh
@@ -26,6 +32,7 @@ jobs:
             --name "JeffBrowser" `
             --icon "jeff.ico" `
             --add-data "jeff.ico;." `
+            --add-binary "xray.exe;." `
             --collect-all PyQt5 `
             jeff_browser.py
       - name: Package (zip + self-extract exe)

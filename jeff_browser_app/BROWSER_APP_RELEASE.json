@@ -1,6 +1,6 @@
 {
-  "version": "0.2",
-  "name": "Jeff Browser 0.2",
+  "version": "0.3",
+  "name": "Jeff Browser 0.3",
   "url": "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jeffbrowser",
-  "notes": "Свой браузер Jeff: красивый интерфейс, Speed Dial, уведомление об обновлениях."
+  "notes": "Встроенный VPN: вставь ключ или подписку прямо в браузере."
 }
