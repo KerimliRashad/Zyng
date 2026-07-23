@@ -1,4 +1,60 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+// MARK: - Кросс-платформенные помощники (iOS + macOS)
+
+func jtClipboard() -> String? {
+    #if canImport(UIKit)
+    return UIPasteboard.general.string
+    #elseif canImport(AppKit)
+    return NSPasteboard.general.string(forType: .string)
+    #else
+    return nil
+    #endif
+}
+
+func jtHaptic() {
+    #if canImport(UIKit)
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    #endif
+}
+
+func jtDeviceOS() -> String {
+    #if canImport(UIKit)
+    return UIDevice.current.systemVersion
+    #else
+    let v = ProcessInfo.processInfo.operatingSystemVersion
+    return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    #endif
+}
+
+func jtDeviceModel() -> String {
+    #if canImport(UIKit)
+    return UIDevice.current.model
+    #else
+    return "Mac"
+    #endif
+}
+
+func jtHWID() -> String {
+    #if canImport(UIKit)
+    return UIDevice.current.identifierForVendor?.uuidString ?? "jefftun-ios"
+    #else
+    return "jefftun-mac"
+    #endif
+}
+
+extension View {
+    @ViewBuilder func jtNoAutocap() -> some View {
+        #if os(iOS)
+        self.textInputAutocapitalization(.never)
+        #else
+        self
+        #endif
+    }
+}
 
 // MARK: - Модель
 
@@ -339,10 +395,10 @@ struct ContentView: View {
                     .background(RoundedRectangle(cornerRadius: 14).fill(JT.card)
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(JT.stroke, lineWidth: 1)))
                     .autocorrectionDisabled(true)
-                    .textInputAutocapitalization(.never)
+                    .jtNoAutocap()
                     .padding(.horizontal, 20)
 
-                Button { input = UIPasteboard.general.string ?? input } label: {
+                Button { input = jtClipboard() ?? input } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "doc.on.clipboard")
                         Text("Вставить из буфера")
@@ -380,7 +436,7 @@ struct ContentView: View {
         case .off:
             withAnimation { state = .connecting }
             startPulse()
-            let gen = UIImpactFeedbackGenerator(style: .medium); gen.impactOccurred()
+            jtHaptic()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
                 guard state == .connecting else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
@@ -458,10 +514,10 @@ struct ContentView: View {
             var req = URLRequest(url: url)
             req.timeoutInterval = 15
             req.setValue(ua, forHTTPHeaderField: "User-Agent")
-            req.setValue(hwid(), forHTTPHeaderField: "x-hwid")
+            req.setValue(jtHWID(), forHTTPHeaderField: "x-hwid")
             req.setValue("ios", forHTTPHeaderField: "x-device-os")
-            req.setValue(UIDevice.current.systemVersion, forHTTPHeaderField: "x-ver-os")
-            req.setValue(UIDevice.current.model, forHTTPHeaderField: "x-device-model")
+            req.setValue(jtDeviceOS(), forHTTPHeaderField: "x-ver-os")
+            req.setValue(jtDeviceModel(), forHTTPHeaderField: "x-device-model")
             do {
                 let (data, _) = try await URLSession.shared.data(for: req)
                 var text = String(data: data, encoding: .utf8) ?? ""
@@ -475,10 +531,6 @@ struct ContentView: View {
             } catch { continue }
         }
         return []
-    }
-
-    private func hwid() -> String {
-        UIDevice.current.identifierForVendor?.uuidString ?? "jefftun-ios"
     }
 
     func save() {
