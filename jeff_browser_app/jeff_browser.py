@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 APP_NAME = "Jeff Browser"
-APP_VERSION = "0.3"
+APP_VERSION = "0.4"
 SOCKS_PORT = 10811   # локальный прокси VPN внутри браузера
 
 
@@ -83,24 +83,137 @@ def build_xray_config(ob, port):
             "outbounds": [ob, {"protocol": "freedom", "tag": "direct"}]}
 
 
-def fetch_first(url):
-    """Из подписки берём первый рабочий ключ vless/vmess/trojan/ss."""
-    import ssl
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-    for ua in ("Happ/1.0", "v2rayNG/1.9.5", "Mozilla/5.0"):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": ua})
-            raw = urllib.request.urlopen(req, timeout=8, context=ctx).read().decode("utf-8", "ignore").strip()
-            cands = [raw]
-            try: cands.append(base64.b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8", "ignore"))
-            except Exception: pass
-            for c in cands:
-                for ln in c.splitlines():
-                    ln = ln.strip()
-                    if ln.startswith(("vless://", "vmess://", "trojan://", "ss://")):
-                        return ln
-        except Exception:
-            pass
+SUB_USER_AGENTS = ["Happ/1.0", "v2rayNG/1.9.5", "v2rayN/6.45", "sing-box/1.9.0",
+                   "clash-verge/1.6.0", "hiddify-next/2.0.0", "Streisand",
+                   "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"]
+
+
+def _hwid():
+    path = os.path.join(tempfile.gettempdir(), ".jeffbrowser_hwid")
+    try:
+        h = open(path, encoding="utf-8").read().strip()
+        if h:
+            return h
+    except Exception:
+        pass
+    import uuid
+    h = str(uuid.uuid4())
+    try: open(path, "w", encoding="utf-8").write(h)
+    except Exception: pass
+    return h
+
+
+def _sub_headers(ua):
+    return {"User-Agent": ua, "Accept": "*/*", "x-hwid": _hwid(),
+            "x-device-os": "Windows", "x-ver-os": "10", "x-device-model": "Jeff Browser"}
+
+
+def _sb_stream(ob):
+    tls = ob.get("tls") or {}; tr = ob.get("transport") or {}
+    net = (tr.get("type") or "tcp").lower(); net = {"": "tcp"}.get(net, net)
+    ss = {"network": net}
+    reality = tls.get("reality") or {}
+    fp = ((tls.get("utls") or {}).get("fingerprint")) or "chrome"
+    sni = tls.get("server_name") or ob.get("server")
+    if reality.get("enabled") or reality.get("public_key"):
+        ss["security"] = "reality"
+        ss["realitySettings"] = {"serverName": sni, "fingerprint": fp, "publicKey": reality.get("public_key", ""),
+                                 "shortId": reality.get("short_id", ""), "spiderX": ""}
+    elif tls.get("enabled"):
+        ss["security"] = "tls"
+        ss["tlsSettings"] = {"serverName": sni, "fingerprint": fp, "allowInsecure": bool(tls.get("insecure"))}
+    if net == "ws":
+        host = (tr.get("headers", {}) or {}).get("Host") or tr.get("host") or ""
+        ss["wsSettings"] = {"path": tr.get("path", "/"), "headers": {"Host": host} if host else {}}
+    elif net == "grpc":
+        ss["grpcSettings"] = {"serviceName": tr.get("service_name", "")}
+    elif net in ("httpupgrade", "xhttp"):
+        ss[("xhttpSettings" if net == "xhttp" else "httpupgradeSettings")] = {"path": tr.get("path", "/"), "host": tr.get("host", "")}
+    return ss
+
+
+def _sb_to_xray(ob):
+    t = (ob.get("type") or "").lower(); host = ob.get("server"); port = int(ob.get("server_port", 443) or 443)
+    if not host:
+        return None
+    if t == "vless":
+        return {"protocol": "vless", "settings": {"vnext": [{"address": host, "port": port,
+                "users": [{"id": ob.get("uuid", ""), "encryption": "none", "flow": ob.get("flow", "")}]}]},
+                "streamSettings": _sb_stream(ob), "tag": "proxy"}
+    if t == "vmess":
+        return {"protocol": "vmess", "settings": {"vnext": [{"address": host, "port": port,
+                "users": [{"id": ob.get("uuid", ""), "alterId": int(ob.get("alter_id", 0) or 0), "security": ob.get("security", "auto")}]}]},
+                "streamSettings": _sb_stream(ob), "tag": "proxy"}
+    if t == "trojan":
+        return {"protocol": "trojan", "settings": {"servers": [{"address": host, "port": port, "password": ob.get("password", "")}]},
+                "streamSettings": _sb_stream(ob), "tag": "proxy"}
+    if t == "shadowsocks":
+        return {"protocol": "shadowsocks", "settings": {"servers": [{"address": host, "port": port,
+                "method": ob.get("method", "aes-128-gcm"), "password": ob.get("password", "")}]}, "tag": "proxy"}
+    return None
+
+
+def _json_first_outbound(text):
+    try:
+        obj = json.loads(text)
+    except Exception:
+        return None
+    cfgs = obj if isinstance(obj, list) else [obj]
+    for cfg in cfgs:
+        if not isinstance(cfg, dict):
+            continue
+        obs = cfg.get("outbounds") or ([cfg] if (cfg.get("protocol") or cfg.get("type")) else [])
+        for ob in obs:
+            if not isinstance(ob, dict):
+                continue
+            if (ob.get("protocol") or "").lower() in ("vless", "vmess", "trojan", "shadowsocks"):
+                st = ob.get("settings", {})
+                if st.get("vnext") or st.get("servers"):
+                    o = dict(ob); o["tag"] = "proxy"; return o
+            elif ob.get("type"):
+                x = _sb_to_xray(ob)
+                if x:
+                    return x
+    return None
+
+
+def resolve_outbound(text):
+    """Из ключа ИЛИ подписки достаёт рабочий xray-outbound. Понимает base64,
+    обычный список, xray-JSON, sing-box-JSON, ssconf; шлёт HWID-заголовки."""
+    text = (text or "").strip()
+    if text.startswith(("vless://", "vmess://", "trojan://", "ss://")):
+        return parse_link(text)
+    url = ("https://" + text[len("ssconf://"):]) if text.startswith("ssconf://") else text
+    if url.startswith("http"):
+        import ssl
+        ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+        for ua in SUB_USER_AGENTS:
+            try:
+                req = urllib.request.Request(url, headers=_sub_headers(ua))
+                raw = urllib.request.urlopen(req, timeout=9, context=ctx).read().decode("utf-8", "ignore").strip().lstrip("﻿")
+                cands = [raw]
+                try: cands.append(base64.b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8", "ignore"))
+                except Exception: pass
+                for c in cands:
+                    o = _json_first_outbound(c.strip())
+                    if o:
+                        return o
+                    for ln in c.splitlines():
+                        ln = ln.strip()
+                        if ln.startswith(("vless://", "vmess://", "trojan://", "ss://")):
+                            try: return parse_link(ln)
+                            except Exception: pass
+            except Exception:
+                pass
+        return None
+    try:
+        dec = base64.b64decode(text + "=" * (-len(text) % 4)).decode("utf-8", "ignore")
+        for ln in dec.splitlines():
+            ln = ln.strip()
+            if ln.startswith(("vless://", "vmess://", "trojan://", "ss://")):
+                return parse_link(ln)
+    except Exception:
+        pass
     return None
 MANIFEST_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/jeff_browser_app/BROWSER_APP_RELEASE.json"
 RELEASES = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jeffbrowser"
@@ -239,6 +352,16 @@ class Browser(QMainWindow):
     # ── Вкладки ──
     def add_tab(self, url=None):
         view = QWebEngineView()
+        try:
+            from PyQt5.QtWebEngineWidgets import QWebEngineSettings as S
+            s = view.settings()
+            for attr in ("JavascriptEnabled", "LocalStorageEnabled", "PluginsEnabled",
+                         "FullScreenSupportEnabled", "JavascriptCanOpenWindows",
+                         "ScrollAnimatorEnabled", "PlaybackRequiresUserGesture"):
+                if hasattr(S, attr):
+                    s.setAttribute(getattr(S, attr), attr != "PlaybackRequiresUserGesture")
+        except Exception:
+            pass
         if url:
             view.setUrl(QUrl(url))
         else:
@@ -312,10 +435,9 @@ class Browser(QMainWindow):
         self.vpn_status.setText("Подключаюсь…")
         QApplication.processEvents()
         try:
-            link = fetch_first(text) if text.startswith("http") else text
-            if not link:
-                self.vpn_status.setText("Подписка пустая или недоступна"); return
-            ob = parse_link(link)
+            ob = resolve_outbound(text)
+            if not ob:
+                self.vpn_status.setText("Не удалось получить сервер (подписка пустая/недоступна)"); return
         except Exception as e:
             self.vpn_status.setText("Ошибка ключа: " + str(e)); return
         xray = resource("xray.exe" if os.name == "nt" else "xray")
