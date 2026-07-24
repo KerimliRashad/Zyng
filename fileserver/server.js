@@ -17,7 +17,7 @@ const os         = require('os');
 const crypto     = require('crypto');
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION      = '3.1';
+const VERSION      = '3.2';
 const PORT         = process.env.PORT || 3000;
 const UPLOAD_DIR   = path.join(__dirname, 'uploads');
 const DB_FILE      = path.join(__dirname, 'fileserver.db');
@@ -150,17 +150,19 @@ tr:hover td{background:#21262d}
 .alert{padding:11px 15px;border-radius:6px;margin-bottom:14px;font-size:13px}
 .err{background:#3d1a1a;border:1px solid #da3633;color:#f85149}
 .ok{background:#1c2d1e;border:1px solid #238636;color:#56d364}
-#dz{border:2px dashed #30363d;border-radius:8px;padding:36px;text-align:center;cursor:pointer;transition:.2s;position:relative}
+#dz{border:2px dashed #30363d;border-radius:8px;padding:36px;text-align:center;cursor:pointer;transition:.2s}
 #dz.over{border-color:#58a6ff;background:rgba(31,111,235,.07)}
 #dz p{color:#8b949e;margin:6px 0}
-#pw{display:none;margin-top:14px}
-#pb{height:7px;background:#21262d;border-radius:4px;overflow:hidden;margin-bottom:6px}
-#pf{height:100%;background:#1f6feb;width:0;transition:width .3s}
-#pt{font-size:12px;color:#8b949e;text-align:center}
 .sbar{background:#161b22;border-bottom:1px solid #30363d;padding:5px 24px;font-size:12px;color:#8b949e;display:flex;gap:20px}
 .dot{width:7px;height:7px;border-radius:50%;background:#56d364;display:inline-block;margin-right:4px}
 .sf{display:flex;gap:8px;margin-bottom:16px}.sf input{margin:0;flex:1}
-@media(max-width:600px){.grid{grid-template-columns:1fr 1fr}}
+#float-upload{display:none;position:fixed;bottom:24px;right:24px;width:320px;background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+#float-upload .fu-title{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+#float-upload .fu-bar{height:8px;background:#21262d;border-radius:4px;overflow:hidden;margin-bottom:8px}
+#float-upload .fu-fill{height:100%;background:#1f6feb;width:0;transition:width .4s}
+#float-upload .fu-info{font-size:12px;color:#8b949e}
+#float-upload .fu-cancel{background:none;border:none;color:#8b949e;cursor:pointer;font-size:18px;line-height:1}
+@media(max-width:600px){.grid{grid-template-columns:1fr 1fr}#float-upload{width:calc(100% - 32px);right:16px;bottom:16px}}
 `;
 
 function page(title, body, user = null) {
@@ -176,8 +178,8 @@ ${user ? `<div class="sbar"><span><span class="dot" id="sd"></span>Онлайн<
 <div class="wrap">${body}</div>
 ${user ? `<script>
 let uploading=false;
-window.addEventListener('beforeunload',e=>{if(uploading){e.preventDefault();e.returnValue='Загрузка идёт!';}});
-async function loadStatus(){try{const d=await(await fetch('/api/status')).json();document.getElementById('sc').textContent='CPU '+d.cpu+'%';document.getElementById('sr').textContent='RAM '+d.ram+'%';document.getElementById('su').textContent='Аптайм '+d.uptime;}catch(e){document.getElementById('sd').style.background='#da3633';}}
+window.addEventListener('beforeunload',e=>{if(uploading){e.preventDefault();e.returnValue='Загрузка файлов ещё идёт! Подождите.';}});
+async function loadStatus(){try{const d=await(await fetch('/api/status')).json();document.getElementById('sc').textContent='CPU '+d.cpu+'%';document.getElementById('sr').textContent='RAM '+d.ram+'%';document.getElementById('su').textContent='Аптайм '+d.uptime;}catch(e){if(document.getElementById('sd'))document.getElementById('sd').style.background='#da3633';}}
 loadStatus();setInterval(loadStatus,15000);
 </script>` : ''}
 </body></html>`;
@@ -288,10 +290,15 @@ app.get('/', auth, (req, res) => {
     <p style="font-size:11px">или нажмите для выбора файлов</p>
     <input id="fi" type="file" multiple style="display:none">
   </div>
-  <div id="pw">
-    <div id="pb"><div id="pf"></div></div>
-    <div id="pt"></div>
+</div>
+
+<div id="float-upload">
+  <div class="fu-title">
+    <span id="fu-label">Загрузка…</span>
+    <button class="fu-cancel" id="fu-cancel" title="Отмена">✕</button>
   </div>
+  <div class="fu-bar"><div class="fu-fill" id="fu-fill"></div></div>
+  <div class="fu-info" id="fu-info"></div>
 </div>
 <div class="card">
   <h2>Файлы</h2>
@@ -306,12 +313,22 @@ app.get('/', auth, (req, res) => {
   </table></div>
 </div>
 <script>
-const dz=document.getElementById('dz'),fi=document.getElementById('fi'),
-      pw=document.getElementById('pw'),pf=document.getElementById('pf'),pt=document.getElementById('pt');
+const dz=document.getElementById('dz'),fi=document.getElementById('fi');
+const fu=document.getElementById('float-upload'),fuFill=document.getElementById('fu-fill'),
+      fuInfo=document.getElementById('fu-info'),fuLabel=document.getElementById('fu-label'),
+      fuCancel=document.getElementById('fu-cancel');
+let currentXHR=null;
+
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
 dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
 dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');handleItems(e.dataTransfer.items)});
-fi.addEventListener('change',()=>go(Array.from(fi.files),[]));
+fi.addEventListener('change',()=>{go(Array.from(fi.files),[]);fi.value=''});
+
+fuCancel.addEventListener('click',()=>{
+  if(currentXHR){currentXHR.abort();currentXHR=null;}
+  fu.style.display='none';uploading=false;
+});
+
 async function handleItems(items){
   const files=[],folders=[];
   async function read(entry,pre){
@@ -321,23 +338,53 @@ async function handleItems(items){
   for(const item of items){const e=item.webkitGetAsEntry?.();if(e)await read(e,'');else if(item.getAsFile){files.push(item.getAsFile());folders.push('')}}
   go(files,folders);
 }
+
 function go(files,folders){
   if(!files.length)return;
-  pw.style.display='block';pf.style.width='0';pf.style.background='#1f6feb';
+  const totalMB=(files.reduce((a,f)=>a+f.size,0)/1048576).toFixed(1);
+  fuLabel.textContent=files.length===1?files[0].name:files.length+' файлов ('+totalMB+' MB)';
+  fuFill.style.width='0%';fuFill.style.background='#1f6feb';
+  fuInfo.textContent='Подготовка…';fu.style.display='block';
+
   const fd=new FormData();
   files.forEach((f,i)=>{fd.append('files',f);fd.append('folders',folders[i]||'')});
+
   const x=new XMLHttpRequest();
+  currentXHR=x;
+
   x.upload.addEventListener('progress',e=>{
-    if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);pf.style.width=p+'%';
-    pt.textContent=p+'% — '+(e.loaded/1048576).toFixed(1)+' MB / '+(e.total/1048576).toFixed(1)+' MB'}
+    if(!e.lengthComputable)return;
+    const p=Math.round(e.loaded/e.total*100);
+    const loaded=(e.loaded/1048576).toFixed(1),total=(e.total/1048576).toFixed(1);
+    fuFill.style.width=p+'%';
+    fuInfo.textContent=p+'% — '+loaded+' MB / '+total+' MB';
+    document.title=p+'% загрузка — FileServer';
   });
+
   x.addEventListener('load',()=>{
-    uploading=false;
-    if(x.status===200){pf.style.background='#238636';pt.textContent='✓ Загружено!';setTimeout(()=>location.reload(),1200)}
-    else{pf.style.background='#da3633';pt.textContent='Ошибка '+x.status}
+    uploading=false;currentXHR=null;document.title='Файлы — FileServer';
+    if(x.status===200){
+      fuFill.style.width='100%';fuFill.style.background='#238636';
+      fuInfo.textContent='✓ Загружено успешно!';fuLabel.textContent='Готово!';
+      setTimeout(()=>{fu.style.display='none';location.reload();},1500);
+    } else {
+      fuFill.style.background='#da3633';fuInfo.textContent='Ошибка сервера: '+x.status;
+    }
   });
-  x.addEventListener('error',()=>{uploading=false;pf.style.background='#da3633';pt.textContent='Ошибка соединения'});
-  x.open('POST','/upload');uploading=true;x.send(fd);
+
+  x.addEventListener('error',()=>{
+    uploading=false;currentXHR=null;document.title='Файлы — FileServer';
+    fuFill.style.background='#da3633';fuInfo.textContent='Ошибка соединения. Попробуйте снова.';
+  });
+
+  x.addEventListener('abort',()=>{
+    document.title='Файлы — FileServer';
+    fuInfo.textContent='Загрузка отменена.';
+  });
+
+  x.open('POST','/upload');
+  uploading=true;
+  x.send(fd);
 }
 </script>`, user));
 });
