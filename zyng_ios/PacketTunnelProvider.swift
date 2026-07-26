@@ -1,4 +1,4 @@
-import NetworkExtension
+@preconcurrency import NetworkExtension
 import Foundation
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
@@ -29,19 +29,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         ipv4Settings.includedRoutes = [NEIPv4Route.default()]
         settings.ipv4Settings = ipv4Settings
 
-        // Configure IPv6 (optional but recommended)
+        // Configure IPv6
         let ipv6Settings = NEIPv6Settings(addresses: ["fc00::2"], networkPrefixLengths: [64])
         ipv6Settings.includedRoutes = [NEIPv6Route.default()]
         settings.ipv6Settings = ipv6Settings
 
         // Configure DNS
         let dnsSettings = NEDNSSettings(servers: ["1.1.1.1", "8.8.8.8"])
-        dnsSettings.matchDomains = nil  // Route all DNS through VPN
+        dnsSettings.matchDomains = nil
         settings.dnsSettings = dnsSettings
-
-        // Configure TCP/UDP proxy if needed (optional)
-        // let proxySettings = NEProxySettings()
-        // settings.proxySettings = proxySettings
 
         // Set MTU
         settings.mtu = 1500
@@ -50,7 +46,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self = self else {
                 completionHandler(NSError(domain: "ZyngTunnel", code: 99,
-                    userInfo: [NSLocalizedDescriptionKey: "Self deallocated"]))
+                    userInfo: [NSLocalizedDescriptionKey: "Provider deallocated"]))
                 return
             }
 
@@ -84,11 +80,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
             if let packets = packets, !packets.isEmpty {
                 NSLog("📦 Zyng: Read \(packets.count) packet(s)")
-                // TODO: Process packets through VPN backend (e.g., libXray)
-                // For now, continue reading
             }
 
-            // Continue reading packets
             self.startPacketHandling()
         }
     }
