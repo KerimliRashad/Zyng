@@ -46,8 +46,8 @@ final class VPNController: NSObject, ObservableObject {
         guard !key.isEmpty else {
             let error = NSError(domain: "ZyngVPN", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "VPN key is empty"])
-            DispatchQueue.main.async {
-                self.errorMessage = "Invalid VPN key"
+            DispatchQueue.main.async { [weak self] in
+                self?.errorMessage = "Invalid VPN key"
                 completion(error)
             }
             return
@@ -59,8 +59,8 @@ final class VPNController: NSObject, ObservableObject {
 
             if let error = error {
                 NSLog("❌ Zyng: Failed to load preferences: \(error)")
-                DispatchQueue.main.async {
-                    self.errorMessage = error.localizedDescription
+                DispatchQueue.main.async { [weak self] in
+                    self?.errorMessage = error.localizedDescription
                     completion(error)
                 }
                 return
@@ -92,8 +92,8 @@ final class VPNController: NSObject, ObservableObject {
 
                 if let error = saveError {
                     NSLog("❌ Zyng: Failed to save preferences: \(error)")
-                    DispatchQueue.main.async {
-                        self.errorMessage = error.localizedDescription
+                    DispatchQueue.main.async { [weak self] in
+                        self?.errorMessage = error.localizedDescription
                         completion(error)
                     }
                     return
@@ -107,8 +107,8 @@ final class VPNController: NSObject, ObservableObject {
 
                     if let error = loadError {
                         NSLog("❌ Zyng: Failed to load preferences: \(error)")
-                        DispatchQueue.main.async {
-                            self.errorMessage = error.localizedDescription
+                        DispatchQueue.main.async { [weak self] in
+                            self?.errorMessage = error.localizedDescription
                             completion(error)
                         }
                         return
@@ -121,14 +121,14 @@ final class VPNController: NSObject, ObservableObject {
                     do {
                         try m.connection.startVPNTunnel()
                         NSLog("✅ Zyng: startVPNTunnel succeeded")
-                        DispatchQueue.main.async {
-                            self.isConnected = true
+                        DispatchQueue.main.async { [weak self] in
+                            self?.isConnected = true
                             completion(nil)
                         }
                     } catch {
                         NSLog("❌ Zyng: startVPNTunnel failed: \(error)")
-                        DispatchQueue.main.async {
-                            self.errorMessage = error.localizedDescription
+                        DispatchQueue.main.async { [weak self] in
+                            self?.errorMessage = error.localizedDescription
                             completion(error)
                         }
                     }

@@ -48,7 +48,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // Apply settings
         setTunnelNetworkSettings(settings) { [weak self] error in
-            guard let self = self else { return }
+            guard let self = self else {
+                completionHandler(NSError(domain: "ZyngTunnel", code: 99,
+                    userInfo: [NSLocalizedDescriptionKey: "Self deallocated"]))
+                return
+            }
 
             if let error = error {
                 NSLog("❌ Zyng: Failed to set tunnel settings: \(error.localizedDescription)")
