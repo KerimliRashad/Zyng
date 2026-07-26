@@ -8,10 +8,12 @@ final class VPNController: NSObject, ObservableObject {
     @Published var errorMessage: String?
 
     private var manager: NETunnelProviderManager?
+    private let providerBundleIdentifier = "online.zyng.Zyng.ZyngTunnel"
 
     override init() {
         super.init()
         setupStatusObserver()
+        loadExistingConfiguration()
     }
 
     private func setupStatusObserver() {
@@ -26,52 +28,109 @@ final class VPNController: NSObject, ObservableObject {
     @objc private func vpnStatusDidChange() {
         DispatchQueue.main.async {
             self.isConnected = self.manager?.connection.status == .connected
+            self.errorMessage = nil
+        }
+    }
+
+    private func loadExistingConfiguration() {
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+            if let error = error {
+                NSLog("⚠️ Zyng: Failed to load existing configs: \(error)")
+                return
+            }
+            self?.manager = managers?.first
         }
     }
 
     func connect(key: String, completion: @escaping (Error?) -> Void) {
+        guard !key.isEmpty else {
+            let error = NSError(domain: "ZyngVPN", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "VPN key is empty"])
+            DispatchQueue.main.async {
+                self.errorMessage = "Invalid VPN key"
+                completion(error)
+            }
+            return
+        }
+
+        // Load existing managers to clean up old configs
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+            guard let self = self else { return }
+
             if let error = error {
-                DispatchQueue.main.async { completion(error) }
+                NSLog("❌ Zyng: Failed to load preferences: \(error)")
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                    completion(error)
+                }
                 return
             }
 
-            let m = managers?.first ?? NETunnelProviderManager()
+            // Remove old configurations
+            for mgr in managers ?? [] {
+                mgr.removeFromPreferences()
+            }
+
+            // Create new manager
+            let m = NETunnelProviderManager()
             let proto = NETunnelProviderProtocol()
 
-            // Bundle ID must match your ZyngTunnel extension target
-            proto.providerBundleIdentifier = "online.zyng.Zyng.ZyngTunnel"
+            // Configure protocol
+            proto.providerBundleIdentifier = self.providerBundleIdentifier
             proto.serverAddress = "Zyng VPN"
-
-            // Pass the key to tunnel provider
             proto.providerConfiguration = ["key": key]
+            proto.disconnectOnSleep = false
 
             m.protocolConfiguration = proto
             m.localizedDescription = "Zyng VPN"
             m.isEnabled = true
             m.isOnDemandEnabled = false
 
+            // Save to preferences
             m.saveToPreferences { [weak self] saveError in
+                guard let self = self else { return }
+
                 if let error = saveError {
-                    DispatchQueue.main.async { completion(error) }
+                    NSLog("❌ Zyng: Failed to save preferences: \(error)")
+                    DispatchQueue.main.async {
+                        self.errorMessage = error.localizedDescription
+                        completion(error)
+                    }
                     return
                 }
 
+                NSLog("✅ Zyng: Configuration saved")
+
+                // Load from preferences (required before starting)
                 m.loadFromPreferences { [weak self] loadError in
+                    guard let self = self else { return }
+
                     if let error = loadError {
-                        DispatchQueue.main.async { completion(error) }
+                        NSLog("❌ Zyng: Failed to load preferences: \(error)")
+                        DispatchQueue.main.async {
+                            self.errorMessage = error.localizedDescription
+                            completion(error)
+                        }
                         return
                     }
 
-                    self?.manager = m
+                    NSLog("✅ Zyng: Configuration loaded")
+                    self.manager = m
+
+                    // Start VPN tunnel
                     do {
                         try m.connection.startVPNTunnel()
+                        NSLog("✅ Zyng: startVPNTunnel succeeded")
                         DispatchQueue.main.async {
-                            self?.isConnected = true
+                            self.isConnected = true
                             completion(nil)
                         }
                     } catch {
-                        DispatchQueue.main.async { completion(error) }
+                        NSLog("❌ Zyng: startVPNTunnel failed: \(error)")
+                        DispatchQueue.main.async {
+                            self.errorMessage = error.localizedDescription
+                            completion(error)
+                        }
                     }
                 }
             }
@@ -79,7 +138,8 @@ final class VPNController: NSObject, ObservableObject {
     }
 
     func disconnect() {
-        manager?.connection.stopVPNTunnel()
-        DispatchQueue.main.async { self.isConnected = false }
+        guard let manager = manager else { return }
+        manager.connection.stopVPNTunnel()
+        NSLog("🛑 Zyng: Disconnect called")
     }
 }
