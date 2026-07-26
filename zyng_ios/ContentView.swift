@@ -158,6 +158,9 @@ struct ContentView: View {
     @State private var input = ""
     @State private var status = ""
     @State private var loading = false
+    @State private var vpnError: String?
+
+    @StateObject private var vpnController = VPNController.shared
 
     enum ConnState { case off, connecting, on }
 
@@ -174,6 +177,10 @@ struct ContentView: View {
                 orb
                 statusPill.padding(.top, 18)
                 timerLabel.padding(.top, 6)
+                if let err = vpnError {
+                    Text(err).foregroundColor(JT.red).font(.system(size: 12))
+                        .padding(.top, 8).padding(.horizontal, 20).multilineTextAlignment(.center)
+                }
                 Spacer(minLength: 8)
                 locationCard.padding(.horizontal, 20)
                 addButton.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
@@ -182,6 +189,11 @@ struct ContentView: View {
         .onAppear(perform: load)
         .sheet(isPresented: $showAdd)  { addSheet }
         .sheet(isPresented: $showList) { serverListSheet }
+        .onChange(of: vpnController.isConnected) { _, connected in
+            if connected && state == .connecting {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
+            }
+        }
     }
 
     private var header: some View {
@@ -431,17 +443,25 @@ struct ContentView: View {
     }
 
     private func tapConnect() {
-        guard selected != nil else { showAdd = true; return }
+        guard let selected = selected else { showAdd = true; return }
         switch state {
         case .off:
             withAnimation { state = .connecting }
             startPulse()
             jtHaptic()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
-                guard state == .connecting else { return }
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
-                stopPulse()
-                startTimer()
+
+            vpnController.connect(key: selected.raw) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        withAnimation { state = .off }
+                        stopPulse()
+                        vpnError = "Ошибка: \(error.localizedDescription)"
+                        return
+                    }
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
+                    stopPulse()
+                    startTimer()
+                }
             }
         case .connecting: break
         case .on: disconnect()
@@ -449,6 +469,7 @@ struct ContentView: View {
     }
 
     private func disconnect() {
+        vpnController.disconnect()
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .off }
         stopPulse(); stopTimer(); elapsed = 0
     }
