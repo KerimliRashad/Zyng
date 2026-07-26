@@ -4,12 +4,14 @@ import Foundation
 class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private var isRunning = false
+    private var vpnKey: String?
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         NSLog("🔵 Zyng: startTunnel called")
 
         guard let protocolConfig = protocolConfiguration as? NETunnelProviderProtocol,
-              let config = protocolConfig.providerConfiguration else {
+              let config = protocolConfig.providerConfiguration,
+              let key = config["key"] as? String else {
             let error = NSError(domain: "ZyngTunnel", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "VPN configuration missing"])
             NSLog("❌ Zyng: No VPN configuration found")
@@ -17,9 +19,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // Extract VPN key for future use with libXray
-        let _vpnKey = config["key"] as? String
-        NSLog("✅ Zyng: VPN key received")
+        self.vpnKey = key
+        NSLog("✅ Zyng: VPN key received (length: \(key.count))")
 
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "192.0.2.1")
 
@@ -50,7 +51,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
-            NSLog("✅ Zyng: Tunnel network settings applied")
+            NSLog("✅ Zyng: Tunnel network settings applied successfully")
 
             self.isRunning = true
             completionHandler(nil)
@@ -62,6 +63,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         NSLog("🛑 Zyng: stopTunnel reason=\(reason.rawValue)")
         isRunning = false
+        vpnKey = nil
         completionHandler()
     }
 

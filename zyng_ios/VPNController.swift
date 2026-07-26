@@ -14,6 +14,7 @@ final class VPNController: NSObject, ObservableObject {
     override init() {
         super.init()
         setupStatusObserver()
+        loadExistingManager()
     }
 
     private func setupStatusObserver() {
@@ -25,27 +26,42 @@ final class VPNController: NSObject, ObservableObject {
         )
     }
 
-    @objc private func vpnStatusDidChange() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.isConnected = self.manager?.connection.status == .connected
-            NSLog("🔵 VPN Status: \(self.manager?.connection.status.rawValue ?? -1)")
+    private func loadExistingManager() {
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+            self?.manager = managers?.first
         }
     }
 
+    @objc private func vpnStatusDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateConnectionStatus()
+        }
+    }
+
+    private func updateConnectionStatus() {
+        isConnected = manager?.connection.status == .connected
+        NSLog("🔵 VPN Status: \(manager?.connection.status.rawValue ?? -1)")
+    }
+
     func connect(key: String, completion: @escaping (Error?) -> Void) {
+        nonisolated(unsafe) let handler = completion
+
         guard !key.isEmpty else {
             let error = NSError(domain: "ZyngVPN", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "VPN key is empty"])
             DispatchQueue.main.async { [weak self] in
                 self?.errorMessage = "Invalid VPN key"
-                completion(error)
             }
+            handler(error)
             return
         }
 
-        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
-            guard let self = self else { return }
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
+            guard let self = self else {
+                handler(NSError(domain: "ZyngVPN", code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Deallocated"]))
+                return
+            }
 
             for mgr in managers ?? [] {
                 mgr.removeFromPreferences()
@@ -63,27 +79,35 @@ final class VPNController: NSObject, ObservableObject {
             m.isEnabled = true
             m.isOnDemandEnabled = false
 
-            m.saveToPreferences { [weak self, weak m] saveError in
-                guard let self = self, let m = m else { return }
+            m.saveToPreferences { [weak self] saveError in
+                guard let self = self else {
+                    handler(NSError(domain: "ZyngVPN", code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Deallocated"]))
+                    return
+                }
 
                 if let error = saveError {
                     NSLog("❌ Save error: \(error)")
                     DispatchQueue.main.async { [weak self] in
                         self?.errorMessage = error.localizedDescription
-                        completion(error)
                     }
+                    handler(error)
                     return
                 }
 
-                m.loadFromPreferences { [weak self, weak m] loadError in
-                    guard let self = self, let m = m else { return }
+                m.loadFromPreferences { [weak self] loadError in
+                    guard let self = self else {
+                        handler(NSError(domain: "ZyngVPN", code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "Deallocated"]))
+                        return
+                    }
 
                     if let error = loadError {
                         NSLog("❌ Load error: \(error)")
                         DispatchQueue.main.async { [weak self] in
                             self?.errorMessage = error.localizedDescription
-                            completion(error)
                         }
+                        handler(error)
                         return
                     }
 
@@ -93,15 +117,15 @@ final class VPNController: NSObject, ObservableObject {
                         try m.connection.startVPNTunnel()
                         NSLog("✅ VPN tunnel started")
                         DispatchQueue.main.async { [weak self] in
-                            self?.isConnected = true
-                            completion(nil)
+                            self?.updateConnectionStatus()
                         }
+                        handler(nil)
                     } catch {
                         NSLog("❌ Start tunnel error: \(error)")
                         DispatchQueue.main.async { [weak self] in
                             self?.errorMessage = error.localizedDescription
-                            completion(error)
                         }
+                        handler(error)
                     }
                 }
             }
