@@ -26,9 +26,9 @@ final class VPNController: NSObject, ObservableObject {
     }
 
     @objc private func vpnStatusDidChange() {
-        DispatchQueue.main.async {
-            self.isConnected = self.manager?.connection.status == .connected
-            self.errorMessage = nil
+        DispatchQueue.main.async { [weak self] in
+            self?.isConnected = (self?.manager?.connection.status == .connected) ?? false
+            self?.errorMessage = nil
         }
     }
 
@@ -87,8 +87,8 @@ final class VPNController: NSObject, ObservableObject {
             m.isOnDemandEnabled = false
 
             // Save to preferences
-            m.saveToPreferences { [weak self] saveError in
-                guard let self = self else { return }
+            m.saveToPreferences { [weak self, weak m] saveError in
+                guard let self = self, let m = m else { return }
 
                 if let error = saveError {
                     NSLog("❌ Zyng: Failed to save preferences: \(error)")
@@ -102,8 +102,8 @@ final class VPNController: NSObject, ObservableObject {
                 NSLog("✅ Zyng: Configuration saved")
 
                 // Load from preferences (required before starting)
-                m.loadFromPreferences { [weak self] loadError in
-                    guard let self = self else { return }
+                m.loadFromPreferences { [weak self, weak m] loadError in
+                    guard let self = self, let m = m else { return }
 
                     if let error = loadError {
                         NSLog("❌ Zyng: Failed to load preferences: \(error)")
