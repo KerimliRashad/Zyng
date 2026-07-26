@@ -9,15 +9,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         NSLog("🔵 Zyng: startTunnel called")
 
         guard let protocolConfig = protocolConfiguration as? NETunnelProviderProtocol,
-              let config = protocolConfig.providerConfiguration,
-              let vpnKey = config["key"] as? String else {
+              let config = protocolConfig.providerConfiguration else {
             let error = NSError(domain: "ZyngTunnel", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "VPN key not provided"])
-            NSLog("❌ Zyng: No VPN key found")
+                userInfo: [NSLocalizedDescriptionKey: "VPN configuration missing"])
+            NSLog("❌ Zyng: No VPN configuration found")
             completionHandler(error)
             return
         }
 
+        // Extract VPN key for future use with libXray
+        let _vpnKey = config["key"] as? String
         NSLog("✅ Zyng: VPN key received")
 
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "192.0.2.1")

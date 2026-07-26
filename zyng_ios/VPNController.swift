@@ -44,21 +44,13 @@ final class VPNController: NSObject, ObservableObject {
             return
         }
 
-        // Удаляем все старые конфигурации
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
             guard let self = self else { return }
-
-            if let error = error {
-                NSLog("❌ Load error: \(error)")
-                DispatchQueue.main.async { completion(error) }
-                return
-            }
 
             for mgr in managers ?? [] {
                 mgr.removeFromPreferences()
             }
 
-            // Создаём новую конфигурацию
             let m = NETunnelProviderManager()
             let proto = NETunnelProviderProtocol()
 
@@ -76,7 +68,10 @@ final class VPNController: NSObject, ObservableObject {
 
                 if let error = saveError {
                     NSLog("❌ Save error: \(error)")
-                    DispatchQueue.main.async { completion(error) }
+                    DispatchQueue.main.async { [weak self] in
+                        self?.errorMessage = error.localizedDescription
+                        completion(error)
+                    }
                     return
                 }
 
@@ -85,7 +80,10 @@ final class VPNController: NSObject, ObservableObject {
 
                     if let error = loadError {
                         NSLog("❌ Load error: \(error)")
-                        DispatchQueue.main.async { completion(error) }
+                        DispatchQueue.main.async { [weak self] in
+                            self?.errorMessage = error.localizedDescription
+                            completion(error)
+                        }
                         return
                     }
 
