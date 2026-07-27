@@ -28,6 +28,12 @@ final class VPNController: NSObject, ObservableObject {
 
     private var manager: NETunnelProviderManager?
 
+    /// Идёт ли попытка подключения и удалась ли она. По одному лишь предыдущему
+    /// статусу судить нельзя: путь бывает и connecting → disconnected, и
+    /// connecting → disconnecting → disconnected.
+    private var isAttempting = false
+    private var reachedConnected = false
+
     private override init() {
         super.init()
         NotificationCenter.default.addObserver(
@@ -55,29 +61,45 @@ final class VPNController: NSObject, ObservableObject {
         let newStatus = manager?.connection.status ?? .invalid
         guard newStatus != status else { return }
 
-        let previous = status
         status = newStatus
         NSLog("🔵 Zyng: VPN status = \(Self.name(for: newStatus))")
 
         switch newStatus {
         case .connected:
+            reachedConnected = true
+            isAttempting = false
             errorMessage = nil
 
-        case .disconnected where previous == .connecting || previous == .reasserting:
-            // Туннель отвалился, не успев подняться. Своей ошибки система тут
-            // не даёт, поэтому забираем причину у расширения через App Group.
-            // Ядро пишет её с небольшой задержкой — отсюда пауза.
-            Task {
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                if let reason = TunnelDiagnostics.lastFailure() {
-                    errorMessage = reason
-                } else {
-                    errorMessage = "Туннель отключился, не подключившись. Проверь ключ сервера."
-                }
+        case .disconnected:
+            // Туннель отвалился, так и не подключившись. Своей ошибки система
+            // здесь не даёт, поэтому забираем причину у расширения.
+            if isAttempting && !reachedConnected {
+                isAttempting = false
+                reportFailure()
             }
+            isAttempting = false
 
         default:
             break
+        }
+    }
+
+    /// Ядро пишет причину в общий файл с небольшой задержкой, поэтому читаем
+    /// не сразу и повторяем несколько раз.
+    private func reportFailure() {
+        Task {
+            for _ in 0..<6 {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if let reason = TunnelDiagnostics.lastFailure(), !reason.isEmpty {
+                    errorMessage = reason
+                    return
+                }
+            }
+            errorMessage = """
+            Туннель отключился, не подключившись, и расширение не оставило \
+            причины. Скорее всего процесс не запустился — проверь подпись \
+            расширения ZyngTunnel.
+            """
         }
     }
 
@@ -103,6 +125,8 @@ final class VPNController: NSObject, ObservableObject {
         }
 
         errorMessage = nil
+        isAttempting = true
+        reachedConnected = false
 
         do {
             // Переиспользуем существующую конфигурацию вместо удаления и создания
