@@ -106,6 +106,23 @@ PLIST
   echo "  • Info.plist записан (${PLATFORM})"
 }
 
+# --- 3. Заголовок ------------------------------------------------------------
+
+fix_header() {
+  local FW="$1"
+  local HEADER="$FW/Headers/Libbox.objc.h"
+  [ -f "$HEADER" ] || return 0
+
+  # gomobile объявляет init как nullable у классов, где базовый NSObject
+  # объявляет его nonnull. Clang справедливо ругается:
+  #   «conflicting nullability specifier on return types».
+  # На работу это не влияет, но засоряет сборку предупреждениями.
+  if grep -q '^- (nullable instancetype)init;' "$HEADER"; then
+    sed -i '' 's/^- (nullable instancetype)init;/- (nonnull instancetype)init;/' "$HEADER"
+    echo "  • заголовок поправлен (nullability у init)"
+  fi
+}
+
 # --- Обход слайсов -----------------------------------------------------------
 
 found=0
@@ -131,6 +148,8 @@ for FW in "$XCFW"/*/Libbox.framework; do
     echo "  ❌ нет бинарника Libbox — фреймворк собран неправильно"
     exit 1
   fi
+
+  fix_header "$FW"
 done
 
 if [ "$found" -eq 0 ]; then

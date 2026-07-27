@@ -130,7 +130,8 @@ extension Color {
     }
 }
 
-private enum JT {
+/// Не private: палитрой пользуются и другие экраны.
+enum JT {
     static let bg1     = Color(hex:"0E1014")
     static let bg2     = Color(hex:"171A20")
     static let card    = Color(hex:"1D2129")
@@ -147,13 +148,9 @@ private enum JT {
 
 @MainActor
 struct ContentView: View {
-    @AppStorage("zyng_keys") private var savedRaw: String = ""
-    /// Выбранный сервер запоминаем по строке ключа: `Server.id` генерируется
-    /// заново при каждом парсинге, поэтому по нему выбор не переживал перезапуск.
-    @AppStorage("zyng_selected") private var savedSelected: String = ""
-
-    @State private var servers: [Server] = []
-    @State private var selectedID: UUID?
+    /// Подписки и одиночные ключи живут в общем хранилище — оно же отвечает
+    /// за сохранение и за то, какой сервер выбран.
+    @ObservedObject private var store = ServerStore.shared
 
     @State private var connectedAt: Date?
     @State private var elapsed = 0
@@ -173,7 +170,8 @@ struct ContentView: View {
 
     enum ConnState { case off, connecting, on }
 
-    var selected: Server? { servers.first { $0.id == selectedID } }
+    var servers: [Server] { store.allServers }
+    var selected: Server? { store.selected }
 
     /// Состояние UI выводится напрямую из статуса системы. Отдельного флага больше
     /// нет — раньше он расходился с реальностью, если VPN отваливался сам.
@@ -215,7 +213,6 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            load()
             // Приложение могли открыть при уже поднятом туннеле — тогда
             // onChange не сработает, и замер надо запустить самим.
             handle(vpn.status)
@@ -402,77 +399,11 @@ struct ContentView: View {
     }
 
     private var serverListSheet: some View {
-        ZStack {
-            JT.bg1.ignoresSafeArea()
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Серверы").foregroundColor(JT.text)
-                        .font(.system(size: 20, weight: .bold))
-                    Spacer()
-                    Text("\(servers.count)").foregroundColor(JT.sub)
-                        .font(.system(size: 14, weight: .semibold))
-                    Button { showList = false } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundColor(JT.sub)
-                            .font(.system(size: 24))
-                    }.padding(.leading, 6)
-                }.padding(20)
-
-                if servers.isEmpty {
-                    Spacer()
-                    VStack(spacing: 12) {
-                        Image(systemName: "server.rack").font(.system(size: 40)).foregroundColor(JT.sub)
-                        Text("Пока нет серверов").foregroundColor(JT.sub)
-                        Button("Добавить ключ") { showList = false; showAdd = true }
-                            .foregroundColor(JT.accent).font(.system(size: 15, weight: .semibold))
-                    }
-                    Spacer()
-                } else {
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            ForEach(servers) { sv in serverRow(sv) }
-                        }.padding(.horizontal, 16).padding(.bottom, 24)
-                    }
-                }
-            }
-        }
-    }
-
-    private func serverRow(_ sv: Server) -> some View {
-        HStack(spacing: 12) {
-            Text(sv.flag).font(.system(size: 24))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(sv.name).foregroundColor(JT.text)
-                    .font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                Text(sv.proto).foregroundColor(JT.sub).font(.system(size: 11))
-            }
-            Spacer()
-            if sv.id == selectedID {
-                Image(systemName: "checkmark.circle.fill").foregroundColor(JT.green)
-                    .font(.system(size: 20))
-            }
-            Button {
-                servers.removeAll { $0.id == sv.id }
-                if selectedID == sv.id {
-                    selectedID = servers.first?.id
-                    vpn.disconnect()
-                }
-                save()
-            } label: {
-                Image(systemName: "trash").foregroundColor(JT.red.opacity(0.8))
-                    .font(.system(size: 15))
-            }.padding(.leading, 4)
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14)
-            .fill(sv.id == selectedID ? JT.cardHi : JT.card)
-            .overlay(RoundedRectangle(cornerRadius: 14)
-                .stroke(sv.id == selectedID ? JT.green.opacity(0.4) : JT.stroke, lineWidth: 1)))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeOut(duration: 0.15)) { selectedID = sv.id }
-            save()
-            showList = false
-        }
+        ServerListView(
+            store: store,
+            onPicked: { showList = false },
+            onAdd: { showList = false; showAdd = true }
+        )
     }
 
     private var addSheet: some View {
@@ -565,73 +496,34 @@ struct ContentView: View {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { status = "Пусто"; return }
 
+        // Ссылка — это подписка, она будет обновляться сама.
         if text.lowercased().hasPrefix("http") {
-            loading = true; status = "Загружаю подписку…"
+            loading = true
+            status = "Загружаю подписку…"
             Task {
-                let list = await importSubscription(text)
-                await MainActor.run {
-                    loading = false
-                    let existing = Set(servers.map { $0.raw })
-                    let fresh = list.filter { !existing.contains($0.raw) }
-                    servers.append(contentsOf: fresh)
-                    if selectedID == nil { selectedID = servers.first?.id }
-                    status = list.isEmpty
-                        ? "Подписка пустая или недоступна"
-                        : "Добавлено: \(fresh.count) (всего \(servers.count))"
-                    save()
-                    if !list.isEmpty { input = ""; showAdd = false }
+                await store.addSubscription(url: text)
+                loading = false
+                if let error = store.lastError {
+                    status = error
+                } else {
+                    status = "Подписка добавлена"
+                    input = ""
+                    showAdd = false
                 }
             }
             return
         }
 
-        var added = 0
-        for line in text.split(whereSeparator: \.isNewline) {
-            if let sv = parseServer(String(line)) {
-                if !servers.contains(where: { $0.raw == sv.raw }) { servers.append(sv); added += 1 }
-            }
+        let added = store.addSingleKeys(from: text)
+        status = added > 0
+            ? "Добавлено ключей: \(added)"
+            : "Не похоже на ключ (нужен vless:// и т.п.)"
+        if added > 0 {
+            input = ""
+            showAdd = false
         }
-        if selectedID == nil { selectedID = servers.first?.id }
-        status = added > 0 ? "Добавлено: \(added)" : "Не похоже на ключ (нужен vless:// и т.п.)"
-        save()
-        if added > 0 { input = ""; showAdd = false }
     }
 
-    func importSubscription(_ urlStr: String) async -> [Server] {
-        guard let url = URL(string: urlStr) else { return [] }
-        let uas = ["Happ/1.0", "v2rayNG/1.8.5", "Streisand", "SFI/2.0", "Zyng/1.0"]
-        for ua in uas {
-            var req = URLRequest(url: url)
-            req.timeoutInterval = 15
-            req.setValue(ua, forHTTPHeaderField: "User-Agent")
-            req.setValue(jtHWID(), forHTTPHeaderField: "x-hwid")
-            req.setValue("ios", forHTTPHeaderField: "x-device-os")
-            req.setValue(jtDeviceOS(), forHTTPHeaderField: "x-ver-os")
-            req.setValue(jtDeviceModel(), forHTTPHeaderField: "x-device-model")
-            do {
-                let (data, _) = try await URLSession.shared.data(for: req)
-                var text = String(data: data, encoding: .utf8) ?? ""
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let d = Data(base64Encoded: padBase64(trimmed)),
-                   let dec = String(data: d, encoding: .utf8), dec.contains("://") {
-                    text = dec
-                }
-                let list = text.split(whereSeparator: \.isNewline).compactMap { parseServer(String($0)) }
-                if !list.isEmpty { return list }
-            } catch { continue }
-        }
-        return []
-    }
-
-    func save() {
-        savedRaw = servers.map { $0.raw }.joined(separator: "\n")
-        savedSelected = selected?.raw ?? ""
-    }
-
-    func load() {
-        servers = savedRaw.split(whereSeparator: \.isNewline).compactMap { parseServer(String($0)) }
-        selectedID = servers.first { $0.raw == savedSelected }?.id ?? servers.first?.id
-    }
 }
 
 // MARK: - Placeholder helper
