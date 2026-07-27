@@ -34,6 +34,11 @@ final class VPNController: NSObject, ObservableObject {
     private var isAttempting = false
     private var reachedConnected = false
 
+    /// Номер попытки. Причину сбоя приходится ждать пару секунд, и за это время
+    /// пользователь успевает нажать «подключить» снова. Без номера сообщение от
+    /// прошлой, неудачной попытки всплывало бы поверх уже работающего туннеля.
+    private var attempt = 0
+
     private override init() {
         super.init()
         NotificationCenter.default.addObserver(
@@ -75,7 +80,7 @@ final class VPNController: NSObject, ObservableObject {
             // здесь не даёт, поэтому забираем причину у расширения.
             if isAttempting && !reachedConnected {
                 isAttempting = false
-                reportFailure()
+                reportFailure(for: attempt)
             }
             isAttempting = false
 
@@ -86,15 +91,22 @@ final class VPNController: NSObject, ObservableObject {
 
     /// Ядро пишет причину в общий файл с небольшой задержкой, поэтому читаем
     /// не сразу и повторяем несколько раз.
-    private func reportFailure() {
+    private func reportFailure(for attemptID: Int) {
         Task {
             for _ in 0..<6 {
                 try? await Task.sleep(nanoseconds: 300_000_000)
+
+                // Пока ждали, могла начаться новая попытка или туннель уже
+                // поднялся — тогда старая причина никому не нужна.
+                guard attemptID == attempt, !reachedConnected else { return }
+
                 if let reason = TunnelDiagnostics.lastFailure(), !reason.isEmpty {
                     errorMessage = reason
                     return
                 }
             }
+
+            guard attemptID == attempt, !reachedConnected else { return }
             errorMessage = """
             Туннель отключился, не подключившись, и расширение не оставило \
             причины. Скорее всего процесс не запустился — проверь подпись \
@@ -127,6 +139,7 @@ final class VPNController: NSObject, ObservableObject {
         errorMessage = nil
         isAttempting = true
         reachedConnected = false
+        attempt += 1
 
         do {
             // Переиспользуем существующую конфигурацию вместо удаления и создания

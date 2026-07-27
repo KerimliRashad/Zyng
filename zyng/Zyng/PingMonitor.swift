@@ -21,8 +21,18 @@ final class PingMonitor: ObservableObject {
 
     private var task: Task<Void, Never>?
 
-    /// generate_204 отдаёт пустой ответ без тела и не кэшируется.
-    private static let probeURL = URL(string: "https://www.gstatic.com/generate_204")!
+    /// Адреса, отдающие крошечный ответ. Пробуем по очереди: часть из них
+    /// бывает недоступна у отдельных провайдеров или за конкретным сервером,
+    /// и тогда замер врал бы «нет ответа» при работающем туннеле.
+    private static let probeURLs = [
+        // Проверка сети от Apple — доступна практически везде.
+        URL(string: "https://captive.apple.com/hotspot-detect.html")!,
+        URL(string: "https://www.gstatic.com/generate_204")!,
+        URL(string: "https://cp.cloudflare.com/generate_204")!
+    ]
+
+    /// Адрес, ответивший последним, чтобы не перебирать список каждый раз.
+    private var preferred: URL?
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -52,20 +62,35 @@ final class PingMonitor: ObservableObject {
     }
 
     private func measure() async {
-        var request = URLRequest(url: Self.probeURL)
-        request.httpMethod = "HEAD"
-        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-
-        let started = Date()
-        do {
-            _ = try await session.data(for: request)
-            guard !Task.isCancelled else { return }
-            latency = Int(Date().timeIntervalSince(started) * 1000)
-            failed = false
-        } catch {
-            guard !Task.isCancelled else { return }
-            latency = nil
-            failed = true
+        // Начинаем с того, который отвечал в прошлый раз.
+        var candidates = Self.probeURLs
+        if let preferred, let index = candidates.firstIndex(of: preferred) {
+            candidates.remove(at: index)
+            candidates.insert(preferred, at: 0)
         }
+
+        for url in candidates {
+            guard !Task.isCancelled else { return }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD"
+            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+
+            let started = Date()
+            do {
+                _ = try await session.data(for: request)
+                guard !Task.isCancelled else { return }
+                latency = Int(Date().timeIntervalSince(started) * 1000)
+                failed = false
+                preferred = url
+                return
+            } catch {
+                continue
+            }
+        }
+
+        guard !Task.isCancelled else { return }
+        latency = nil
+        failed = true
     }
 }

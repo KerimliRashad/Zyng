@@ -105,7 +105,9 @@ final class LatencyProbe: ObservableObject {
             // состояния и таймаут могут сработать одновременно.
             let once = OnceFlag()
 
-            func finish(_ value: Int?) {
+            // Вызывается из обработчика соединения и из таймаута — то есть
+            // с разных потоков, поэтому @Sendable.
+            @Sendable func finish(_ value: Int?) {
                 guard once.claim() else { return }
                 connection.cancel()
                 continuation.resume(returning: value)
