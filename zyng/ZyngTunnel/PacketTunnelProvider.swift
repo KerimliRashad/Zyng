@@ -17,6 +17,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
+        // Запуск уходит в фон: дальше мы ждём, пока ядро откроет туннель,
+        // а блокировать поток, на котором система вызвала startTunnel, нельзя.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.start(completionHandler: completionHandler)
+        }
+    }
+
+    private func start(completionHandler: @escaping (Error?) -> Void) {
         NSLog("🔵 Zyng: startTunnel, ядро \(LibboxVersion())")
 
         // Причину прошлой неудачи убираем сразу: иначе после успешного
@@ -54,7 +62,19 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             try server.start()
             try server.startOrReloadService(config, options: LibboxOverrideOptions())
 
-            NSLog("✅ Zyng: ядро запущено")
+            NSLog("✅ Zyng: ядро запущено, жду открытия туннеля…")
+
+            // Пока ядро не вызовет openTun, сетевые настройки не применены,
+            // и система будет вечно держать статус «подключение». Сообщать
+            // об успехе раньше этого момента нельзя.
+            guard platform.waitUntilTunnelOpened(timeout: 20) else {
+                throw Self.coreError(
+                    "Ядро запустилось, но не открыло туннель за 20 секунд. "
+                    + "Обычно это значит, что не удалось соединиться с сервером."
+                )
+            }
+
+            NSLog("✅ Zyng: подключение установлено")
             completionHandler(nil)
 
         } catch {

@@ -16,6 +16,16 @@ final class PlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
     private var monitor: NWPathMonitor?
     private let monitorQueue = DispatchQueue(label: "online.zyng.tunnel.path")
 
+    /// Ядро открывает туннель своим потоком уже после того, как запуск сервиса
+    /// вернул управление. Пока это не произошло, сетевые настройки не применены
+    /// и система держит статус «подключение» — поэтому запуск ждёт этот сигнал.
+    private let tunnelOpened = DispatchSemaphore(value: 0)
+
+    /// Ждёт, пока ядро откроет туннель. false — не дождались.
+    func waitUntilTunnelOpened(timeout: TimeInterval) -> Bool {
+        tunnelOpened.wait(timeout: .now() + timeout) == .success
+    }
+
     init(provider: NEPacketTunnelProvider) {
         self.provider = provider
         super.init()
@@ -136,6 +146,9 @@ final class PlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         }
 
         ret0_?.pointee = fd
+
+        NSLog("✅ Zyng: туннель открыт, настройки применены")
+        tunnelOpened.signal()
     }
 
     // MARK: - Отслеживание сети
