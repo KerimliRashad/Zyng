@@ -2,6 +2,21 @@ import Foundation
 import Network
 import Combine
 
+/// Пропускает только первый вызов. Нужен там, где несколько обработчиков могут
+/// завершить одну и ту же операцию.
+private final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var used = false
+
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if used { return false }
+        used = true
+        return true
+    }
+}
+
 /// Измеряет задержку до серверов из списка, не поднимая туннель.
 ///
 /// Меряется время установки TCP-соединения с адресом и портом сервера —
@@ -88,14 +103,10 @@ final class LatencyProbe: ObservableObject {
 
             // Продолжение можно возобновить только один раз, а обработчик
             // состояния и таймаут могут сработать одновременно.
-            let finished = OSAllocatedUnfairLock(initialState: false)
+            let once = OnceFlag()
 
             func finish(_ value: Int?) {
-                let alreadyDone: Bool = finished.withLock { done in
-                    defer { done = true }
-                    return done
-                }
-                guard !alreadyDone else { return }
+                guard once.claim() else { return }
                 connection.cancel()
                 continuation.resume(returning: value)
             }
