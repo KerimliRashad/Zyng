@@ -65,6 +65,9 @@ targets:
       # Ядро sing-box. Собирается скриптом ./build-libbox.sh — в git не хранится.
       - framework: Frameworks/Libbox.xcframework
         embed: false
+      # Сетевой код Go зовёт системный резолвер (res_9_ninit и соседи).
+      # Без этой библиотеки линковка расширения падает на неизвестных символах.
+      - sdk: libresolv.tbd
     settings:
       base:
         # Bundle ID расширения обязан начинаться с Bundle ID приложения.
