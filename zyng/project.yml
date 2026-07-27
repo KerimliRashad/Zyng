@@ -37,6 +37,11 @@ targets:
       - target: ZyngTunnel
         embed: true
       - sdk: NetworkExtension.framework
+      # Ядро — динамическая библиотека, поэтому лежать она должна в бандле
+      # приложения. Расширение линкуется с ней, но своей копии не имеет.
+      - framework: Frameworks/Libbox.xcframework
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng
