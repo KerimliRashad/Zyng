@@ -1,23 +1,25 @@
 import SwiftUI
 
-/// Экран выбора сервера: подписки и одиночные ключи на разных вкладках.
+/// Экран выбора сервера.
+///
+/// Каждая подписка — своя вкладка со своим именем, трафиком и списком серверов.
+/// Последняя вкладка — ключи, добавленные вручную.
 @MainActor
 struct ServerListView: View {
 
     @ObservedObject var store: ServerStore
     @StateObject private var probe = LatencyProbe()
 
-    /// Закрыть экран после выбора сервера.
     let onPicked: () -> Void
     let onAdd: () -> Void
 
-    enum Tab: String, CaseIterable {
-        case subscriptions = "Подписки"
-        case singles = "Ключи"
+    /// Вкладка — либо конкретная подписка, либо раздел одиночных ключей.
+    private enum Tab: Hashable {
+        case subscription(UUID)
+        case singles
     }
 
-    @State private var tab: Tab = .subscriptions
-    @State private var expanded: Set<UUID> = []
+    @State private var tab: Tab?
 
     var body: some View {
         ZStack {
@@ -25,37 +27,60 @@ struct ServerListView: View {
 
             VStack(spacing: 0) {
                 header
-                tabPicker.padding(.horizontal, 16).padding(.bottom, 12)
+                tabBar
 
                 ScrollView {
                     VStack(spacing: 10) {
-                        switch tab {
-                        case .subscriptions: subscriptionsSection
-                        case .singles:       singlesSection
-                        }
+                        content
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 12)
                     .padding(.bottom, 28)
                 }
             }
         }
         .task {
-            // Подписки со вышедшим сроком обновляем при открытии экрана.
+            selectTabIfNeeded()
             await store.refreshStale()
+            selectTabIfNeeded()
         }
+    }
+
+    /// При первом показе и после удаления подписки вкладка может исчезнуть.
+    private func selectTabIfNeeded() {
+        let available = tabs
+        if tab == nil || !available.contains(where: { $0 == tab }) {
+            tab = available.first
+        }
+    }
+
+    private var tabs: [Tab] {
+        store.subscriptions.map { .subscription($0.id) } + [.singles]
+    }
+
+    private var currentSubscription: Subscription? {
+        guard case .subscription(let id) = tab else { return nil }
+        return store.subscriptions.first { $0.id == id }
+    }
+
+    /// Серверы текущей вкладки — их и меряет кнопка замера.
+    private var visibleServers: [Server] {
+        if let sub = currentSubscription {
+            return store.servers(in: sub)
+        }
+        return store.singleServers
     }
 
     // MARK: - Шапка
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Text("Серверы")
                 .foregroundColor(JT.text)
                 .font(.system(size: 20, weight: .bold))
 
             Spacer()
 
-            // Замерить все разом — как кнопка со спидометром в примере.
             Button {
                 jtHaptic()
                 Task { await probe.measure(visibleServers) }
@@ -64,7 +89,8 @@ struct ServerListView: View {
                     if probe.isRunning {
                         ProgressView().tint(JT.accent)
                     } else {
-                        Image(systemName: "speedometer").font(.system(size: 18, weight: .semibold))
+                        Image(systemName: "speedometer")
+                            .font(.system(size: 18, weight: .semibold))
                     }
                 }
                 .foregroundColor(JT.accent)
@@ -87,80 +113,106 @@ struct ServerListView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
-        .padding(.bottom, 14)
+        .padding(.bottom, 12)
     }
 
-    private var tabPicker: some View {
-        HStack(spacing: 6) {
-            ForEach(Tab.allCases, id: \.self) { item in
-                let active = tab == item
-                let count = item == .subscriptions
-                    ? store.subscriptions.count
-                    : store.singleKeys.count
+    // MARK: - Полоса вкладок
 
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { tab = item }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(item.rawValue)
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("\(count)")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(active ? .white.opacity(0.8) : JT.sub)
-                    }
-                    .foregroundColor(active ? .white : JT.sub)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(active ? JT.accent : JT.card)
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(store.subscriptions) { sub in
+                    tabChip(
+                        title: sub.name,
+                        count: sub.rawKeys.count,
+                        tab: .subscription(sub.id)
                     )
                 }
+
+                tabChip(
+                    title: "Ключи",
+                    count: store.singleKeys.count,
+                    tab: .singles
+                )
             }
-        }
-        .padding(4)
-        .background(RoundedRectangle(cornerRadius: 16).fill(JT.bg2))
-    }
-
-    /// Серверы текущей вкладки — их и меряем кнопкой замера.
-    private var visibleServers: [Server] {
-        switch tab {
-        case .subscriptions: return store.subscriptions.flatMap { store.servers(in: $0) }
-        case .singles:       return store.singleServers
+            .padding(.horizontal, 16)
         }
     }
 
-    // MARK: - Подписки
+    private func tabChip(title: String, count: Int, tab item: Tab) -> some View {
+        let active = tab == item
+
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) { tab = item }
+        } label: {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                Text("\(count)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(active ? .white.opacity(0.75) : JT.sub)
+            }
+            .foregroundColor(active ? .white : JT.sub)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                Capsule().fill(active ? JT.accent : JT.card)
+                    .overlay(Capsule().stroke(active ? .clear : JT.stroke, lineWidth: 1))
+            )
+        }
+    }
+
+    // MARK: - Содержимое вкладки
 
     @ViewBuilder
-    private var subscriptionsSection: some View {
-        if store.subscriptions.isEmpty {
+    private var content: some View {
+        if let sub = currentSubscription {
+            subscriptionHeader(sub)
+
+            let servers = store.servers(in: sub)
+            if servers.isEmpty {
+                emptyState(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "Подписка пустая",
+                    hint: "Обнови её — возможно, панель ещё не отдала серверы"
+                )
+            } else {
+                ForEach(servers) { server in
+                    serverRow(server, showDelete: false)
+                }
+            }
+        } else if store.subscriptions.isEmpty && store.singleServers.isEmpty {
             emptyState(
-                icon: "arrow.triangle.2.circlepath",
-                title: "Подписок пока нет",
-                hint: "Добавь ссылку — серверы обновятся сами"
+                icon: "server.rack",
+                title: "Серверов пока нет",
+                hint: "Добавь ссылку-подписку или отдельный ключ"
+            )
+        } else if store.singleServers.isEmpty {
+            emptyState(
+                icon: "key",
+                title: "Отдельных ключей нет",
+                hint: "Вставь ключ vless:// или другой"
             )
         } else {
-            ForEach(store.subscriptions) { sub in
-                subscriptionCard(sub)
+            ForEach(store.singleServers) { server in
+                serverRow(server, showDelete: true)
             }
         }
     }
 
-    private func subscriptionCard(_ sub: Subscription) -> some View {
-        let servers = store.servers(in: sub)
-        let isOpen = expanded.contains(sub.id)
+    // MARK: - Карточка подписки
 
-        return VStack(spacing: 0) {
-            // Заголовок подписки: имя, когда обновлялась, кнопки.
+    private func subscriptionHeader(_ sub: Subscription) -> some View {
+        VStack(spacing: 12) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(sub.name)
                         .foregroundColor(JT.text)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .lineLimit(1)
 
-                    Text(subtitle(for: sub, count: servers.count))
+                    Text(subtitle(for: sub))
                         .foregroundColor(JT.sub)
                         .font(.system(size: 11))
                 }
@@ -176,45 +228,36 @@ struct ServerListView: View {
                             ProgressView().tint(JT.accent)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                         }
                     }
                     .foregroundColor(JT.accent)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 30, height: 30)
                 }
 
                 Menu {
+                    if let page = sub.webPage, let url = URL(string: page) {
+                        Link(destination: url) {
+                            Label("Личный кабинет", systemImage: "safari")
+                        }
+                    }
                     Button(role: .destructive) {
                         store.removeSubscription(sub.id)
+                        selectTabIfNeeded()
                     } label: {
                         Label("Удалить подписку", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(JT.sub)
-                        .frame(width: 28, height: 28)
-                }
-            }
-            .padding(14)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    if isOpen { expanded.remove(sub.id) } else { expanded.insert(sub.id) }
+                        .frame(width: 30, height: 30)
                 }
             }
 
-            if isOpen {
-                Divider().background(JT.stroke)
-                VStack(spacing: 8) {
-                    ForEach(servers) { server in
-                        serverRow(server, showDelete: false)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 10)
-            }
+            trafficBar(sub)
         }
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(JT.card)
@@ -222,8 +265,59 @@ struct ServerListView: View {
         )
     }
 
-    private func subtitle(for sub: Subscription, count: Int) -> String {
-        var parts = ["\(count) серв."]
+    /// Полоса расхода трафика. Для безлимита полосы нет — только цифра.
+    private func trafficBar(_ sub: Subscription) -> some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(trafficText(sub))
+                    .foregroundColor(JT.text)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+
+                Spacer()
+
+                if let expires = sub.expiresAt {
+                    Text(expiryText(expires))
+                        .foregroundColor(expires < Date() ? JT.red : JT.sub)
+                        .font(.system(size: 11, weight: .medium))
+                }
+            }
+
+            if !sub.isUnlimited {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(JT.bg1)
+                        Capsule()
+                            .fill(sub.usedFraction > 0.9 ? JT.red : JT.accent)
+                            .frame(width: max(4, geo.size.width * sub.usedFraction))
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private func trafficText(_ sub: Subscription) -> String {
+        sub.isUnlimited
+            ? "\(formatBytes(sub.usedTraffic)) / ∞"
+            : "\(formatBytes(sub.usedTraffic)) / \(formatBytes(sub.totalTraffic))"
+    }
+
+    private func expiryText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy"
+
+        guard date > Date() else { return "истекла \(formatter.string(from: date))" }
+
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
+        return days <= 30
+            ? "осталось \(days) дн."
+            : "до \(formatter.string(from: date))"
+    }
+
+    private func subtitle(for sub: Subscription) -> String {
+        var parts: [String] = []
+
         if let updated = sub.updatedAt {
             let formatter = DateFormatter()
             formatter.dateFormat = "dd.MM HH:mm"
@@ -231,25 +325,9 @@ struct ServerListView: View {
         } else {
             parts.append("не обновлялась")
         }
-        parts.append("авто — \(sub.autoUpdateHours) ч.")
+
+        parts.append("автообновление — \(sub.autoUpdateHours) ч.")
         return parts.joined(separator: " • ")
-    }
-
-    // MARK: - Одиночные ключи
-
-    @ViewBuilder
-    private var singlesSection: some View {
-        if store.singleServers.isEmpty {
-            emptyState(
-                icon: "key",
-                title: "Отдельных ключей нет",
-                hint: "Вставь ключ vless:// или другой"
-            )
-        } else {
-            ForEach(store.singleServers) { server in
-                serverRow(server, showDelete: true)
-            }
-        }
     }
 
     // MARK: - Строка сервера
@@ -349,6 +427,6 @@ struct ServerListView: View {
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 50)
     }
 }

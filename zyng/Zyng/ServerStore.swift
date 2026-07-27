@@ -2,21 +2,61 @@ import Foundation
 import Combine
 
 /// Подписка — ссылка, по которой провайдер отдаёт список серверов.
+///
+/// Имя, лимит трафика и срок действия приходят не в теле ответа, а в его
+/// заголовках — так это устроено во всех панелях. Поэтому здесь хранится
+/// не только список ключей.
 struct Subscription: Identifiable, Codable, Equatable {
     var id: UUID = UUID()
+    /// Имя из заголовка profile-title. Пока подписка не загружена — хост ссылки.
     var name: String
     var url: String
     var updatedAt: Date?
     /// Ключи в том виде, в каком пришли. Разбираются при чтении, чтобы
     /// сохранённые данные не зависели от версии парсера.
     var rawKeys: [String] = []
-    /// Как часто обновлять, в часах.
+    /// Как часто обновлять, в часах. Панель может задать своё значение.
     var autoUpdateHours: Int = 3
+
+    // Данные из заголовка subscription-userinfo.
+    var uploaded: Int64 = 0
+    var downloaded: Int64 = 0
+    /// 0 означает безлимит.
+    var totalTraffic: Int64 = 0
+    var expiresAt: Date?
+
+    /// Ссылка на личный кабинет, если панель её прислала.
+    var webPage: String?
+
+    var usedTraffic: Int64 { uploaded + downloaded }
+
+    var isUnlimited: Bool { totalTraffic <= 0 }
+
+    /// Доля израсходованного трафика, 0…1. Для безлимита не имеет смысла.
+    var usedFraction: Double {
+        guard !isUnlimited else { return 0 }
+        return min(1, max(0, Double(usedTraffic) / Double(totalTraffic)))
+    }
 
     var isStale: Bool {
         guard let updatedAt else { return true }
         return Date().timeIntervalSince(updatedAt) > Double(autoUpdateHours) * 3600
     }
+}
+
+/// Человекочитаемый объём: 6 GB, 512 MB и так далее.
+func formatBytes(_ value: Int64) -> String {
+    guard value > 0 else { return "0 B" }
+    let units = ["B", "KB", "MB", "GB", "TB"]
+    var size = Double(value)
+    var index = 0
+    while size >= 1024, index < units.count - 1 {
+        size /= 1024
+        index += 1
+    }
+    return size >= 100 || index == 0
+        ? String(format: "%.0f %@", size, units[index])
+        : String(format: "%.1f %@", size, units[index])
 }
 
 /// Хранилище серверов: подписки и одиночные ключи.
@@ -141,13 +181,28 @@ final class ServerStore: ObservableObject {
         defer { refreshing.remove(id) }
 
         do {
-            let keys = try await fetchKeys(from: subscriptions[index].url)
-            guard !keys.isEmpty else {
+            let profile = try await fetchProfile(from: subscriptions[index].url)
+            guard !profile.keys.isEmpty else {
                 lastError = "Подписка не вернула ни одного сервера"
                 return
             }
-            subscriptions[index].rawKeys = keys
+
+            subscriptions[index].rawKeys = profile.keys
             subscriptions[index].updatedAt = Date()
+
+            // Имя из панели важнее того, что подставили при добавлении.
+            if let title = profile.title, !title.isEmpty {
+                subscriptions[index].name = title
+            }
+            subscriptions[index].uploaded = profile.uploaded
+            subscriptions[index].downloaded = profile.downloaded
+            subscriptions[index].totalTraffic = profile.total
+            subscriptions[index].expiresAt = profile.expiresAt
+            subscriptions[index].webPage = profile.webPage
+            if let hours = profile.updateHours {
+                subscriptions[index].autoUpdateHours = hours
+            }
+
             lastError = nil
             fixSelectionIfNeeded()
             persist()
@@ -169,8 +224,20 @@ final class ServerStore: ObservableObject {
         "Happ/1.0", "v2rayNG/1.8.5", "Streisand", "SFI/2.0", "Zyng/1.0"
     ]
 
-    private func fetchKeys(from url: String) async throws -> [String] {
-        guard let parsed = URL(string: url) else { return [] }
+    /// Что удалось вытащить из ответа панели.
+    private struct Profile {
+        var keys: [String] = []
+        var title: String?
+        var uploaded: Int64 = 0
+        var downloaded: Int64 = 0
+        var total: Int64 = 0
+        var expiresAt: Date?
+        var updateHours: Int?
+        var webPage: String?
+    }
+
+    private func fetchProfile(from url: String) async throws -> Profile {
+        guard let parsed = URL(string: url) else { return Profile() }
 
         var lastError: Error?
 
@@ -200,14 +267,79 @@ final class ServerStore: ObservableObject {
                 }
 
                 let keys = expand(String(decoding: data, as: UTF8.self))
-                if !keys.isEmpty { return keys }
+                if !keys.isEmpty {
+                    var profile = Profile(keys: keys)
+                    if let http = response as? HTTPURLResponse {
+                        Self.readHeaders(http, into: &profile)
+                    }
+                    return profile
+                }
             } catch {
                 lastError = error
             }
         }
 
         if let lastError { throw lastError }
-        return []
+        return Profile()
+    }
+
+    /// Разбирает заголовки, которыми панели описывают подписку.
+    private static func readHeaders(_ response: HTTPURLResponse, into profile: inout Profile) {
+        func header(_ name: String) -> String? {
+            let value = response.value(forHTTPHeaderField: name)?
+                .trimmingCharacters(in: .whitespaces)
+            return value?.isEmpty == false ? value : nil
+        }
+
+        // Имя профиля. Часто приходит закодированным: "base64:0JbQtdGE..."
+        if let raw = header("profile-title") {
+            profile.title = decodeTitle(raw)
+        } else if let disposition = header("content-disposition"),
+                  let range = disposition.range(of: "filename=") {
+            profile.title = String(disposition[range.upperBound...])
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+        }
+
+        // subscription-userinfo: upload=1234; download=5678; total=0; expire=1700000000
+        if let info = header("subscription-userinfo") {
+            for pair in info.split(separator: ";") {
+                let parts = pair.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2 else { continue }
+                let key = parts[0].trimmingCharacters(in: .whitespaces).lowercased()
+                let value = parts[1].trimmingCharacters(in: .whitespaces)
+
+                switch key {
+                case "upload":   profile.uploaded = Int64(value) ?? 0
+                case "download": profile.downloaded = Int64(value) ?? 0
+                case "total":    profile.total = Int64(value) ?? 0
+                case "expire":
+                    if let seconds = Double(value), seconds > 0 {
+                        profile.expiresAt = Date(timeIntervalSince1970: seconds)
+                    }
+                default: break
+                }
+            }
+        }
+
+        // Интервал панель задаёт в часах.
+        if let interval = header("profile-update-interval"), let hours = Int(interval), hours > 0 {
+            profile.updateHours = hours
+        }
+
+        profile.webPage = header("profile-web-page-url")
+    }
+
+    private static func decodeTitle(_ raw: String) -> String {
+        let value = raw.hasPrefix("base64:")
+            ? String(raw.dropFirst("base64:".count))
+            : raw
+
+        if let data = Data(base64Encoded: padBase64(value)),
+           let decoded = String(data: data, encoding: .utf8),
+           !decoded.isEmpty {
+            return decoded
+        }
+        return raw
     }
 
     // MARK: - Разбор содержимого
