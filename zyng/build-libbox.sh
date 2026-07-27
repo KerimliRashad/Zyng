@@ -12,6 +12,12 @@ cd "$(dirname "$0")"
 ROOT="$PWD"
 OUT="$ROOT/Frameworks"
 
+# ВАЖНО: sing-box собирается форком gomobile от SagerNet, а не оригинальным
+# golang.org/x/mobile. Оригинальный падает с «missing golang.org/x/mobile
+# dependency», потому что в go.mod sing-box прописан именно форк.
+GOMOBILE_PKG="github.com/sagernet/gomobile"
+GOMOBILE_VERSION="${GOMOBILE_VERSION:-latest}"
+
 # --- Проверки инструментов -------------------------------------------------
 
 if ! command -v brew >/dev/null 2>&1; then
@@ -26,11 +32,22 @@ fi
 
 export PATH="$PATH:$(go env GOPATH)/bin"
 
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "→ Устанавливаю gomobile…"
-  go install golang.org/x/mobile/cmd/gomobile@latest
-  go install golang.org/x/mobile/cmd/gobind@latest
-  export PATH="$PATH:$(go env GOPATH)/bin"
+# Полный Xcode, а не Command Line Tools — иначе gomobile не найдёт iOS SDK.
+DEVDIR="$(xcode-select -p 2>/dev/null || true)"
+if [[ "$DEVDIR" != *"Xcode.app"* ]]; then
+  echo "❌ Сейчас выбраны Command Line Tools, а нужен полный Xcode."
+  echo "   Выполни:  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+  exit 1
+fi
+
+# --- Сеть ------------------------------------------------------------------
+# Если включён VPN без работающего транспорта, DNS отваливается и всё падает
+# на клонировании. Проверяем заранее, чтобы причина была очевидна.
+
+if ! git ls-remote --exit-code https://github.com/SagerNet/sing-box HEAD >/dev/null 2>&1; then
+  echo "❌ Нет доступа к github.com."
+  echo "   Чаще всего это включённый VPN — отключи Zyng и попробуй снова."
+  exit 1
 fi
 
 # --- Версия ядра -----------------------------------------------------------
@@ -65,21 +82,34 @@ fi
 
 git -C "$SRC" checkout --quiet "$SB_VERSION"
 
-# --- Сборка ----------------------------------------------------------------
-
 cd "$SRC"
+
+# --- gomobile (форк SagerNet) ----------------------------------------------
+# Ставим из папки sing-box, чтобы подхватилась версия форка из его go.mod.
+
+echo "→ Устанавливаю gomobile (форк SagerNet)…"
+go install -v "$GOMOBILE_PKG/cmd/gomobile@$GOMOBILE_VERSION"
+go install -v "$GOMOBILE_PKG/cmd/gobind@$GOMOBILE_VERSION"
+export PATH="$PATH:$(go env GOPATH)/bin"
+hash -r
 
 echo "→ Инициализирую gomobile…"
 gomobile init
 
+# --- Сборка ----------------------------------------------------------------
+
 echo "→ Собираю Libbox.xcframework (это надолго, 5–15 минут)…"
 
-# Набор тегов = протоколы, которые попадут в ядро. Полный список из Makefile
-# sing-box для мобильных сборок.
-TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api"
+mkdir -p "$OUT"
 
+# Набор тегов = протоколы, которые попадут в ядро. Соответствует мобильной
+# сборке из Makefile sing-box.
+TAGS="with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_clash_api"
+
+# -libname=box даёт на выходе именно Libbox.xcframework (gomobile добавляет «Lib»).
 gomobile bind -v \
   -target ios,iossimulator \
+  -libname=box \
   -tags "$TAGS" \
   -trimpath -ldflags="-s -w" \
   -o "$OUT/Libbox.xcframework" \
@@ -89,8 +119,7 @@ echo ""
 echo "✅ Готово: $OUT/Libbox.xcframework"
 echo "   Версия ядра: $SB_VERSION"
 echo ""
-echo "Теперь пришли мне сгенерированный заголовок, чтобы я написал связку"
-echo "под точные сигнатуры:"
+echo "Теперь пришли мне сгенерированный заголовок:"
 echo ""
-echo "  cat $OUT/Libbox.xcframework/ios-arm64/Libbox.framework/Headers/Libbox.objc.h | head -400"
+echo "  find Frameworks -name 'Libbox.objc.h' | head -1"
 echo ""
