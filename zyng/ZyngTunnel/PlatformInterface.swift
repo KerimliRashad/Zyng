@@ -209,10 +209,21 @@ final class PlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             let length = socklen_t(addr.pointee.sa_len)
-            if getnameinfo(addr, length, &host, socklen_t(host.count),
-                           nil, 0, NI_NUMERICHOST) == 0 {
-                byName[name, default: []].append(String(cString: host))
+            guard getnameinfo(addr, length, &host, socklen_t(host.count),
+                              nil, 0, NI_NUMERICHOST) == 0 else { continue }
+
+            var text = String(cString: host)
+
+            // getnameinfo дописывает к link-local адресам зону: fe80::1%utun5.
+            // Ядро такой адрес не разбирает.
+            if let percent = text.firstIndex(of: "%") {
+                text = String(text[text.startIndex..<percent])
             }
+
+            // Ядро ждёт именно префикс — «адрес/длина». Голый адрес роняет его
+            // в netip.ParsePrefix с «no '/'».
+            let prefix = Self.prefixLength(of: ifa.ifa_netmask, family: family)
+            byName[name, default: []].append("\(text)/\(prefix)")
         }
 
         for (name, addresses) in byName {
@@ -226,6 +237,35 @@ final class PlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         }
 
         return NetworkInterfaceIterator(result)
+    }
+
+    /// Длина префикса = количество единичных битов в сетевой маске.
+    private static func prefixLength(of mask: UnsafeMutablePointer<sockaddr>?,
+                                     family: UInt8) -> Int32 {
+        let full: Int32 = family == UInt8(AF_INET) ? 32 : 128
+        guard let mask else { return full }
+
+        // Смещение и длина той части структуры, где лежат байты маски.
+        let offset: Int
+        let count: Int
+        if family == UInt8(AF_INET) {
+            offset = MemoryLayout<sockaddr_in>.offset(of: \.sin_addr) ?? 4
+            count = 4
+        } else {
+            offset = MemoryLayout<sockaddr_in6>.offset(of: \.sin6_addr) ?? 8
+            count = 16
+        }
+
+        // sa_len у маски бывает урезанным — читать за его границей нельзя.
+        let available = Int(mask.pointee.sa_len) - offset
+        guard available > 0 else { return full }
+
+        var bits: Int32 = 0
+        let raw = UnsafeRawPointer(mask).advanced(by: offset)
+        for i in 0..<min(count, available) {
+            bits += Int32(raw.load(fromByteOffset: i, as: UInt8.self).nonzeroBitCount)
+        }
+        return bits
     }
 
     private static func interfaceType(_ name: String) -> Int32 {
