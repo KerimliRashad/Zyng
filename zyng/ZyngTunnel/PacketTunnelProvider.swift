@@ -21,6 +21,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
         do {
             let key = try readKey()
+
+            // Схему логируем, содержимое ключа — нет: там пароли и UUID.
+            NSLog("🔵 Zyng: протокол \(key.prefix(while: { $0 != ":" }))")
+
             let config = try SingBoxConfig.makeConfig(from: key)
 
             try setupCore()

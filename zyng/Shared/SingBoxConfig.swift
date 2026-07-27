@@ -31,21 +31,28 @@ enum SingBoxConfig {
         let outbound = try makeOutbound(from: key)
 
         let config: [String: Any] = [
-            "log": ["level": "warn", "timestamp": false],
+            // info, а не warn: иначе в логе не видно, на чём именно ядро
+            // споткнулось при установке соединения.
+            "log": ["level": "info", "timestamp": false],
 
+            // Формат DNS начиная с 1.12: сервер задаётся полями type/server,
+            // а не строкой address, как было раньше.
             "dns": [
                 "servers": [
-                    ["tag": "remote", "address": "1.1.1.1", "detour": "proxy"],
-                    ["tag": "local",  "address": "223.5.5.5", "detour": "direct"]
+                    [
+                        "type": "udp",
+                        "tag": "dns-remote",
+                        "server": "1.1.1.1",
+                        "detour": "proxy"
+                    ],
+                    [
+                        "type": "udp",
+                        "tag": "dns-direct",
+                        "server": "8.8.8.8",
+                        "detour": "direct"
+                    ]
                 ],
-                "rules": [
-                    // Адрес самого сервера резолвим напрямую, иначе получим
-                    // курицу и яйцо: чтобы подключиться, нужен DNS, а DNS идёт
-                    // через подключение.
-                    ["outbound": "any", "server": "local"]
-                ],
-                "final": "remote",
-                "strategy": "prefer_ipv4"
+                "final": "dns-remote"
             ],
 
             "inbounds": [[
@@ -56,7 +63,7 @@ enum SingBoxConfig {
                 "auto_route": true,
                 "strict_route": false,
                 // gvisor — пользовательский стек. На iOS обязателен: системный
-                // недоступен внутри расширения.
+                // внутри расширения недоступен.
                 "stack": "gvisor"
             ]],
 
@@ -71,7 +78,11 @@ enum SingBoxConfig {
                     ["protocol": "dns", "action": "hijack-dns"]
                 ],
                 "final": "proxy",
-                "auto_detect_interface": true
+                "auto_detect_interface": true,
+                // Обязательно с 1.12. Адрес сервера из ключа — обычно домен,
+                // и разрешать его нужно НЕ через прокси: иначе замкнутый круг —
+                // чтобы подключиться, нужен DNS, а DNS идёт через подключение.
+                "default_domain_resolver": "dns-direct"
             ]
         ]
 
