@@ -19,6 +19,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                               completionHandler: @escaping (Error?) -> Void) {
         NSLog("🔵 Zyng: startTunnel, ядро \(LibboxVersion())")
 
+        // Причину прошлой неудачи убираем сразу: иначе после успешного
+        // подключения приложение покажет устаревшую ошибку.
+        TunnelDiagnostics.clear()
+
         do {
             let key = try readKey()
 
@@ -55,6 +59,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
         } catch {
             NSLog("❌ Zyng: запуск не удался: \(error.localizedDescription)")
+            // Приложение прочитает это и покажет на экране: своих логов
+            // расширения оно не видит.
+            TunnelDiagnostics.record(error.localizedDescription)
             completionHandler(error)
         }
     }
@@ -94,6 +101,17 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
         for dir in [base, work, temp] {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        // Ядро написано на Go: при панике процесс умирает мгновенно и ничего
+        // сообщить через NetworkExtension не успевает — приложение видит просто
+        // «отключено». Поэтому весь его вывод уводим в файл, который переживёт
+        // смерть процесса и который прочитает приложение.
+        if let stderrPath = TunnelDiagnostics.stderrPath {
+            var redirectError: NSError?
+            if !LibboxRedirectStderr(stderrPath, &redirectError) {
+                NSLog("⚠️ Zyng: не удалось перенаправить вывод ядра: \(redirectError?.localizedDescription ?? "")")
+            }
         }
 
         let options = LibboxSetupOptions()

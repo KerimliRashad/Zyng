@@ -54,10 +54,30 @@ final class VPNController: NSObject, ObservableObject {
     private func syncStatus() {
         let newStatus = manager?.connection.status ?? .invalid
         guard newStatus != status else { return }
+
+        let previous = status
         status = newStatus
         NSLog("🔵 Zyng: VPN status = \(Self.name(for: newStatus))")
-        if newStatus == .connected {
+
+        switch newStatus {
+        case .connected:
             errorMessage = nil
+
+        case .disconnected where previous == .connecting || previous == .reasserting:
+            // Туннель отвалился, не успев подняться. Своей ошибки система тут
+            // не даёт, поэтому забираем причину у расширения через App Group.
+            // Ядро пишет её с небольшой задержкой — отсюда пауза.
+            Task {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                if let reason = TunnelDiagnostics.lastFailure() {
+                    errorMessage = reason
+                } else {
+                    errorMessage = "Туннель отключился, не подключившись. Проверь ключ сервера."
+                }
+            }
+
+        default:
+            break
         }
     }
 

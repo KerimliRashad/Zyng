@@ -196,8 +196,16 @@ struct ContentView: View {
                 statusPill.padding(.top, 18)
                 timerLabel.padding(.top, 6)
                 if let err = vpn.errorMessage {
-                    Text(err).foregroundColor(JT.red).font(.system(size: 12))
-                        .padding(.top, 8).padding(.horizontal, 20).multilineTextAlignment(.center)
+                    // Сообщение от ядра бывает длинным, а скопировать его нужно
+                    // целиком — иначе причину сбоя не разобрать.
+                    Text(err)
+                        .foregroundColor(JT.red)
+                        .font(.system(size: 12, design: .monospaced))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 20)
+                        .multilineTextAlignment(.center)
                 }
                 Spacer(minLength: 8)
                 locationCard.padding(.horizontal, 20)
