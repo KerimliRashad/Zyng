@@ -27,12 +27,20 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
             // Проверяем конфиг до запуска: иначе ошибка всплыла бы уже внутри
             // ядра, а туннель просто завис бы в состоянии «подключение».
-            try LibboxCheckConfig(config)
+            var checkError: NSError?
+            guard LibboxCheckConfig(config, &checkError) else {
+                throw checkError ?? Self.coreError("Конфигурация отвергнута ядром")
+            }
 
             let platform = PlatformInterface(provider: self)
             self.platform = platform
 
-            let server = try LibboxNewCommandServer(CommandHandler(provider: self), platform)
+            var serverError: NSError?
+            guard let server = LibboxNewCommandServer(
+                CommandHandler(provider: self), platform, &serverError
+            ) else {
+                throw serverError ?? Self.coreError("Не удалось создать сервис ядра")
+            }
             self.commandServer = server
 
             try server.start()
@@ -45,6 +53,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             NSLog("❌ Zyng: запуск не удался: \(error.localizedDescription)")
             completionHandler(error)
         }
+    }
+
+    /// Ядро возвращает false без заполненной ошибки не должно, но полагаться
+    /// на это нельзя — иначе получим падение вместо сообщения.
+    private static func coreError(_ message: String) -> NSError {
+        NSError(domain: "ZyngTunnel", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: message])
     }
 
     /// Ключ приезжает из приложения через providerConfiguration.
@@ -83,7 +98,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         options.tempPath = temp.path
         options.logMaxLines = 200
 
-        try LibboxSetup(options)
+        // Libbox* — это функции, а не методы объектов, поэтому Swift не
+        // превращает их NSError** в throws: указатель передаём сами.
+        var setupError: NSError?
+        guard LibboxSetup(options, &setupError) else {
+            throw setupError ?? Self.coreError("Не удалось инициализировать ядро")
+        }
 
         // У packet tunnel расширения жёсткий лимит памяти (около 50 МБ).
         // Без этого ядро считает, что памяти сколько угодно, и его убивает
