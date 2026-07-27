@@ -307,16 +307,19 @@ enum SingBoxConfig {
         let u = try url(raw)
         let q = query(u)
 
+        // Вычисляем заранее: внутри выражения с ?? бросающий вызов не годится.
+        let server = try host(u)
+
         var out: [String: Any] = [
             "type": "hysteria2",
             "tag": "proxy",
-            "server": try host(u),
+            "server": server,
             "server_port": try port(u),
             "password": u.user?.removingPercentEncoding ?? ""
         ]
 
         var tls: [String: Any] = ["enabled": true]
-        tls["server_name"] = q["sni"] ?? q["peer"] ?? (try host(u))
+        tls["server_name"] = q["sni"] ?? q["peer"] ?? server
         if q["insecure"] == "1" || q["allowInsecure"] == "1" {
             tls["insecure"] = true
         }
@@ -343,10 +346,12 @@ enum SingBoxConfig {
 
         guard !uuid.isEmpty else { throw ParseError.malformed("в tuic нет UUID") }
 
+        let server = try host(u)
+
         var out: [String: Any] = [
             "type": "tuic",
             "tag": "proxy",
-            "server": try host(u),
+            "server": server,
             "server_port": try port(u),
             "uuid": uuid,
             "password": password,
@@ -354,7 +359,7 @@ enum SingBoxConfig {
         ]
 
         var tls: [String: Any] = ["enabled": true]
-        tls["server_name"] = q["sni"] ?? (try host(u))
+        tls["server_name"] = q["sni"] ?? server
         if q["allow_insecure"] == "1" || q["insecure"] == "1" {
             tls["insecure"] = true
         }
