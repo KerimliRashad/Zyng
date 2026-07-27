@@ -1,142 +1,170 @@
-@preconcurrency import NetworkExtension
+import NetworkExtension
 import Foundation
 import Combine
 
+/// Управляет жизненным циклом VPN-туннеля Zyng.
+///
+/// Весь класс изолирован на main actor, а работа с NetworkExtension идёт через
+/// async/await-варианты API. Благодаря этому `NETunnelProviderManager` (не Sendable)
+/// никогда не пересекает границу изоляции — отсюда ноль ошибок строгой конкурентности
+/// без обходных путей вроде `nonisolated(unsafe)`.
+@MainActor
 final class VPNController: NSObject, ObservableObject {
+
     static let shared = VPNController()
 
-    @Published var isConnected = false
+    /// Реальный статус туннеля, а не самодельный флаг: UI больше не рассинхронизируется
+    /// с системой, если VPN отвалился сам.
+    @Published private(set) var status: NEVPNStatus = .invalid
     @Published var errorMessage: String?
 
-    private var manager: NETunnelProviderManager?
-    private let providerBundleIdentifier = "online.zyng.Zyng.ZyngTunnel"
-
-    override init() {
-        super.init()
-        setupStatusObserver()
-        loadExistingManager()
+    var isConnected: Bool { status == .connected }
+    var isTransitioning: Bool {
+        status == .connecting || status == .disconnecting || status == .reasserting
     }
 
-    private func setupStatusObserver() {
+    /// Должен точно совпадать с Bundle ID таргета расширения.
+    private static let providerBundleIdentifier = "online.zyng.Zyng.ZyngTunnel"
+
+    private var manager: NETunnelProviderManager?
+
+    private override init() {
+        super.init()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(vpnStatusDidChange),
             name: .NEVPNStatusDidChange,
             object: nil
         )
+        Task { await restoreExistingConfiguration() }
     }
 
-    private func loadExistingManager() {
-        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
-            self?.manager = managers?.first
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    // MARK: - Статус
+
+    /// Уведомление приходит с произвольного потока, поэтому селектор nonisolated,
+    /// а обновление состояния уходит на main actor.
+    @objc private nonisolated func vpnStatusDidChange() {
+        Task { @MainActor [weak self] in self?.syncStatus() }
+    }
+
+    private func syncStatus() {
+        let newStatus = manager?.connection.status ?? .invalid
+        guard newStatus != status else { return }
+        status = newStatus
+        NSLog("🔵 Zyng: VPN status = \(Self.name(for: newStatus))")
+        if newStatus == .connected {
+            errorMessage = nil
         }
     }
 
-    @objc private func vpnStatusDidChange() {
-        DispatchQueue.main.async { [weak self] in
-            self?.updateConnectionStatus()
+    private func restoreExistingConfiguration() async {
+        do {
+            manager = try await NETunnelProviderManager.loadAllFromPreferences().first
+            syncStatus()
+        } catch {
+            // Раньше эта ошибка молча проглатывалась, и настоящая причина
+            // ("permission denied") всплывала гораздо позже и в другом месте.
+            NSLog("⚠️ Zyng: не удалось загрузить конфигурацию: \(error)")
+            errorMessage = Self.describe(error)
         }
     }
 
-    private func updateConnectionStatus() {
-        isConnected = manager?.connection.status == .connected
-        NSLog("🔵 VPN Status: \(manager?.connection.status.rawValue ?? -1)")
-    }
+    // MARK: - Подключение
 
-    func connect(key: String, completion: @escaping (Error?) -> Void) {
-        nonisolated(unsafe) let handler = completion
-
-        guard !key.isEmpty else {
-            let error = NSError(domain: "ZyngVPN", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "VPN key is empty"])
-            DispatchQueue.main.async { [weak self] in
-                self?.errorMessage = "Invalid VPN key"
-            }
-            handler(error)
+    func connect(key: String) async {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Ключ пустой"
             return
         }
 
-        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
-            guard let self = self else {
-                handler(NSError(domain: "ZyngVPN", code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "Deallocated"]))
-                return
-            }
+        errorMessage = nil
 
-            for mgr in managers ?? [] {
-                mgr.removeFromPreferences()
-            }
+        do {
+            // Переиспользуем существующую конфигурацию вместо удаления и создания
+            // новой. Прошлый вариант вызывал removeFromPreferences() не дожидаясь
+            // завершения и тут же сохранял новый профиль — гонка с системной базой
+            // настроек, которая и выдавала NEVPNErrorConfigurationInvalid.
+            let existing = try await NETunnelProviderManager.loadAllFromPreferences()
+            let manager = existing.first ?? NETunnelProviderManager()
 
-            let m = NETunnelProviderManager()
-            let proto = NETunnelProviderProtocol()
-
-            proto.providerBundleIdentifier = self.providerBundleIdentifier
+            let proto = (manager.protocolConfiguration as? NETunnelProviderProtocol)
+                ?? NETunnelProviderProtocol()
+            proto.providerBundleIdentifier = Self.providerBundleIdentifier
             proto.serverAddress = "Zyng"
-            proto.providerConfiguration = ["key": key]
+            proto.providerConfiguration = ["key": trimmed]
 
-            m.protocolConfiguration = proto
-            m.localizedDescription = "Zyng VPN"
-            m.isEnabled = true
-            m.isOnDemandEnabled = false
+            manager.protocolConfiguration = proto
+            manager.localizedDescription = "Zyng VPN"
+            manager.isEnabled = true
+            manager.isOnDemandEnabled = false
 
-            m.saveToPreferences { [weak self] saveError in
-                guard let self = self else {
-                    handler(NSError(domain: "ZyngVPN", code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Deallocated"]))
-                    return
-                }
+            try await manager.saveToPreferences()
+            // Сохранение помечает объект в памяти устаревшим: без повторной загрузки
+            // startVPNTunnel() бросает NEVPNErrorConfigurationInvalid.
+            try await manager.loadFromPreferences()
 
-                if let error = saveError {
-                    NSLog("❌ Save error: \(error)")
-                    DispatchQueue.main.async { [weak self] in
-                        self?.errorMessage = error.localizedDescription
-                    }
-                    handler(error)
-                    return
-                }
+            self.manager = manager
 
-                m.loadFromPreferences { [weak self] loadError in
-                    guard let self = self else {
-                        handler(NSError(domain: "ZyngVPN", code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "Deallocated"]))
-                        return
-                    }
-
-                    if let error = loadError {
-                        NSLog("❌ Load error: \(error)")
-                        DispatchQueue.main.async { [weak self] in
-                            self?.errorMessage = error.localizedDescription
-                        }
-                        handler(error)
-                        return
-                    }
-
-                    self.manager = m
-                    do {
-                        NSLog("🟡 Attempting to start VPN tunnel...")
-                        try m.connection.startVPNTunnel()
-                        NSLog("✅ VPN tunnel started")
-                        DispatchQueue.main.async { [weak self] in
-                            self?.updateConnectionStatus()
-                        }
-                        handler(nil)
-                    } catch {
-                        NSLog("❌ Start tunnel error: \(error)")
-                        DispatchQueue.main.async { [weak self] in
-                            self?.errorMessage = error.localizedDescription
-                        }
-                        handler(error)
-                    }
-                }
-            }
+            NSLog("🟡 Zyng: запускаю туннель…")
+            try manager.connection.startVPNTunnel()
+            // Успех здесь означает только «запрос принят». Реальное подключение
+            // придёт через .NEVPNStatusDidChange, поэтому UI ведём от статуса.
+            syncStatus()
+        } catch {
+            NSLog("❌ Zyng: подключение не удалось: \(error)")
+            errorMessage = Self.describe(error)
+            status = manager?.connection.status ?? .invalid
         }
     }
 
     func disconnect() {
-        NSLog("🛑 Disconnecting VPN")
-        DispatchQueue.main.async { [weak self] in
-            self?.manager?.connection.stopVPNTunnel()
-            self?.isConnected = false
+        NSLog("🛑 Zyng: отключение")
+        manager?.connection.stopVPNTunnel()
+        syncStatus()
+    }
+
+    // MARK: - Диагностика
+
+    private static func name(for status: NEVPNStatus) -> String {
+        switch status {
+        case .invalid:       return "invalid"
+        case .disconnected:  return "disconnected"
+        case .connecting:    return "connecting"
+        case .connected:     return "connected"
+        case .reasserting:   return "reasserting"
+        case .disconnecting: return "disconnecting"
+        @unknown default:    return "unknown(\(status.rawValue))"
+        }
+    }
+
+    /// Коды NEVPNErrorDomain почти всегда указывают на конкретную проблему
+    /// конфигурации, а не на «что-то пошло не так».
+    private static func describe(_ error: Error) -> String {
+        let ns = error as NSError
+        guard ns.domain == NEVPNErrorDomain,
+              let code = NEVPNError.Code(rawValue: ns.code) else {
+            return ns.localizedDescription
+        }
+        switch code {
+        case .configurationInvalid:
+            return "Конфигурация VPN недействительна. Проверь, что Bundle ID расширения — \(providerBundleIdentifier)."
+        case .configurationDisabled:
+            return "Конфигурация VPN отключена в Настройках → VPN."
+        case .configurationStale:
+            return "Конфигурация устарела, повтори попытку."
+        case .configurationReadWriteFailed:
+            return "Нет доступа к настройкам VPN. Проверь entitlements Personal VPN и Network Extension."
+        case .connectionFailed:
+            return "Не удалось установить соединение с сервером."
+        case .configurationUnknown:
+            return "Конфигурация VPN не найдена."
+        @unknown default:
+            return ns.localizedDescription
         }
     }
 }

@@ -1,4 +1,6 @@
 import SwiftUI
+import Combine
+import NetworkExtension
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -143,14 +145,18 @@ private enum JT {
 
 // MARK: - Главный экран
 
+@MainActor
 struct ContentView: View {
     @AppStorage("zyng_keys") private var savedRaw: String = ""
+    /// Выбранный сервер запоминаем по строке ключа: `Server.id` генерируется
+    /// заново при каждом парсинге, поэтому по нему выбор не переживал перезапуск.
+    @AppStorage("zyng_selected") private var savedSelected: String = ""
+
     @State private var servers: [Server] = []
     @State private var selectedID: UUID?
 
-    @State private var state: ConnState = .off
+    @State private var connectedAt: Date?
     @State private var elapsed = 0
-    @State private var timer: Timer?
     @State private var pulse = false
 
     @State private var showAdd = false
@@ -158,13 +164,25 @@ struct ContentView: View {
     @State private var input = ""
     @State private var status = ""
     @State private var loading = false
-    @State private var vpnError: String?
 
-    @StateObject private var vpnController = VPNController.shared
+    /// Контроллер — синглтон, мы его не создаём, поэтому ObservedObject, а не StateObject.
+    @ObservedObject private var vpn = VPNController.shared
+
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     enum ConnState { case off, connecting, on }
 
     var selected: Server? { servers.first { $0.id == selectedID } }
+
+    /// Состояние UI выводится напрямую из статуса системы. Отдельного флага больше
+    /// нет — раньше он расходился с реальностью, если VPN отваливался сам.
+    private var state: ConnState {
+        switch vpn.status {
+        case .connected:              return .on
+        case .connecting, .reasserting, .disconnecting: return .connecting
+        default:                      return .off
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -177,7 +195,7 @@ struct ContentView: View {
                 orb
                 statusPill.padding(.top, 18)
                 timerLabel.padding(.top, 6)
-                if let err = vpnError {
+                if let err = vpn.errorMessage {
                     Text(err).foregroundColor(JT.red).font(.system(size: 12))
                         .padding(.top, 8).padding(.horizontal, 20).multilineTextAlignment(.center)
                 }
@@ -189,10 +207,28 @@ struct ContentView: View {
         .onAppear(perform: load)
         .sheet(isPresented: $showAdd)  { addSheet }
         .sheet(isPresented: $showList) { serverListSheet }
-        .onChange(of: vpnController.isConnected) { _, connected in
-            if connected && state == .connecting {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
-            }
+        .onChange(of: vpn.status) { _, newStatus in
+            handle(newStatus)
+        }
+        .onReceive(ticker) { _ in
+            // Считаем от момента подключения, а не счётчиком: счётчик замирал,
+            // когда приложение уходило в фон, и время показывалось неверно.
+            guard let connectedAt, vpn.status == .connected else { return }
+            elapsed = Int(Date().timeIntervalSince(connectedAt))
+        }
+    }
+
+    private func handle(_ newStatus: NEVPNStatus) {
+        switch newStatus {
+        case .connected:
+            if connectedAt == nil { connectedAt = Date() }
+            stopPulse()
+        case .connecting, .reasserting:
+            startPulse()
+        default:
+            connectedAt = nil
+            elapsed = 0
+            stopPulse()
         }
     }
 
@@ -364,7 +400,10 @@ struct ContentView: View {
             }
             Button {
                 servers.removeAll { $0.id == sv.id }
-                if selectedID == sv.id { selectedID = nil; disconnect() }
+                if selectedID == sv.id {
+                    selectedID = servers.first?.id
+                    vpn.disconnect()
+                }
                 save()
             } label: {
                 Image(systemName: "trash").foregroundColor(JT.red.opacity(0.8))
@@ -443,50 +482,28 @@ struct ContentView: View {
     }
 
     private func tapConnect() {
-        guard let selected = selected else { showAdd = true; return }
+        guard let selected else { showAdd = true; return }
+        jtHaptic()
+
         switch state {
         case .off:
-            withAnimation { state = .connecting }
             startPulse()
-            jtHaptic()
-
-            vpnController.connect(key: selected.raw) { error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        withAnimation { state = .off }
-                        stopPulse()
-                        vpnError = "Ошибка: \(error.localizedDescription)"
-                        return
-                    }
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .on }
-                    stopPulse()
-                    startTimer()
-                }
-            }
-        case .connecting: break
-        case .on: disconnect()
+            Task { await vpn.connect(key: selected.raw) }
+        case .connecting:
+            break
+        case .on:
+            vpn.disconnect()
         }
-    }
-
-    private func disconnect() {
-        vpnController.disconnect()
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { state = .off }
-        stopPulse(); stopTimer(); elapsed = 0
     }
 
     private func startPulse() {
         pulse = false
         withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
     }
+
     private func stopPulse() {
         withAnimation(.easeInOut(duration: 0.2)) { pulse = false }
     }
-
-    private func startTimer() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in elapsed += 1 }
-    }
-    private func stopTimer() { timer?.invalidate(); timer = nil }
 
     private func timeString(_ s: Int) -> String {
         String(format: "%02d:%02d:%02d", s/3600, (s%3600)/60, s%60)
@@ -556,10 +573,12 @@ struct ContentView: View {
 
     func save() {
         savedRaw = servers.map { $0.raw }.joined(separator: "\n")
+        savedSelected = selected?.raw ?? ""
     }
+
     func load() {
         servers = savedRaw.split(whereSeparator: \.isNewline).compactMap { parseServer(String($0)) }
-        if selectedID == nil { selectedID = servers.first?.id }
+        selectedID = servers.first { $0.raw == savedSelected }?.id ?? servers.first?.id
     }
 }
 
