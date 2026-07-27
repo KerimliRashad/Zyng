@@ -238,8 +238,8 @@ final class PlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     /// В Network Extension сокеты, созданные расширением, и так идут мимо
     /// туннеля — привязывать их к интерфейсу вручную не нужно.
-    func usePlatformAutoDetectInterfaceControl() -> Bool { true }
-    func autoDetectInterfaceControl(_ fd: Int32) throws {}
+    func usePlatformAutoDetectControl() -> Bool { true }
+    func autoDetectControl(_ fd: Int32) throws {}
 
     func underNetworkExtension() -> Bool { true }
 
@@ -272,7 +272,7 @@ final class PlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     func clearDNSCache() {}
 
-    func sendNotification(_ notification: LibboxNotification?) throws {}
+    func send(_ notification: LibboxNotification?) throws {}
 
     // MARK: - Разбор итераторов ядра
 
