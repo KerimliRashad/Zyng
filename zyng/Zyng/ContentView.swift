@@ -167,6 +167,7 @@ struct ContentView: View {
 
     /// Контроллер — синглтон, мы его не создаём, поэтому ObservedObject, а не StateObject.
     @ObservedObject private var vpn = VPNController.shared
+    @StateObject private var ping = PingMonitor()
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -195,6 +196,7 @@ struct ContentView: View {
                 orb
                 statusPill.padding(.top, 18)
                 timerLabel.padding(.top, 6)
+                pingLabel.padding(.top, 4)
                 if let err = vpn.errorMessage {
                     // Сообщение от ядра бывает длинным, а скопировать его нужно
                     // целиком — иначе причину сбоя не разобрать.
@@ -212,7 +214,12 @@ struct ContentView: View {
                 addButton.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
             }
         }
-        .onAppear(perform: load)
+        .onAppear {
+            load()
+            // Приложение могли открыть при уже поднятом туннеле — тогда
+            // onChange не сработает, и замер надо запустить самим.
+            handle(vpn.status)
+        }
         .sheet(isPresented: $showAdd)  { addSheet }
         .sheet(isPresented: $showList) { serverListSheet }
         .onChange(of: vpn.status) { _, newStatus in
@@ -231,12 +238,14 @@ struct ContentView: View {
         case .connected:
             if connectedAt == nil { connectedAt = Date() }
             stopPulse()
+            ping.start()
         case .connecting, .reasserting:
             startPulse()
         default:
             connectedAt = nil
             elapsed = 0
             stopPulse()
+            ping.stop()
         }
     }
 
@@ -313,6 +322,41 @@ struct ContentView: View {
         Text(timeString(elapsed))
             .font(.system(size: 15, weight: .medium, design: .monospaced))
             .foregroundColor(state == .on ? JT.text : JT.sub.opacity(0.5))
+    }
+
+    /// Задержка показывается только при активном подключении: без туннеля
+    /// это была бы скорость обычной сети, а не VPN.
+    @ViewBuilder
+    private var pingLabel: some View {
+        if state == .on {
+            HStack(spacing: 6) {
+                Image(systemName: "speedometer")
+                    .font(.system(size: 12, weight: .semibold))
+
+                if let ms = ping.latency {
+                    Text("\(ms) мс")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                } else if ping.failed {
+                    Text("нет ответа")
+                        .font(.system(size: 13, weight: .medium))
+                } else {
+                    Text("измеряю…")
+                        .font(.system(size: 13, weight: .medium))
+                }
+            }
+            .foregroundColor(pingColor)
+            .transition(.opacity)
+        }
+    }
+
+    /// Зелёный до 100 мс, жёлтый до 250, дальше красный.
+    private var pingColor: Color {
+        guard let ms = ping.latency else { return JT.sub }
+        switch ms {
+        case ..<100:  return JT.green
+        case ..<250:  return JT.accent
+        default:      return JT.red
+        }
     }
 
     private var locationCard: some View {
