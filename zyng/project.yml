@@ -37,11 +37,9 @@ targets:
       - target: ZyngTunnel
         embed: true
       - sdk: NetworkExtension.framework
-      # Ядро — динамическая библиотека, поэтому лежать она должна в бандле
-      # приложения. Расширение линкуется с ней, но своей копии не имеет.
-      - framework: Frameworks/Libbox.xcframework
-        embed: true
-        codeSign: true
+      # Ядро приложению не нужно: с ним работает только расширение.
+      # Раньше фреймворк встраивался сюда — но gomobile собирает его статически,
+      # и dyld убивал приложение на старте, не найдя в бандле настоящую dylib.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng
@@ -63,8 +61,11 @@ targets:
     dependencies:
       - sdk: NetworkExtension.framework
       # Ядро sing-box. Собирается скриптом ./build-libbox.sh — в git не хранится.
+      # Библиотека статическая: её код попадает прямо в бинарник расширения,
+      # поэтому embed выключен — копировать в бандл нечего.
       - framework: Frameworks/Libbox.xcframework
         embed: false
+        link: true
       # Сетевой код Go зовёт системный резолвер (res_9_ninit и соседи).
       # Без этой библиотеки линковка расширения падает на неизвестных символах.
       - sdk: libresolv.tbd
