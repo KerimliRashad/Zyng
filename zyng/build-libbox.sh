@@ -115,6 +115,10 @@ gomobile bind -v \
   -o "$OUT/Libbox.xcframework" \
   ./experimental/libbox
 
+# gomobile отдаёт фреймворк в формате macOS (Versions/Current/…), а iOS требует
+# плоский бандл. Без этого сборка падает на этапе встраивания в приложение.
+"$ROOT/flatten-libbox.sh"
+
 echo ""
 echo "✅ Готово: $OUT/Libbox.xcframework"
 echo "   Версия ядра: $SB_VERSION"
