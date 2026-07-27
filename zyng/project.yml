@@ -31,6 +31,7 @@ targets:
     platform: iOS
     sources:
       - path: Zyng
+      - path: Shared
     dependencies:
       # Это и есть «Embed App Extensions» — расширение вкладывается в .app само.
       - target: ZyngTunnel
@@ -53,8 +54,12 @@ targets:
     platform: iOS
     sources:
       - path: ZyngTunnel
+      - path: Shared
     dependencies:
       - sdk: NetworkExtension.framework
+      # Ядро sing-box. Собирается скриптом ./build-libbox.sh — в git не хранится.
+      - framework: Frameworks/Libbox.xcframework
+        embed: false
     settings:
       base:
         # Bundle ID расширения обязан начинаться с Bundle ID приложения.

@@ -7,3 +7,7 @@ DerivedData/
 .DS_Store
 xcuserdata/
 *.xcuserstate
+
+# Ядро sing-box: собирается ./build-libbox.sh, в git не хранится (сотни МБ).
+Frameworks/
+.build/
