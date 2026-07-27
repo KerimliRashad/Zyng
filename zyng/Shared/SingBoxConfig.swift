@@ -46,10 +46,13 @@ enum SingBoxConfig {
                         "detour": "proxy"
                     ],
                     [
+                        // Без detour запрос идёт напрямую, мимо туннеля —
+                        // именно это и нужно, чтобы разрешить адрес сервера.
+                        // Указывать detour на пустой direct-выход в 1.13 нельзя:
+                        // «detour to an empty direct outbound makes no sense».
                         "type": "udp",
                         "tag": "dns-direct",
-                        "server": "8.8.8.8",
-                        "detour": "direct"
+                        "server": "8.8.8.8"
                     ]
                 ],
                 "final": "dns-remote"
@@ -67,10 +70,9 @@ enum SingBoxConfig {
                 "stack": "gvisor"
             ]],
 
-            "outbounds": [
-                outbound,
-                ["type": "direct", "tag": "direct"]
-            ],
+            // Пустой direct-выход больше не нужен: прямые соединения ядро
+            // делает само, когда обходной путь не задан.
+            "outbounds": [outbound],
 
             "route": [
                 "rules": [
