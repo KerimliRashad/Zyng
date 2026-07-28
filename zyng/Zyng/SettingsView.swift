@@ -144,6 +144,13 @@ struct SettingsView: View {
                 )
 
                 toggleRow(
+                    icon: "bolt.shield.fill",
+                    title: "Live Activity",
+                    subtitle: "Статус соединения на экране блокировки и в Dynamic Island. Появляется при запуске туннеля из приложения",
+                    isOn: $settings.liveActivity
+                )
+
+                toggleRow(
                     icon: "iphone.radiowaves.left.and.right",
                     title: "Вибрация",
                     subtitle: "Отклик при нажатии кнопок",
@@ -202,13 +209,15 @@ struct SettingsView: View {
                 linkRow(
                     icon: "hand.raised.fill",
                     title: "Политика конфиденциальности",
+                    subtitle: "Что приложение делает с данными",
                     url: "https://zyng.online/privacy.html"
                 )
 
                 linkRow(
-                    icon: "questionmark.circle.fill",
-                    title: "Поддержка",
-                    url: "https://zyng.online"
+                    icon: "paperplane.fill",
+                    title: "Канал в Telegram",
+                    subtitle: "Новости, ключи и помощь",
+                    url: "https://t.me/jeffvpn"
                 )
             }
         }
@@ -232,16 +241,24 @@ struct SettingsView: View {
         )
     }
 
-    private func linkRow(icon: String, title: String, url: String) -> some View {
+    private func linkRow(icon: String,
+                         title: String,
+                         subtitle: String,
+                         url: String) -> some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .foregroundColor(JT.accent)
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: 22)
-                Text(title)
-                    .foregroundColor(JT.text)
-                    .font(.system(size: 15, weight: .medium))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .foregroundColor(JT.text)
+                        .font(.system(size: 15, weight: .medium))
+                    Text(subtitle)
+                        .foregroundColor(JT.sub)
+                        .font(.system(size: 11))
+                }
                 Spacer()
                 Image(systemName: "arrow.up.right")
                     .foregroundColor(JT.sub)

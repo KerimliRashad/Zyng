@@ -216,6 +216,13 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            #if canImport(ActivityKit)
+            // Плашка могла остаться от прошлого запуска, если приложение
+            // выгрузили, не отключая туннель.
+            if vpn.status != .connected {
+                LiveActivityController.shared.cleanupStale()
+            }
+            #endif
             // Приложение могли открыть при уже поднятом туннеле — тогда
             // onChange не сработает, и замер надо запустить самим.
             handle(vpn.status)
@@ -237,6 +244,17 @@ struct ContentView: View {
             }
             elapsed = max(0, Int(Date().timeIntervalSince(started)))
         }
+        .onChange(of: ping.samples) { _, _ in
+            #if canImport(ActivityKit)
+            guard vpn.status == .connected, let started = vpn.connectedDate else { return }
+            LiveActivityController.shared.update(
+                serverName: selected?.name ?? "Zyng",
+                flag: selected?.flag ?? "🌐",
+                connectedAt: started,
+                latency: ping.latency
+            )
+            #endif
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             // Пока приложение было свёрнуто, уведомления о смене статуса не
@@ -253,13 +271,31 @@ struct ContentView: View {
         case .connected:
             stopPulse()
             ping.start()
+            startLiveActivity()
         case .connecting, .reasserting:
             startPulse()
         default:
             elapsed = 0
             stopPulse()
             ping.stop()
+            #if canImport(ActivityKit)
+            LiveActivityController.shared.stop()
+            #endif
         }
+    }
+
+    /// Плашка на экране блокировки. Время в ней система отсчитывает сама по
+    /// дате подключения, поэтому обновляем её только при смене задержки.
+    private func startLiveActivity() {
+        #if canImport(ActivityKit)
+        guard let started = vpn.connectedDate else { return }
+        LiveActivityController.shared.start(
+            serverName: selected?.name ?? "Zyng",
+            flag: selected?.flag ?? "🌐",
+            connectedAt: started,
+            latency: ping.latency
+        )
+        #endif
     }
 
     private var header: some View {

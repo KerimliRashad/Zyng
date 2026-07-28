@@ -36,6 +36,8 @@ targets:
       # Это и есть «Embed App Extensions» — расширение вкладывается в .app само.
       - target: ZyngTunnel
         embed: true
+      - target: ZyngWidgets
+        embed: true
       - sdk: NetworkExtension.framework
       # Ядро приложению не нужно: с ним работает только расширение.
       # Раньше фреймворк встраивался сюда — но gomobile собирает его статически,
@@ -79,3 +81,25 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ZyngTunnel/ZyngTunnel.entitlements
         INFOPLIST_FILE: ZyngTunnel/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+
+  ZyngWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ZyngWidgets
+      # Описание Live Activity общее с приложением: одна и та же структура
+      # должна компилироваться в оба таргета, иначе система их не свяжет.
+      - path: Shared/TunnelActivity.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngWidgets
+        PRODUCT_NAME: ZyngWidgets
+        MARKETING_VERSION: "1.1"
+        CURRENT_PROJECT_VERSION: "4"
+        CODE_SIGN_ENTITLEMENTS: ZyngWidgets/ZyngWidgets.entitlements
+        INFOPLIST_FILE: ZyngWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES

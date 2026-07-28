@@ -15,7 +15,7 @@ final class AppSettings: ObservableObject {
         static let dns = "settings_dns"
         static let autoConnect = "settings_autoconnect"
         static let haptics = "settings_haptics"
-        static let blockAds = "settings_block_ads"
+        static let liveActivity = "settings_live_activity"
     }
 
     // MARK: - DNS
@@ -79,6 +79,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(haptics, forKey: Key.haptics) }
     }
 
+    /// Плашка соединения на экране блокировки и в Dynamic Island.
+    @Published var liveActivity: Bool {
+        didSet { defaults.set(liveActivity, forKey: Key.liveActivity) }
+    }
+
     private init() {
         let stored = defaults.string(forKey: Key.dns) ?? DNSProvider.cloudflare.rawValue
         dns = DNSProvider(rawValue: stored) ?? .cloudflare
@@ -87,6 +92,7 @@ final class AppSettings: ObservableObject {
         // поэтому для вибрации задаём true явно.
         autoConnect = defaults.bool(forKey: Key.autoConnect)
         haptics = defaults.object(forKey: Key.haptics) as? Bool ?? true
+        liveActivity = defaults.object(forKey: Key.liveActivity) as? Bool ?? true
     }
 
     // MARK: - Версии
