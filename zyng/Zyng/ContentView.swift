@@ -101,7 +101,7 @@ func parseServer(_ raw: String) -> Server? {
     // Ровно то, что умеет собрать SingBoxConfig. Лишние схемы здесь означали бы
     // ключ, который добавляется и красиво выглядит, а падает при подключении.
     let ok = ["vless","vmess","trojan","ss","shadowsocks","socks","socks5",
-              "wireguard","wg","hysteria2","hy2","tuic"]
+              "hysteria2","hy2","tuic"]
     guard ok.contains(scheme) else { return nil }
     var name = ""
     if let h = s.firstIndex(of: "#") {
@@ -111,7 +111,6 @@ func parseServer(_ raw: String) -> Server? {
     let proto: String
     switch scheme {
     case "hy2":         proto = "HYSTERIA2"
-    case "wg":          proto = "WIREGUARD"
     case "shadowsocks": proto = "SS"
     case "socks5":      proto = "SOCKS"
     default:            proto = scheme.uppercased()
