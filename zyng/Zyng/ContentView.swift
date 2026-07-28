@@ -153,7 +153,13 @@ struct ContentView: View {
     @ObservedObject private var store = ServerStore.shared
 
     @State private var elapsed = 0
-    @State private var pulse = false
+
+    // Анимация кнопки подключения.
+    @State private var outerAngle: Double = 0
+    @State private var innerAngle: Double = 0
+    @State private var glow: CGFloat = 1
+    @State private var boltScale: CGFloat = 1
+    @State private var pressed = false
 
     @State private var showAdd = false
     @State private var showList = false
@@ -269,14 +275,13 @@ struct ContentView: View {
     private func handle(_ newStatus: NEVPNStatus) {
         switch newStatus {
         case .connected:
-            stopPulse()
             ping.start()
             startLiveActivity()
         case .connecting, .reasserting:
-            startPulse()
+            // Анимация кольца сама ускоряется по состоянию — здесь делать нечего.
+            break
         default:
             elapsed = 0
-            stopPulse()
             ping.stop()
             #if canImport(ActivityKit)
             LiveActivityController.shared.stop()
@@ -344,31 +349,129 @@ struct ContentView: View {
 
     private var orb: some View {
         let color: Color = state == .on ? JT.green : (state == .connecting ? JT.accent : JT.sub)
+
         return Button {
             tapConnect()
         } label: {
             ZStack {
-                Circle().fill(color.opacity(0.14)).frame(width: 250, height: 250).blur(radius: 12)
-                    .scaleEffect(pulse ? 1.06 : 0.94)
-                Circle().stroke(color.opacity(0.25), lineWidth: 1).frame(width: 230, height: 230)
-                Circle().stroke(color.opacity(0.35), lineWidth: 1).frame(width: 190, height: 190)
+                // Свечение: дышит при подключении и в процессе, спокойно в покое.
                 Circle()
-                    .fill(LinearGradient(colors:[JT.cardHi, JT.card],
-                                         startPoint:.topLeading, endPoint:.bottomTrailing))
+                    .fill(
+                        RadialGradient(
+                            colors: [color.opacity(0.35), color.opacity(0.02)],
+                            center: .center, startRadius: 30, endRadius: 140
+                        )
+                    )
+                    .frame(width: 270, height: 270)
+                    .blur(radius: 14)
+                    .scaleEffect(glow)
+                    .opacity(state == .off ? 0.5 : 1)
+
+                // Внешнее кольцо: разомкнутая дуга, вращается по часовой.
+                Circle()
+                    .trim(from: 0, to: 0.72)
+                    .stroke(
+                        AngularGradient(
+                            colors: [color.opacity(0), color.opacity(0.55), color.opacity(0)],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                    )
+                    .frame(width: 236, height: 236)
+                    .rotationEffect(.degrees(outerAngle))
+
+                // Внутреннее кольцо крутится в обратную сторону — так движение
+                // читается, даже когда скорость небольшая.
+                Circle()
+                    .trim(from: 0, to: 0.45)
+                    .stroke(
+                        AngularGradient(
+                            colors: [color.opacity(0), color.opacity(0.7), color.opacity(0)],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                    )
+                    .frame(width: 196, height: 196)
+                    .rotationEffect(.degrees(innerAngle))
+
+                // Ободок вокруг кнопки — ровный, чтобы форма читалась.
+                Circle()
+                    .stroke(color.opacity(0.18), lineWidth: 1)
+                    .frame(width: 216, height: 216)
+
+                // Сама кнопка.
+                Circle()
+                    .fill(
+                        LinearGradient(colors: [JT.cardHi, JT.card],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
                     .frame(width: 168, height: 168)
                     .overlay(Circle().stroke(color.opacity(0.55), lineWidth: 2))
-                    .shadow(color: color.opacity(0.35), radius: 24)
+                    .shadow(color: color.opacity(0.4), radius: 26)
+                    .scaleEffect(pressed ? 0.94 : 1)
+
                 VStack(spacing: 8) {
                     Image(systemName: state == .on ? "bolt.fill" : "power")
                         .font(.system(size: 40, weight: .bold))
                         .foregroundColor(color)
+                        .scaleEffect(state == .on ? boltScale : 1)
+
                     Text(state == .on ? "ВКЛ" : (state == .connecting ? "…" : "ВЫКЛ"))
                         .font(.system(size: 13, weight: .bold)).tracking(2)
                         .foregroundColor(JT.sub)
                 }
+                .scaleEffect(pressed ? 0.94 : 1)
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pressed)
+            .animation(.easeInOut(duration: 0.4), value: state)
         }
         .buttonStyle(.plain)
+        // Нажатие отслеживаем сами: у кнопки со своим оформлением нет
+        // встроенной подсветки, а отклик на палец нужен.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in pressed = true }
+                .onEnded { _ in pressed = false }
+        )
+        .onAppear { startOrbAnimation() }
+        .onChange(of: state) { _, _ in startOrbAnimation() }
+    }
+
+    /// Кольца крутятся всегда, но с разной скоростью: быстро при подключении,
+    /// спокойно в остальное время. Свечение и молния дышат только когда
+    /// соединение активно.
+    private func startOrbAnimation() {
+        let outerDuration: Double
+        let innerDuration: Double
+
+        switch state {
+        case .connecting: outerDuration = 1.6; innerDuration = 2.4
+        case .on:         outerDuration = 9;   innerDuration = 13
+        case .off:        outerDuration = 26;  innerDuration = 34
+        }
+
+        withAnimation(.linear(duration: outerDuration).repeatForever(autoreverses: false)) {
+            outerAngle = 360
+        }
+        withAnimation(.linear(duration: innerDuration).repeatForever(autoreverses: false)) {
+            innerAngle = -360
+        }
+
+        if state == .off {
+            withAnimation(.easeInOut(duration: 0.4)) {
+                glow = 1
+                boltScale = 1
+            }
+        } else {
+            withAnimation(.easeInOut(duration: state == .on ? 2.4 : 1).repeatForever()) {
+                glow = state == .on ? 1.08 : 1.14
+            }
+            if state == .on {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever()) {
+                    boltScale = 1.1
+                }
+            }
+        }
     }
 
     private var statusPill: some View {
@@ -553,22 +656,12 @@ struct ContentView: View {
 
         switch state {
         case .off:
-            startPulse()
             Task { await vpn.connect(key: selected.raw) }
         case .connecting:
             break
         case .on:
             vpn.disconnect()
         }
-    }
-
-    private func startPulse() {
-        pulse = false
-        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
-    }
-
-    private func stopPulse() {
-        withAnimation(.easeInOut(duration: 0.2)) { pulse = false }
     }
 
     private func timeString(_ s: Int) -> String {
