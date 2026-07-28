@@ -39,8 +39,8 @@ final class AppSettings: ObservableObject {
 
         var subtitle: String {
             switch self {
-            case .cloudflare: return "1.1.1.1 · быстрый"
-            case .google:     return "8.8.8.8 · надёжный"
+            case .cloudflare: return "1.1.1.1 · быстрый, но блокируется у части провайдеров"
+            case .google:     return "8.8.8.8 · надёжный, работает почти везде"
             case .adguard:    return "94.140.14.14 · режет рекламу"
             case .quad9:      return "9.9.9.9 · блокирует вредоносное"
             }
@@ -85,8 +85,10 @@ final class AppSettings: ObservableObject {
     }
 
     private init() {
-        let stored = defaults.string(forKey: Key.dns) ?? DNSProvider.cloudflare.rawValue
-        dns = DNSProvider(rawValue: stored) ?? .cloudflare
+        // По умолчанию Google: Cloudflare у ряда провайдеров недоступен, и тогда
+        // резолвинг встаёт целиком — соединение есть, а сайты не открываются.
+        let stored = defaults.string(forKey: Key.dns) ?? DNSProvider.google.rawValue
+        dns = DNSProvider(rawValue: stored) ?? .google
 
         // Значения по умолчанию: у отсутствующего ключа bool читается как false,
         // поэтому для вибрации задаём true явно.
