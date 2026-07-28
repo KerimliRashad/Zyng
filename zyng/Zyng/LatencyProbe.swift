@@ -73,16 +73,14 @@ final class LatencyProbe: ObservableObject {
     // MARK: - Замер одного сервера
 
     /// Адрес и порт достаём тем же разборщиком, что строит конфиг ядра, —
-    /// он уже умеет все форматы, включая base64 в vmess.
+    /// он уже умеет все форматы, включая base64 в vmess и пиров WireGuard.
     private static func endpoint(of raw: String) -> (String, UInt16)? {
-        guard let outbound = try? SingBoxConfig.makeOutbound(from: raw),
-              let host = outbound["server"] as? String,
-              let port = outbound["server_port"] as? Int,
-              port > 0, port <= 65535,
-              !host.isEmpty else {
+        guard let server = try? SingBoxConfig.serverEndpoint(from: raw),
+              server.port > 0, server.port <= 65535,
+              !server.host.isEmpty else {
             return nil
         }
-        return (host, UInt16(port))
+        return (server.host, UInt16(server.port))
     }
 
     private static func probe(_ raw: String) async -> Int? {

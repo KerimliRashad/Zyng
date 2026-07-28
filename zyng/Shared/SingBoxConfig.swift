@@ -24,6 +24,16 @@ enum SingBoxConfig {
         }
     }
 
+    /// Куда попадает разобранный ключ в конфиге.
+    ///
+    /// Почти все протоколы — это обычный outbound. WireGuard с версии 1.12
+    /// описывается отдельной секцией `endpoints`: у него собственный
+    /// интерфейс с адресами и списком пиров, а не просто исходящее соединение.
+    enum Proxy {
+        case outbound([String: Any])
+        case endpoint([String: Any])
+    }
+
     // MARK: - Точка входа
 
     /// Полный конфиг sing-box для одного сервера.
@@ -31,7 +41,7 @@ enum SingBoxConfig {
     /// `dns` — адрес резолвера из настроек приложения. Через него пойдут
     /// запросы внутри туннеля.
     static func makeConfig(from key: String, dns: String = "1.1.1.1") throws -> String {
-        let outbound = try makeOutbound(from: key)
+        let proxy = try makeProxy(from: key)
 
         let config: [String: Any] = [
             // info, а не warn: иначе в логе не видно, на чём именно ядро
@@ -83,7 +93,15 @@ enum SingBoxConfig {
 
             // Пустой direct-выход больше не нужен: прямые соединения ядро
             // делает само, когда обходной путь не задан.
-            "outbounds": [outbound],
+            "outbounds": {
+                if case .outbound(let out) = proxy { return [out] }
+                return []
+            }(),
+
+            "endpoints": {
+                if case .endpoint(let end) = proxy { return [end] }
+                return []
+            }(),
 
             "route": [
                 "rules": [
@@ -108,7 +126,28 @@ enum SingBoxConfig {
 
     // MARK: - Разбор ключа в outbound
 
-    static func makeOutbound(from key: String) throws -> [String: Any] {
+    /// Адрес и порт сервера — для замера задержки, без построения конфига.
+    static func serverEndpoint(from key: String) throws -> (host: String, port: Int) {
+        switch try makeProxy(from: key) {
+        case .outbound(let out):
+            guard let host = out["server"] as? String,
+                  let port = out["server_port"] as? Int else {
+                throw ParseError.malformed("нет адреса сервера")
+            }
+            return (host, port)
+
+        case .endpoint(let end):
+            guard let peers = end["peers"] as? [[String: Any]],
+                  let peer = peers.first,
+                  let host = peer["address"] as? String,
+                  let port = peer["port"] as? Int else {
+                throw ParseError.malformed("нет адреса пира")
+            }
+            return (host, port)
+        }
+    }
+
+    static func makeProxy(from key: String) throws -> Proxy {
         let raw = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { throw ParseError.emptyKey }
 
@@ -118,13 +157,14 @@ enum SingBoxConfig {
         let scheme = String(raw[raw.startIndex..<schemeEnd.lowerBound]).lowercased()
 
         switch scheme {
-        case "vless":                 return try vless(raw)
-        case "vmess":                 return try vmess(raw)
-        case "trojan":                return try trojan(raw)
-        case "ss", "shadowsocks":     return try shadowsocks(raw)
-        case "hysteria2", "hy2":      return try hysteria2(raw)
-        case "tuic":                  return try tuic(raw)
-        case "socks", "socks5":       return try socks(raw)
+        case "vless":                 return .outbound(try vless(raw))
+        case "vmess":                 return .outbound(try vmess(raw))
+        case "trojan":                return .outbound(try trojan(raw))
+        case "ss", "shadowsocks":     return .outbound(try shadowsocks(raw))
+        case "hysteria2", "hy2":      return .outbound(try hysteria2(raw))
+        case "tuic":                  return .outbound(try tuic(raw))
+        case "socks", "socks5":       return .outbound(try socks(raw))
+        case "wireguard", "wg":       return .endpoint(try wireguard(raw))
         default:                      throw ParseError.unsupportedScheme(scheme)
         }
     }
@@ -414,6 +454,75 @@ enum SingBoxConfig {
         return out
     }
 
+    // MARK: - WireGuard
+    //
+    // С версии 1.12 WireGuard описывается не outbound-ом, а секцией endpoints:
+    // у него собственный сетевой интерфейс с адресами, а не просто исходящее
+    // соединение.
+    //
+    // Единого стандарта ссылки нет. Разбираем распространённый вид:
+    // wireguard://<приватный_ключ>@host:port?publickey=..&address=10.0.0.2/32
+    //             &presharedkey=..&reserved=0,0,0&mtu=1408#Имя
+
+    private static func wireguard(_ raw: String) throws -> [String: Any] {
+        let u = try url(raw)
+        let q = query(u)
+
+        guard let privateKey = u.user?.removingPercentEncoding, !privateKey.isEmpty else {
+            throw ParseError.malformed("в wireguard нет приватного ключа")
+        }
+        guard let publicKey = (q["publickey"] ?? q["public_key"] ?? q["pubkey"]),
+              !publicKey.isEmpty else {
+            throw ParseError.malformed("в wireguard нет публичного ключа пира")
+        }
+
+        // Локальные адреса интерфейса. Без маски подставляем /32 и /128 —
+        // иначе ядро не разберёт префикс.
+        let rawAddresses = (q["address"] ?? q["ip"] ?? "")
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .map { address -> String in
+                guard !address.contains("/") else { return address }
+                return address.contains(":") ? "\(address)/128" : "\(address)/32"
+            }
+
+        let addresses = rawAddresses.isEmpty ? ["172.16.0.2/32"] : rawAddresses
+
+        var peer: [String: Any] = [
+            "address": try host(u),
+            "port": try port(u),
+            "public_key": publicKey,
+            // Весь трафик — в туннель: маршрутизацией занимается route.
+            "allowed_ips": ["0.0.0.0/0", "::/0"]
+        ]
+
+        if let psk = (q["presharedkey"] ?? q["pre_shared_key"] ?? q["psk"]), !psk.isEmpty {
+            peer["pre_shared_key"] = psk
+        }
+
+        // reserved=1,2,3 — приём, которым пользуются некоторые провайдеры
+        // (в частности, WARP), чтобы пометить свои пакеты.
+        if let reserved = q["reserved"], !reserved.isEmpty {
+            let values = reserved.components(separatedBy: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            if values.count == 3 { peer["reserved"] = values }
+        }
+
+        var endpoint: [String: Any] = [
+            "type": "wireguard",
+            "tag": "proxy",
+            "address": addresses,
+            "private_key": privateKey,
+            "peers": [peer]
+        ]
+
+        if let mtu = q["mtu"], let value = Int(mtu), value > 0 {
+            endpoint["mtu"] = value
+        }
+
+        return endpoint
+    }
+
     // MARK: - Общие куски
 
     /// TLS-блок из query-параметров ссылки, включая Reality.
@@ -465,7 +574,16 @@ enum SingBoxConfig {
             t["path"] = q["path"]?.removingPercentEncoding ?? "/"
             if let h = q["host"], !h.isEmpty { t["host"] = h.components(separatedBy: ",") }
             return t
+        case "httpupgrade":
+            var t: [String: Any] = ["type": "httpupgrade"]
+            t["path"] = q["path"]?.removingPercentEncoding ?? "/"
+            if let h = q["host"], !h.isEmpty { t["host"] = h }
+            return t
+        case "quic":
+            return ["type": "quic"]
         default:
+            // tcp, а также xhttp и kcp, которых в sing-box нет: соединение
+            // пойдёт без транспорта, как обычный TCP.
             return nil
         }
     }
