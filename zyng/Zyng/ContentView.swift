@@ -161,6 +161,9 @@ struct ContentView: View {
     @State private var boltScale: CGFloat = 1
     @State private var pressed = false
 
+    /// Задержка, уже показанная в плашке на экране блокировки.
+    @State private var lastReportedLatency: Int?
+
     @State private var showAdd = false
     @State private var showList = false
     @State private var showSettings = false
@@ -253,6 +256,10 @@ struct ContentView: View {
         .onChange(of: ping.samples) { _, _ in
             #if canImport(ActivityKit)
             guard vpn.status == .connected, let started = vpn.connectedDate else { return }
+            // Показываем лучшее из замеров, и оно меняется редко. Обновлять
+            // плашку на каждый замер незачем — у Live Activity лимит обновлений.
+            guard ping.latency != lastReportedLatency else { return }
+            lastReportedLatency = ping.latency
             LiveActivityController.shared.update(
                 serverName: selected?.name ?? "Zyng",
                 flag: selected?.flag ?? "🌐",
@@ -276,6 +283,7 @@ struct ContentView: View {
         switch newStatus {
         case .connected:
             ping.start()
+            lastReportedLatency = nil
             startLiveActivity()
         case .connecting, .reasserting:
             // Анимация кольца сама ускоряется по состоянию — здесь делать нечего.
