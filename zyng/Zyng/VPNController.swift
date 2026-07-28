@@ -186,7 +186,13 @@ final class VPNController: NSObject, ObservableObject {
             manager.protocolConfiguration = proto
             manager.localizedDescription = "Zyng VPN"
             manager.isEnabled = true
-            manager.isOnDemandEnabled = false
+
+            // Переподключение поручаем системе, а не приложению: расширение
+            // могут выгрузить, сеть — переключиться с Wi-Fi на сотовую, сервер
+            // — оборвать соединение. Приложение в этот момент обычно закрыто и
+            // сделать ничего не может, а система поднимет туннель сама.
+            manager.isOnDemandEnabled = AppSettings.shared.autoConnect
+            manager.onDemandRules = [Self.alwaysConnectRule()]
 
             try await manager.saveToPreferences()
             // Сохранение помечает объект в памяти устаревшим: без повторной загрузки
@@ -209,8 +215,30 @@ final class VPNController: NSObject, ObservableObject {
 
     func disconnect() {
         NSLog("🛑 Zyng: отключение")
-        manager?.connection.stopVPNTunnel()
-        syncStatus()
+        isAttempting = false
+
+        guard let manager else { return }
+
+        // Правило подключения по требованию надо снять ДО остановки, иначе
+        // система тут же поднимет туннель обратно и выключить его будет нельзя.
+        if manager.isOnDemandEnabled {
+            Task {
+                manager.isOnDemandEnabled = false
+                try? await manager.saveToPreferences()
+                manager.connection.stopVPNTunnel()
+                syncStatus()
+            }
+        } else {
+            manager.connection.stopVPNTunnel()
+            syncStatus()
+        }
+    }
+
+    /// Держать туннель поднятым на любом интерфейсе.
+    private static func alwaysConnectRule() -> NEOnDemandRule {
+        let rule = NEOnDemandRuleConnect()
+        rule.interfaceTypeMatch = .any
+        return rule
     }
 
     // MARK: - Диагностика

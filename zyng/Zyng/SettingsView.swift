@@ -138,8 +138,8 @@ struct SettingsView: View {
             VStack(spacing: 8) {
                 toggleRow(
                     icon: "arrow.clockwise.circle.fill",
-                    title: "Переподключаться автоматически",
-                    subtitle: "Восстанавливать соединение, если оно оборвалось",
+                    title: "Держать соединение",
+                    subtitle: "Система сама поднимет туннель, если он оборвался или сменилась сеть. Применяется при следующем подключении",
                     isOn: $settings.autoConnect
                 )
 

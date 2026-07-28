@@ -321,14 +321,8 @@ struct ContentView: View {
 
     private var header: some View {
         HStack {
-            HStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 9)
-                        .fill(LinearGradient(colors:[JT.accent, Color(hex:"7A5CFF")],
-                                             startPoint:.topLeading, endPoint:.bottomTrailing))
-                        .frame(width: 34, height: 34)
-                    Text("Z").font(.system(size: 20, weight: .black)).foregroundColor(.white)
-                }
+            HStack(spacing: 9) {
+                ZyngLogo(size: 34)
                 Text("Zyng").font(.system(size: 19, weight: .heavy))
                     .foregroundColor(JT.text)
             }
