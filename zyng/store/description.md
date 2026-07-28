@@ -60,16 +60,15 @@ vpn,vless,vmess,trojan,shadowsocks,hysteria,tuic,proxy,впн,прокси,ту�
 https://zyng.online
 ```
 
-Замени на свой домен. Страница должна открываться — годится даже простая
-страница с контактом.
+Главная страница сайта, уже работает.
 
 ## Privacy Policy URL
 
 ```
-https://zyng.online/privacy
+https://zyng.online/privacy.html
 ```
 
-Адрес, куда выложил `privacy-policy.html`.
+Страница из `docs/privacy.html`, уже опубликована.
 
 ## Category
 
