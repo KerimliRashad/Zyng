@@ -37,7 +37,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             // Схему логируем, содержимое ключа — нет: там пароли и UUID.
             NSLog("🔵 Zyng: протокол \(key.prefix(while: { $0 != ":" }))")
 
-            let config = try SingBoxConfig.makeConfig(from: key)
+            let config = try SingBoxConfig.makeConfig(from: key, dns: readDNS())
 
             try setupCore()
 
@@ -102,6 +102,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                           userInfo: [NSLocalizedDescriptionKey: "В конфигурации нет ключа сервера"])
         }
         return key
+    }
+
+    /// DNS-сервер, выбранный в настройках. Приезжает вместе с ключом.
+    private func readDNS() -> String {
+        guard let proto = protocolConfiguration as? NETunnelProviderProtocol,
+              let dns = proto.providerConfiguration?["dns"] as? String,
+              !dns.isEmpty else {
+            return "1.1.1.1"
+        }
+        return dns
     }
 
     /// Ядру нужны рабочие папки. Держим их в App Group, чтобы приложение могло

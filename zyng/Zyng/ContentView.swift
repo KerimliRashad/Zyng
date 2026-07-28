@@ -152,19 +152,22 @@ struct ContentView: View {
     /// за сохранение и за то, какой сервер выбран.
     @ObservedObject private var store = ServerStore.shared
 
-    @State private var connectedAt: Date?
     @State private var elapsed = 0
     @State private var pulse = false
 
     @State private var showAdd = false
     @State private var showList = false
+    @State private var showSettings = false
     @State private var input = ""
     @State private var status = ""
     @State private var loading = false
 
     /// Контроллер — синглтон, мы его не создаём, поэтому ObservedObject, а не StateObject.
     @ObservedObject private var vpn = VPNController.shared
+    @ObservedObject private var settings = AppSettings.shared
     @StateObject private var ping = PingMonitor()
+
+    @Environment(\.scenePhase) private var scenePhase
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -219,27 +222,40 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showAdd)  { addSheet }
         .sheet(isPresented: $showList) { serverListSheet }
+        .sheet(isPresented: $showSettings) {
+            SettingsView(settings: settings) { showSettings = false }
+        }
         .onChange(of: vpn.status) { _, newStatus in
             handle(newStatus)
         }
         .onReceive(ticker) { _ in
-            // Считаем от момента подключения, а не счётчиком: счётчик замирал,
-            // когда приложение уходило в фон, и время показывалось неверно.
-            guard let connectedAt, vpn.status == .connected else { return }
-            elapsed = Int(Date().timeIntervalSince(connectedAt))
+            // Момент подключения берём у системы: своё значение терялось при
+            // выгрузке экрана, и после сворачивания таймер начинался заново.
+            guard let started = vpn.connectedDate, vpn.status == .connected else {
+                elapsed = 0
+                return
+            }
+            elapsed = max(0, Int(Date().timeIntervalSince(started)))
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            // Пока приложение было свёрнуто, уведомления о смене статуса не
+            // приходили, а показанная задержка успела устареть.
+            Task {
+                await vpn.refresh()
+                if vpn.status == .connected { ping.refreshNow() }
+            }
         }
     }
 
     private func handle(_ newStatus: NEVPNStatus) {
         switch newStatus {
         case .connected:
-            if connectedAt == nil { connectedAt = Date() }
             stopPulse()
             ping.start()
         case .connecting, .reasserting:
             startPulse()
         default:
-            connectedAt = nil
             elapsed = 0
             stopPulse()
             ping.stop()
@@ -260,12 +276,31 @@ struct ContentView: View {
                     .foregroundColor(JT.text)
             }
             Spacer()
-            Button { showList = true } label: {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(JT.sub)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(JT.card))
+
+            HStack(spacing: 10) {
+                Button {
+                    haptic()
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(JT.sub)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(JT.card)
+                            .overlay(Circle().stroke(JT.stroke, lineWidth: 1)))
+                }
+
+                Button {
+                    haptic()
+                    showList = true
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(JT.sub)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(JT.card)
+                            .overlay(Circle().stroke(JT.stroke, lineWidth: 1)))
+                }
             }
         }
         .padding(.horizontal, 20).padding(.top, 8)
@@ -328,21 +363,28 @@ struct ContentView: View {
         if state == .on {
             HStack(spacing: 6) {
                 Image(systemName: "speedometer")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
 
                 if let ms = ping.latency {
                     Text("\(ms) мс")
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 } else if ping.failed {
                     Text("нет ответа")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                 } else {
                     Text("измеряю…")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                 }
             }
             .foregroundColor(pingColor)
-            .transition(.opacity)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(pingColor.opacity(0.12))
+                    .overlay(Capsule().stroke(pingColor.opacity(0.25), lineWidth: 1))
+            )
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .animation(.easeOut(duration: 0.2), value: ping.latency)
         }
     }
 
@@ -464,9 +506,14 @@ struct ContentView: View {
         }
     }
 
+    /// Вибрация только если она включена в настройках.
+    private func haptic() {
+        if settings.haptics { jtHaptic() }
+    }
+
     private func tapConnect() {
         guard let selected else { showAdd = true; return }
-        jtHaptic()
+        haptic()
 
         switch state {
         case .off:

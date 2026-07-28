@@ -18,6 +18,11 @@ final class VPNController: NSObject, ObservableObject {
     @Published private(set) var status: NEVPNStatus = .invalid
     @Published var errorMessage: String?
 
+    /// Момент установления соединения — берём у системы, а не считаем сами.
+    /// Своё значение терялось при выгрузке экрана, и таймер после сворачивания
+    /// начинался заново. Система же помнит его, пока туннель жив.
+    @Published private(set) var connectedDate: Date?
+
     var isConnected: Bool { status == .connected }
     var isTransitioning: Bool {
         status == .connecting || status == .disconnecting || status == .reasserting
@@ -67,6 +72,7 @@ final class VPNController: NSObject, ObservableObject {
         guard newStatus != status else { return }
 
         status = newStatus
+        connectedDate = manager?.connection.connectedDate
         NSLog("🔵 Zyng: VPN status = \(Self.name(for: newStatus))")
 
         switch newStatus {
@@ -115,6 +121,23 @@ final class VPNController: NSObject, ObservableObject {
         }
     }
 
+    /// Перечитывает состояние у системы. Нужно при возвращении из фона: пока
+    /// приложение было свёрнуто, уведомления о смене статуса не приходили.
+    func refresh() async {
+        do {
+            if manager == nil {
+                manager = try await NETunnelProviderManager.loadAllFromPreferences().first
+            }
+            let current = manager?.connection.status ?? .invalid
+            connectedDate = manager?.connection.connectedDate
+            if current != status {
+                syncStatus()
+            }
+        } catch {
+            NSLog("⚠️ Zyng: не удалось обновить состояние: \(error)")
+        }
+    }
+
     private func restoreExistingConfiguration() async {
         do {
             manager = try await NETunnelProviderManager.loadAllFromPreferences().first
@@ -153,7 +176,12 @@ final class VPNController: NSObject, ObservableObject {
                 ?? NETunnelProviderProtocol()
             proto.providerBundleIdentifier = Self.providerBundleIdentifier
             proto.serverAddress = "Zyng"
-            proto.providerConfiguration = ["key": trimmed]
+            // Настройки уезжают вместе с ключом: расширение — отдельный процесс
+            // и читать их из приложения напрямую не может.
+            proto.providerConfiguration = [
+                "key": trimmed,
+                "dns": AppSettings.shared.dns.address
+            ]
 
             manager.protocolConfiguration = proto
             manager.localizedDescription = "Zyng VPN"

@@ -27,7 +27,10 @@ enum SingBoxConfig {
     // MARK: - Точка входа
 
     /// Полный конфиг sing-box для одного сервера.
-    static func makeConfig(from key: String) throws -> String {
+    ///
+    /// `dns` — адрес резолвера из настроек приложения. Через него пойдут
+    /// запросы внутри туннеля.
+    static func makeConfig(from key: String, dns: String = "1.1.1.1") throws -> String {
         let outbound = try makeOutbound(from: key)
 
         let config: [String: Any] = [
@@ -42,7 +45,7 @@ enum SingBoxConfig {
                     [
                         "type": "udp",
                         "tag": "dns-remote",
-                        "server": "1.1.1.1",
+                        "server": dns,
                         "detour": "proxy"
                     ],
                     [
