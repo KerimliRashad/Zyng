@@ -14,13 +14,7 @@ import Combine
 final class PingMonitor: ObservableObject {
 
     /// Задержка в миллисекундах. nil — ещё не измеряли или замер не удался.
-    ///
-    /// Показываем лучшее из последних замеров, а не последний. Первый запрос к
-    /// хосту включает установку TLS-соединения и завышает результат в разы;
-    /// последующие переиспользуют его и отражают реальную задержку.
-    var latency: Int? { samples.min() }
-
-    @Published private(set) var samples: [Int] = []
+    @Published private(set) var latency: Int?
 
     /// Замер не прошёл — сеть есть, но ответа нет.
     @Published private(set) var failed = false
@@ -40,13 +34,13 @@ final class PingMonitor: ObservableObject {
     /// Адрес, ответивший последним, чтобы не перебирать список каждый раз.
     private var preferred: URL?
 
-    private static let sampleCount = 5
-
+    /// Одноразовая сессия — принципиально.
+    ///
+    /// Постоянная переиспользует соединение между замерами, и после поднятия
+    /// туннеля продолжает держать то, что было открыто на старом интерфейсе.
+    /// Запросы уходят в никуда и отваливаются по таймауту, хотя туннель жив.
     private let session: URLSession = {
-        // Не ephemeral: нужно, чтобы соединение переиспользовалось между
-        // замерами, иначе каждый раз меряется ещё и TLS-рукопожатие.
-        let config = URLSessionConfiguration.default
-        config.httpMaximumConnectionsPerHost = 1
+        let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         config.timeoutIntervalForRequest = 5
         config.urlCache = nil
@@ -68,7 +62,7 @@ final class PingMonitor: ObservableObject {
     func stop() {
         task?.cancel()
         task = nil
-        samples = []
+        latency = nil
         failed = false
     }
 
@@ -98,12 +92,7 @@ final class PingMonitor: ObservableObject {
                 _ = try await session.data(for: request)
                 guard !Task.isCancelled else { return }
 
-                let ms = Int(Date().timeIntervalSince(started) * 1000)
-                samples.append(ms)
-                if samples.count > Self.sampleCount {
-                    samples.removeFirst(samples.count - Self.sampleCount)
-                }
-
+                latency = Int(Date().timeIntervalSince(started) * 1000)
                 failed = false
                 preferred = url
                 return
@@ -113,7 +102,7 @@ final class PingMonitor: ObservableObject {
         }
 
         guard !Task.isCancelled else { return }
-        samples = []
+        latency = nil
         failed = true
     }
 }

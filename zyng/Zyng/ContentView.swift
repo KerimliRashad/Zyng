@@ -261,7 +261,7 @@ struct ContentView: View {
             }
             elapsed = max(0, Int(Date().timeIntervalSince(started)))
         }
-        .onChange(of: ping.samples) { _, _ in
+        .onChange(of: ping.latency) { _, _ in
             #if canImport(ActivityKit)
             guard vpn.status == .connected, let started = vpn.connectedDate else { return }
             // Показываем лучшее из замеров, и оно меняется редко. Обновлять
