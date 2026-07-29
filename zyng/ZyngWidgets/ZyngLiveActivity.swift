@@ -130,5 +130,10 @@ struct ZyngLiveActivity: Widget {
 struct ZyngWidgetsBundle: WidgetBundle {
     var body: some Widget {
         ZyngLiveActivity()
+
+        // Переключатель в Пункте управления появился только в iOS 18.
+        if #available(iOS 18.0, *) {
+            ZyngControl()
+        }
     }
 }
