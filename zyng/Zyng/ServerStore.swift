@@ -372,27 +372,78 @@ final class ServerStore: ObservableObject {
         }
     }
 
+    /// Ключи и подписки — самое чувствительное, что есть в приложении: по ним
+    /// можно подключиться к серверам пользователя. Поэтому они лежат не в
+    /// обычных настройках, а в файле, который:
+    ///
+    /// * защищён до первой разблокировки устройства — с выключенного телефона
+    ///   его не прочитать;
+    /// * помечен как не подлежащий резервному копированию, иначе ключи уезжали
+    ///   бы в iCloud, хотя политика обещает обратное.
+    private struct Vault: Codable {
+        var subscriptions: [Subscription] = []
+        var singleKeys: [String] = []
+    }
+
+    private static var vaultURL: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: TunnelDiagnostics.appGroup)?
+            .appendingPathComponent("servers.json")
+    }
+
     private func persist() {
-        if let data = try? JSONEncoder().encode(subscriptions) {
-            defaults.set(data, forKey: Key.subscriptions)
+        guard let url = Self.vaultURL else { return }
+
+        let vault = Vault(subscriptions: subscriptions, singleKeys: singleKeys)
+        guard let data = try? JSONEncoder().encode(vault) else { return }
+
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try excludeFromBackup(url)
+        } catch {
+            NSLog("⚠️ Zyng: не удалось сохранить список серверов: \(error.localizedDescription)")
         }
-        defaults.set(singleKeys.joined(separator: "\n"), forKey: Key.singles)
+    }
+
+    private func excludeFromBackup(_ url: URL) throws {
+        var url = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try url.setResourceValues(values)
     }
 
     private func load() {
+        if let url = Self.vaultURL,
+           let data = try? Data(contentsOf: url),
+           let vault = try? JSONDecoder().decode(Vault.self, from: data) {
+            subscriptions = vault.subscriptions
+            singleKeys = vault.singleKeys.filter { parseServer($0) != nil }
+        } else {
+            migrateFromDefaults()
+        }
+
+        selectedRaw = defaults.string(forKey: Key.selected) ?? ""
+        fixSelectionIfNeeded()
+    }
+
+    /// Прежние версии держали ключи в обычных настройках. Переносим их в файл
+    /// и стираем оттуда — иначе копия так и осталась бы в резервных копиях.
+    private func migrateFromDefaults() {
         if let data = defaults.data(forKey: Key.subscriptions),
            let decoded = try? JSONDecoder().decode([Subscription].self, from: data) {
             subscriptions = decoded
         }
 
-        // Ключи из прежней версии приложения лежат тут же — они станут
-        // одиночными, ничего не потеряется.
         let raw = defaults.string(forKey: Key.singles) ?? ""
         singleKeys = raw.split(whereSeparator: \.isNewline)
             .map(String.init)
             .filter { parseServer($0) != nil }
 
-        selectedRaw = defaults.string(forKey: Key.selected) ?? ""
-        fixSelectionIfNeeded()
+        guard !subscriptions.isEmpty || !singleKeys.isEmpty else { return }
+
+        persist()
+        defaults.removeObject(forKey: Key.subscriptions)
+        defaults.removeObject(forKey: Key.singles)
+        NSLog("🔒 Zyng: список серверов перенесён в защищённое хранилище")
     }
 }
