@@ -70,6 +70,10 @@ struct Server: Identifiable, Equatable {
     /// Умеет ли ядро такой транспорт. Неподдерживаемые показываем в списке
     /// помеченными, чтобы это не выяснялось после неудачного подключения.
     let isSupported: Bool
+    /// Протокол работает поверх UDP (Hysteria2, TUIC). Проверить такой сервер
+    /// TCP-соединением нельзя: порт закрыт для TCP, и замер выглядел бы как
+    /// «сервер не отвечает», хотя он полностью рабочий.
+    let usesDatagrams: Bool
     let flag: String
 }
 
@@ -128,6 +132,7 @@ func parseServer(_ raw: String) -> Server? {
         proto: proto,
         transport: transport.uppercased(),
         isSupported: SingBoxConfig.supports(transport: transport),
+        usesDatagrams: ["hysteria2", "hy2", "tuic"].contains(scheme),
         flag: flagFor(name)
     )
 }

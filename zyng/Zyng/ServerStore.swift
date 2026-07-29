@@ -216,9 +216,19 @@ final class ServerStore: ObservableObject {
     }
 
     /// Обновляет те подписки, у которых вышел срок. Вызывается при открытии.
+    ///
+    /// Параллельно, а не по очереди: раньше каждая подписка ждала предыдущую, и
+    /// при нескольких недоступных панелях экран занимался работой на минуты —
+    /// система считала это затянувшейся задачей запуска и грозилась выгрузить
+    /// приложение.
     func refreshStale() async {
-        for sub in subscriptions where sub.isStale {
-            await refresh(sub.id)
+        let stale = subscriptions.filter(\.isStale).map(\.id)
+        guard !stale.isEmpty else { return }
+
+        await withTaskGroup(of: Void.self) { group in
+            for id in stale {
+                group.addTask { await self.refresh(id) }
+            }
         }
     }
 
@@ -248,7 +258,9 @@ final class ServerStore: ObservableObject {
         for agent in Self.userAgents {
             var request = URLRequest(url: parsed)
             request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-            request.timeoutInterval = 20
+            // Перебор идёт по пяти User-Agent подряд, поэтому долгий таймаут
+            // умножается на пять. Восьми секунд хватает живой панели с запасом.
+            request.timeoutInterval = 8
             request.setValue(agent, forHTTPHeaderField: "User-Agent")
 
             // Панели, которые считают устройства по подписке, ждут именно эти

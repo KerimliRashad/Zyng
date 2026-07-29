@@ -79,9 +79,9 @@ struct ServerListView: View {
     /// Серверы текущей вкладки — их и меряет кнопка замера.
     private var visibleServers: [Server] {
         let all = currentSubscription.map { store.servers(in: $0) } ?? store.singleServers
-        // Неподдерживаемые мерить бессмысленно: подключиться к ним всё равно
-        // не выйдет, а замеры отнимают время у остальных.
-        return all.filter(\.isSupported)
+        // Мерим только то, что имеет смысл мерить: неподдерживаемые всё равно
+        // не подключатся, а протоколы поверх UDP не отвечают на TCP-проверку.
+        return all.filter { $0.isSupported && !$0.usesDatagrams }
     }
 
     // MARK: - Шапка
@@ -375,8 +375,17 @@ struct ServerListView: View {
 
             Spacer(minLength: 8)
 
-            if server.isSupported {
+            if server.isSupported && !server.usesDatagrams {
                 latencyLabel(for: server)
+            } else if server.usesDatagrams {
+                // Замерить нельзя, но сервер рабочий — так и пишем, вместо
+                // прочерка, который читается как «не отвечает».
+                Text("UDP")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(JT.sub)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(JT.cardHi))
             }
 
             if isSelected {
