@@ -2,6 +2,13 @@ import Foundation
 
 #if canImport(ActivityKit)
 import ActivityKit
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
+#if canImport(ActivityKit)
 
 /// Управляет плашкой на экране блокировки и в Dynamic Island.
 ///
@@ -20,8 +27,22 @@ final class LiveActivityController {
         ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
+    private var isForeground: Bool {
+        #if canImport(UIKit)
+        UIApplication.shared.applicationState == .active
+        #else
+        true
+        #endif
+    }
+
     func start(serverName: String, flag: String, connectedAt: Date, latency: Int?) {
         guard AppSettings.shared.liveActivity, isSupported else { return }
+
+        // Систему не обмануть: создать плашку можно только пока приложение на
+        // экране. Туннель же часто поднимают из Пункта управления или по
+        // правилу «держать соединение», когда приложение в фоне. Молча
+        // пропускаем — плашка появится, когда приложение откроют.
+        guard isForeground else { return }
 
         let state = TunnelActivityAttributes.ContentState(
             connectedAt: connectedAt,
