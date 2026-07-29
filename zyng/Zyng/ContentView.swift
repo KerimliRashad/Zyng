@@ -65,8 +65,12 @@ struct Server: Identifiable, Equatable {
     let raw: String
     let name: String
     let proto: String
+    /// Транспорт из ключа: TCP, WS, gRPC, XHTTP и так далее.
+    let transport: String
+    /// Умеет ли ядро такой транспорт. Неподдерживаемые показываем в списке
+    /// помеченными, чтобы это не выяснялось после неудачного подключения.
+    let isSupported: Bool
     let flag: String
-    var ping: Int? = nil
 }
 
 func flagFor(_ name: String) -> String {
@@ -115,7 +119,34 @@ func parseServer(_ raw: String) -> Server? {
     case "socks5":      proto = "SOCKS"
     default:            proto = scheme.uppercased()
     }
-    return Server(raw: s, name: name, proto: proto, flag: flagFor(name))
+
+    let transport = transportOf(s, scheme: scheme)
+
+    return Server(
+        raw: s,
+        name: name,
+        proto: proto,
+        transport: transport.uppercased(),
+        isSupported: SingBoxConfig.supports(transport: transport),
+        flag: flagFor(name)
+    )
+}
+
+/// Транспорт указывают по-разному: в vmess он внутри base64-JSON, у остальных —
+/// параметром `type` в ссылке.
+private func transportOf(_ raw: String, scheme: String) -> String {
+    if scheme == "vmess" {
+        guard let data = Data(base64Encoded: padBase64(String(raw.dropFirst("vmess://".count)))),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "tcp"
+        }
+        if let net = json["net"] as? String, !net.isEmpty { return net }
+        return "tcp"
+    }
+
+    guard let components = URLComponents(string: raw) else { return "tcp" }
+    let type = components.queryItems?.first { $0.name == "type" }?.value ?? ""
+    return type.isEmpty ? "tcp" : type
 }
 
 func padBase64(_ s: String) -> String {
@@ -560,12 +591,14 @@ struct ContentView: View {
                         .foregroundColor(JT.text)
                         .font(.system(size: 16, weight: .semibold)).lineLimit(1)
                     HStack(spacing: 6) {
-                        Text(selected?.proto ?? "Добавь ключ или подписку")
+                        Text(selected.map { "\($0.proto) · \($0.transport)" }
+                             ?? "Добавь ключ или подписку")
                             .foregroundColor(JT.sub).font(.system(size: 12))
-                        if let p = selected?.ping {
-                            Text("· \(p) ms")
-                                .foregroundColor(p < 150 ? JT.green : JT.sub)
-                                .font(.system(size: 12, weight: .semibold))
+
+                        if let selected, !selected.isSupported {
+                            Text("не поддерживается")
+                                .foregroundColor(JT.red)
+                                .font(.system(size: 11, weight: .semibold))
                         }
                     }
                 }

@@ -21,6 +21,9 @@ struct ServerListView: View {
 
     @State private var tab: Tab?
 
+    /// Сервер, по которому нажали, но подключиться к нему нельзя.
+    @State private var unsupported: Server?
+
     var body: some View {
         ZStack {
             JT.bg1.ignoresSafeArea()
@@ -38,6 +41,16 @@ struct ServerListView: View {
                     .padding(.bottom, 28)
                 }
             }
+        }
+        .alert(
+            "Этот сервер не подойдёт",
+            isPresented: Binding(get: { unsupported != nil },
+                                 set: { if !$0 { unsupported = nil } })
+        ) {
+            Button("Понятно", role: .cancel) { unsupported = nil }
+        } message: {
+            Text("Транспорт «\(unsupported?.transport ?? "")» ядро Zyng не умеет. "
+               + "Выбери сервер, у которого указан TCP, WS, gRPC или QUIC.")
         }
         .task {
             selectTabIfNeeded()
@@ -65,10 +78,10 @@ struct ServerListView: View {
 
     /// Серверы текущей вкладки — их и меряет кнопка замера.
     private var visibleServers: [Server] {
-        if let sub = currentSubscription {
-            return store.servers(in: sub)
-        }
-        return store.singleServers
+        let all = currentSubscription.map { store.servers(in: $0) } ?? store.singleServers
+        // Неподдерживаемые мерить бессмысленно: подключиться к ним всё равно
+        // не выйдет, а замеры отнимают время у остальных.
+        return all.filter(\.isSupported)
     }
 
     // MARK: - Шапка
@@ -340,17 +353,31 @@ struct ServerListView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(server.name)
-                    .foregroundColor(JT.text)
+                    .foregroundColor(server.isSupported ? JT.text : JT.sub)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
-                Text(server.proto)
-                    .foregroundColor(JT.sub)
-                    .font(.system(size: 11))
+
+                HStack(spacing: 5) {
+                    Text("\(server.proto) · \(server.transport)")
+                        .foregroundColor(JT.sub)
+                        .font(.system(size: 11))
+
+                    if !server.isSupported {
+                        Text("не поддерживается")
+                            .foregroundColor(JT.red)
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(JT.red.opacity(0.15)))
+                    }
+                }
             }
 
             Spacer(minLength: 8)
 
-            latencyLabel(for: server)
+            if server.isSupported {
+                latencyLabel(for: server)
+            }
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
@@ -375,8 +402,15 @@ struct ServerListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? JT.green.opacity(0.4) : JT.stroke, lineWidth: 1))
         )
+        .opacity(server.isSupported ? 1 : 0.55)
         .contentShape(Rectangle())
         .onTapGesture {
+            // Неподдерживаемый транспорт выбрать можно, но соединения не будет.
+            // Не блокируем — вдруг в подписке нет других, — но и не молчим.
+            guard server.isSupported else {
+                unsupported = server
+                return
+            }
             jtHaptic()
             store.select(server)
             onPicked()

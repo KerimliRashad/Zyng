@@ -104,7 +104,12 @@ final class ServerStore: ObservableObject {
     }
 
     var selected: Server? {
-        allServers.first { $0.raw == selectedRaw } ?? allServers.first
+        if let chosen = allServers.first(where: { $0.raw == selectedRaw }) {
+            return chosen
+        }
+        // Запасной вариант выбираем среди рабочих: сервер с транспортом,
+        // которого ядро не умеет, подключиться всё равно не даст.
+        return allServers.first(where: \.isSupported) ?? allServers.first
     }
 
     func select(_ server: Server) {
@@ -149,7 +154,7 @@ final class ServerStore: ObservableObject {
             return
         }
 
-        var sub = Subscription(
+        let sub = Subscription(
             name: name?.isEmpty == false ? name! : (parsed.host ?? "Подписка"),
             url: trimmed
         )
@@ -164,7 +169,6 @@ final class ServerStore: ObservableObject {
            updated.rawKeys.isEmpty {
             subscriptions.removeAll { $0.id == sub.id }
             persist()
-            sub.rawKeys = []
         }
     }
 
@@ -365,11 +369,16 @@ final class ServerStore: ObservableObject {
     // MARK: - Хранение
 
     private func fixSelectionIfNeeded() {
-        let available = allServers.map(\.raw)
-        if selectedRaw.isEmpty || !available.contains(selectedRaw) {
-            selectedRaw = available.first ?? ""
-            defaults.set(selectedRaw, forKey: Key.selected)
+        let available = allServers
+        guard selectedRaw.isEmpty || !available.contains(where: { $0.raw == selectedRaw }) else {
+            return
         }
+
+        // Предпочитаем рабочий сервер: иначе после обновления подписки выбор мог
+        // упасть на первый попавшийся с неподдерживаемым транспортом.
+        let fallback = available.first(where: \.isSupported) ?? available.first
+        selectedRaw = fallback?.raw ?? ""
+        defaults.set(selectedRaw, forKey: Key.selected)
     }
 
     /// Ключи и подписки — самое чувствительное, что есть в приложении: по ним

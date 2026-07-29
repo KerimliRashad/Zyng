@@ -10,6 +10,7 @@ enum SingBoxConfig {
     enum ParseError: LocalizedError {
         case emptyKey
         case unsupportedScheme(String)
+        case unsupportedTransport(String)
         case malformed(String)
 
         var errorDescription: String? {
@@ -18,6 +19,9 @@ enum SingBoxConfig {
                 return "Ключ пустой"
             case .unsupportedScheme(let s):
                 return "Протокол «\(s)» не поддерживается"
+            case .unsupportedTransport(let t):
+                return "Транспорт «\(t)» не поддерживается ядром. "
+                     + "Выбери другой сервер из этой же подписки."
             case .malformed(let why):
                 return "Ключ повреждён: \(why)"
             }
@@ -171,7 +175,7 @@ enum SingBoxConfig {
         if let tls = tlsBlock(q, defaultSNI: try host(u)) {
             out["tls"] = tls
         }
-        if let transport = transportBlock(q) {
+        if let transport = try transportBlock(q) {
             out["transport"] = transport
         }
         return out
@@ -239,8 +243,10 @@ enum SingBoxConfig {
             var t: [String: Any] = ["type": "http", "path": str("path") ?? "/"]
             if let h = str("host"), !h.isEmpty { t["host"] = [h] }
             out["transport"] = t
-        default:
+        case "", "tcp", "raw", "none":
             break
+        case let other:
+            throw ParseError.unsupportedTransport(other)
         }
 
         return out
@@ -263,7 +269,7 @@ enum SingBoxConfig {
         // У trojan шифрование включено всегда.
         out["tls"] = tlsBlock(q, defaultSNI: try host(u), forceEnabled: true)
 
-        if let transport = transportBlock(q) {
+        if let transport = try transportBlock(q) {
             out["transport"] = transport
         }
         return out
@@ -473,7 +479,17 @@ enum SingBoxConfig {
     }
 
     /// Транспорт (ws / grpc / http) из query-параметров.
-    private static func transportBlock(_ q: [String: String]) -> [String: Any]? {
+    /// Транспорты, которые умеет ядро. Всё остальное честнее отвергнуть, чем
+    /// подключаться «как получится».
+    static let supportedTransports: Set<String> = [
+        "", "tcp", "raw", "none", "ws", "grpc", "http", "h2", "httpupgrade", "quic"
+    ]
+
+    static func supports(transport: String) -> Bool {
+        supportedTransports.contains(transport.lowercased())
+    }
+
+    private static func transportBlock(_ q: [String: String]) throws -> [String: Any]? {
         switch (q["type"] ?? "tcp").lowercased() {
         case "ws":
             var t: [String: Any] = ["type": "ws"]
@@ -494,10 +510,17 @@ enum SingBoxConfig {
             return t
         case "quic":
             return ["type": "quic"]
-        default:
-            // tcp, а также xhttp и kcp, которых в sing-box нет: соединение
-            // пойдёт без транспорта, как обычный TCP.
+        case "", "tcp", "raw", "none":
+            // Без транспорта — обычный TCP, это норма.
             return nil
+        case let other:
+            // xhttp, splithttp, kcp и прочее из Xray: ядро их не умеет.
+            //
+            // Раньше такой транспорт молча игнорировался, и приложение
+            // подключалось как по обычному TCP. Сервер этого не понимал,
+            // соединение зависало, а выглядело как «эта страна не работает».
+            // Лучше честная ошибка.
+            throw ParseError.unsupportedTransport(other)
         }
     }
 
