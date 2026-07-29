@@ -144,13 +144,6 @@ struct SettingsView: View {
                 )
 
                 toggleRow(
-                    icon: "bolt.shield.fill",
-                    title: "Live Activity",
-                    subtitle: "Статус соединения на экране блокировки и в Dynamic Island. Появляется при запуске туннеля из приложения",
-                    isOn: $settings.liveActivity
-                )
-
-                toggleRow(
                     icon: "iphone.radiowaves.left.and.right",
                     title: "Вибрация",
                     subtitle: "Отклик при нажатии кнопок",

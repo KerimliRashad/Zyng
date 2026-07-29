@@ -160,7 +160,6 @@ struct ContentView: View {
     /// за сохранение и за то, какой сервер выбран.
     @ObservedObject private var store = ServerStore.shared
 
-    @State private var elapsed = 0
 
     // Анимация кнопки подключения.
     @State private var outerAngle: Double = 0
@@ -168,9 +167,6 @@ struct ContentView: View {
     @State private var glow: CGFloat = 1
     @State private var boltScale: CGFloat = 1
     @State private var pressed = false
-
-    /// Задержка, уже показанная в плашке на экране блокировки.
-    @State private var lastReportedLatency: Int?
 
     @State private var showAdd = false
     @State private var showList = false
@@ -185,8 +181,6 @@ struct ContentView: View {
     @StateObject private var ping = PingMonitor()
 
     @Environment(\.scenePhase) private var scenePhase
-
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     enum ConnState { case off, connecting, on }
 
@@ -233,13 +227,6 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            #if canImport(ActivityKit)
-            // Плашка могла остаться от прошлого запуска, если приложение
-            // выгрузили, не отключая туннель.
-            if vpn.status != .connected {
-                LiveActivityController.shared.cleanupStale()
-            }
-            #endif
             // Приложение могли открыть при уже поднятом туннеле — тогда
             // onChange не сработает, и замер надо запустить самим.
             handle(vpn.status)
@@ -251,30 +238,6 @@ struct ContentView: View {
         }
         .onChange(of: vpn.status) { _, newStatus in
             handle(newStatus)
-        }
-        .onReceive(ticker) { _ in
-            // Момент подключения берём у системы: своё значение терялось при
-            // выгрузке экрана, и после сворачивания таймер начинался заново.
-            guard let started = vpn.connectedDate, vpn.status == .connected else {
-                elapsed = 0
-                return
-            }
-            elapsed = max(0, Int(Date().timeIntervalSince(started)))
-        }
-        .onChange(of: ping.latency) { _, _ in
-            #if canImport(ActivityKit)
-            guard vpn.status == .connected, let started = vpn.connectedDate else { return }
-            // Показываем лучшее из замеров, и оно меняется редко. Обновлять
-            // плашку на каждый замер незачем — у Live Activity лимит обновлений.
-            guard ping.latency != lastReportedLatency else { return }
-            lastReportedLatency = ping.latency
-            LiveActivityController.shared.update(
-                serverName: selected?.name ?? "Zyng",
-                flag: selected?.flag ?? "🌐",
-                connectedAt: started,
-                latency: ping.latency
-            )
-            #endif
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -291,32 +254,12 @@ struct ContentView: View {
         switch newStatus {
         case .connected:
             ping.start()
-            lastReportedLatency = nil
-            startLiveActivity()
         case .connecting, .reasserting:
             // Анимация кольца сама ускоряется по состоянию — здесь делать нечего.
             break
         default:
-            elapsed = 0
             ping.stop()
-            #if canImport(ActivityKit)
-            LiveActivityController.shared.stop()
-            #endif
         }
-    }
-
-    /// Плашка на экране блокировки. Время в ней система отсчитывает сама по
-    /// дате подключения, поэтому обновляем её только при смене задержки.
-    private func startLiveActivity() {
-        #if canImport(ActivityKit)
-        guard let started = vpn.connectedDate else { return }
-        LiveActivityController.shared.start(
-            serverName: selected?.name ?? "Zyng",
-            flag: selected?.flag ?? "🌐",
-            connectedAt: started,
-            latency: ping.latency
-        )
-        #endif
     }
 
     private var header: some View {
@@ -499,10 +442,21 @@ struct ContentView: View {
         .background(Capsule().fill(JT.card).overlay(Capsule().stroke(JT.stroke, lineWidth: 1)))
     }
 
+    /// Время считается прямо при отрисовке из момента подключения, который
+    /// хранит система. Ни накопителя, ни таймера в состоянии экрана нет —
+    /// нечему отставать после сворачивания и нечему сбрасываться в ноль.
     private var timerLabel: some View {
-        Text(timeString(elapsed))
-            .font(.system(size: 15, weight: .medium, design: .monospaced))
-            .foregroundColor(state == .on ? JT.text : JT.sub.opacity(0.5))
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let seconds: Int = {
+                guard state == .on, let started = vpn.connectedDate else { return 0 }
+                return max(0, Int(context.date.timeIntervalSince(started)))
+            }()
+
+            Text(timeString(seconds))
+                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                .foregroundColor(state == .on ? JT.text : JT.sub.opacity(0.5))
+                .monospacedDigit()
+        }
     }
 
     /// Задержка показывается только при активном подключении: без туннеля
