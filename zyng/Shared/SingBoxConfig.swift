@@ -20,8 +20,9 @@ enum SingBoxConfig {
             case .unsupportedScheme(let s):
                 return "Протокол «\(s)» не поддерживается"
             case .unsupportedTransport(let t):
-                return "Транспорт «\(t)» не поддерживается ядром. "
-                     + "Выбери другой сервер из этой же подписки."
+                return "Транспорт «\(t)» умеет только Xray, а Zyng работает "
+                     + "на sing-box. Выбери в этой же подписке сервер той же "
+                     + "страны с пометкой tcp, ws, grpc, http или httpupgrade."
             case .malformed(let why):
                 return "Ключ повреждён: \(why)"
             }
@@ -231,22 +232,21 @@ enum SingBoxConfig {
             out["tls"] = tls
         }
 
-        // net: tcp | ws | grpc | h2
-        switch (str("net") ?? "tcp").lowercased() {
-        case "ws":
-            var t: [String: Any] = ["type": "ws", "path": str("path") ?? "/"]
-            if let h = str("host"), !h.isEmpty { t["headers"] = ["Host": h] }
+        // Транспорт разбираем тем же кодом, что и у vless/trojan.
+        //
+        // Раньше здесь был отдельный switch на ws/grpc/h2, и vmess с
+        // httpupgrade или quic отвергался как «неподдерживаемый», хотя ядро
+        // эти транспорты умеет. Приводим поля vmess-JSON к тем же именам,
+        // что в query-строке ссылки, и вызываем общий разбор.
+        var q: [String: String] = ["type": (str("net") ?? "tcp")]
+        if let p = str("path"), !p.isEmpty {
+            q["path"] = p
+            // В vmess у gRPC имя сервиса лежит в том же поле path.
+            q["serviceName"] = p
+        }
+        if let h = str("host"), !h.isEmpty { q["host"] = h }
+        if let t = try transportBlock(q) {
             out["transport"] = t
-        case "grpc":
-            out["transport"] = ["type": "grpc", "service_name": str("path") ?? ""]
-        case "h2", "http":
-            var t: [String: Any] = ["type": "http", "path": str("path") ?? "/"]
-            if let h = str("host"), !h.isEmpty { t["host"] = [h] }
-            out["transport"] = t
-        case "", "tcp", "raw", "none":
-            break
-        case let other:
-            throw ParseError.unsupportedTransport(other)
         }
 
         return out
@@ -489,23 +489,31 @@ enum SingBoxConfig {
         supportedTransports.contains(transport.lowercased())
     }
 
+    /// Путь транспорта. Ссылки приходят с процентным кодированием, а vmess-JSON
+    /// — без него; `removingPercentEncoding` на строке с одиночным «%» вернул бы
+    /// nil, поэтому при неудаче берём исходное значение как есть.
+    private static func path(_ q: [String: String]) -> String {
+        guard let raw = q["path"], !raw.isEmpty else { return "/" }
+        return raw.removingPercentEncoding ?? raw
+    }
+
     private static func transportBlock(_ q: [String: String]) throws -> [String: Any]? {
         switch (q["type"] ?? "tcp").lowercased() {
         case "ws":
             var t: [String: Any] = ["type": "ws"]
-            t["path"] = q["path"]?.removingPercentEncoding ?? "/"
+            t["path"] = path(q)
             if let h = q["host"], !h.isEmpty { t["headers"] = ["Host": h] }
             return t
         case "grpc":
             return ["type": "grpc", "service_name": q["serviceName"] ?? ""]
         case "http", "h2":
             var t: [String: Any] = ["type": "http"]
-            t["path"] = q["path"]?.removingPercentEncoding ?? "/"
+            t["path"] = path(q)
             if let h = q["host"], !h.isEmpty { t["host"] = h.components(separatedBy: ",") }
             return t
         case "httpupgrade":
             var t: [String: Any] = ["type": "httpupgrade"]
-            t["path"] = q["path"]?.removingPercentEncoding ?? "/"
+            t["path"] = path(q)
             if let h = q["host"], !h.isEmpty { t["host"] = h }
             return t
         case "quic":
