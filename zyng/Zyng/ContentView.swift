@@ -168,6 +168,9 @@ struct ContentView: View {
     @State private var boltScale: CGFloat = 1
     @State private var pressed = false
 
+    /// Задержка, уже показанная в плашке на экране блокировки.
+    @State private var lastReportedLatency: Int?
+
     @State private var showAdd = false
     @State private var showList = false
     @State private var showSettings = false
@@ -231,6 +234,19 @@ struct ContentView: View {
             // onChange не сработает, и замер надо запустить самим.
             handle(vpn.status)
         }
+        .onChange(of: ping.latency) { _, _ in
+            #if canImport(ActivityKit)
+            guard vpn.status == .connected, let started = vpn.connectedDate else { return }
+            guard ping.latency != lastReportedLatency else { return }
+            lastReportedLatency = ping.latency
+            LiveActivityController.shared.update(
+                serverName: selected?.name ?? "Zyng",
+                flag: selected?.flag ?? "🌐",
+                connectedAt: started,
+                latency: ping.latency
+            )
+            #endif
+        }
         .sheet(isPresented: $showAdd)  { addSheet }
         .sheet(isPresented: $showList) { serverListSheet }
         .sheet(isPresented: $showSettings) {
@@ -245,7 +261,21 @@ struct ContentView: View {
             // приходили, а показанная задержка успела устареть.
             Task {
                 await vpn.refresh()
-                if vpn.status == .connected { ping.refreshNow() }
+
+                if vpn.status == .connected {
+                    ping.refreshNow()
+                    // Плашку могли не успеть создать — например, туннель
+                    // подняли, пока приложение было свёрнуто.
+                    startLiveActivity()
+                } else {
+                    #if canImport(ActivityKit)
+                    // Убираем плашку, только УБЕДИВШИСЬ, что туннеля нет.
+                    // Раньше проверка шла до опроса системы: при холодном
+                    // старте статус ещё «неизвестен», и плашка от живого
+                    // соединения тут же гасла.
+                    LiveActivityController.shared.cleanupStale()
+                    #endif
+                }
             }
         }
     }
@@ -254,12 +284,32 @@ struct ContentView: View {
         switch newStatus {
         case .connected:
             ping.start()
+            lastReportedLatency = nil
+            startLiveActivity()
         case .connecting, .reasserting:
             // Анимация кольца сама ускоряется по состоянию — здесь делать нечего.
             break
         default:
             ping.stop()
+            #if canImport(ActivityKit)
+            LiveActivityController.shared.stop()
+            #endif
         }
+    }
+
+    /// Плашка на экране блокировки. Время в ней система отсчитывает сама по
+    /// дате подключения, поэтому обновлять её каждую секунду не нужно —
+    /// и она не «замерзает», пока приложение спит.
+    private func startLiveActivity() {
+        #if canImport(ActivityKit)
+        guard let started = vpn.connectedDate else { return }
+        LiveActivityController.shared.start(
+            serverName: selected?.name ?? "Zyng",
+            flag: selected?.flag ?? "🌐",
+            connectedAt: started,
+            latency: ping.latency
+        )
+        #endif
     }
 
     private var header: some View {
