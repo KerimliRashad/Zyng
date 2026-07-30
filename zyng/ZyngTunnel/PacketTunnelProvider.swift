@@ -118,11 +118,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     /// читать оттуда логи и статистику.
     private func setupCore() throws {
         guard let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.online.zyng.Zyng"
+            forSecurityApplicationGroupIdentifier: "group.online.zyng.app"
         ) else {
             throw NSError(domain: "ZyngTunnel", code: 2,
                           userInfo: [NSLocalizedDescriptionKey:
-                                        "Нет доступа к App Group group.online.zyng.Zyng"])
+                                        "Нет доступа к App Group group.online.zyng.app"])
         }
 
         let base = container.appendingPathComponent("core", isDirectory: true)

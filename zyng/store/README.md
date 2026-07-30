@@ -31,11 +31,11 @@ https://zyng.online/privacy.html
 | Platforms | iOS |
 | Name | Zyng |
 | Primary Language | Russian |
-| Bundle ID | `online.zyng.Zyng` |
+| Bundle ID | `online.zyng.app` |
 | SKU | `zyng-ios-001` (любая строка, видна только тебе) |
 | User Access | Full Access |
 
-Если `online.zyng.Zyng` нет в списке Bundle ID — значит Xcode ещё не
+Если `online.zyng.app` нет в списке Bundle ID — значит Xcode ещё не
 зарегистрировал его. Собери приложение на устройстве один раз, и он появится.
 
 ---

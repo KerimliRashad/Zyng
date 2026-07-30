@@ -10,7 +10,7 @@ import Foundation
 /// его и показывает причину прямо на экране.
 enum TunnelDiagnostics {
 
-    static let appGroup = "group.online.zyng.Zyng"
+    static let appGroup = "group.online.zyng.app"
 
     /// Куда ядро пишет свой вывод, включая панику Go.
     static var stderrPath: String? {

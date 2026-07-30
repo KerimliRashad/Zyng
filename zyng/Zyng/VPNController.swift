@@ -29,7 +29,7 @@ final class VPNController: NSObject, ObservableObject {
     }
 
     /// Должен точно совпадать с Bundle ID таргета расширения.
-    private static let providerBundleIdentifier = "online.zyng.Zyng.ZyngTunnel"
+    private static let providerBundleIdentifier = "online.zyng.app.tunnel"
 
     private var manager: NETunnelProviderManager?
 

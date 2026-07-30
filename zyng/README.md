@@ -115,8 +115,8 @@ zyng/
 
 | | |
 |---|---|
-| Приложение | `online.zyng.Zyng` |
-| Расширение | `online.zyng.Zyng.ZyngTunnel` |
-| App Group | `group.online.zyng.Zyng` |
+| Приложение | `online.zyng.app` |
+| Расширение | `online.zyng.app.tunnel` |
+| App Group | `group.online.zyng.app` |
 
 Bundle ID расширения обязан начинаться с Bundle ID приложения.

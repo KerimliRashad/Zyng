@@ -44,7 +44,7 @@ targets:
       # и dyld убивал приложение на старте, не найдя в бандле настоящую dylib.
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng
+        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.app
         PRODUCT_NAME: Zyng
         MARKETING_VERSION: "1.1"
         CURRENT_PROJECT_VERSION: "9"
@@ -74,7 +74,7 @@ targets:
     settings:
       base:
         # Bundle ID расширения обязан начинаться с Bundle ID приложения.
-        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngTunnel
+        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.app.tunnel
         PRODUCT_NAME: ZyngTunnel
         MARKETING_VERSION: "1.1"
         CURRENT_PROJECT_VERSION: "9"
@@ -99,7 +99,7 @@ targets:
       - sdk: NetworkExtension.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: online.zyng.app.widgets
         PRODUCT_NAME: ZyngWidgets
         MARKETING_VERSION: "1.1"
         CURRENT_PROJECT_VERSION: "9"
