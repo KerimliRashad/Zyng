@@ -12,7 +12,7 @@ struct ZyngControl: ControlWidget {
 
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
-            kind: "online.zyng.app.control",
+            kind: "online.zyng.Zyng.control",
             provider: StatusProvider()
         ) { isConnected in
             ControlWidgetToggle(
