@@ -3,73 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zyng — быстрый и приватный VPN</title>
-<meta name="description" content="Zyng — быстрый VPN с современными протоколами. Вставь ключ или подписку и подключайся одним касанием.">
+<title>Zyng — быстрый и приватный VPN для iPhone</title>
+<meta name="description" content="Zyng — VPN-клиент для iPhone от KERIMLI CORP. Вставь ключ или ссылку-подписку и подключайся одним касанием. Без рекламы, без журналов, без регистрации.">
+<meta name="author" content="KERIMLI CORP.">
+<meta property="og:title" content="Zyng — быстрый и приватный VPN">
+<meta property="og:description" content="VPN-клиент для iPhone. Вставь ключ или подписку и подключайся одним касанием.">
+<meta property="og:url" content="https://zyng.online/">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://zyng.online/">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235B8CFF'/><text x='50' y='72' font-size='68' font-family='Arial' font-weight='900' fill='white' text-anchor='middle'>Z</text></svg>">
 <style>
   :root{
     --bg1:#0E1014; --bg2:#171A20; --card:#1D2129; --stroke:#2E343F;
-    --text:#F2F5FA; --sub:#8A94A6; --accent:#5B8CFF; --accent2:#7A5CFF; --green:#39D98A;
+    --text:#F2F5FA; --sub:#8A94A6; --body:#D4DAE4;
+    --accent:#5B8CFF; --accent2:#7A5CFF; --green:#39D98A;
   }
   *{box-sizing:border-box; margin:0; padding:0}
   html{scroll-behavior:smooth}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--text);
-    min-height:100vh; line-height:1.6; -webkit-font-smoothing:antialiased;
+    background:var(--bg1);
+    background-image:
+      radial-gradient(900px 500px at 50% -8%, rgba(91,140,255,.16), transparent 70%),
+      linear-gradient(180deg,var(--bg1),var(--bg2));
+    background-attachment:fixed;
+    color:var(--text); min-height:100vh; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:960px; margin:0 auto; padding:0 20px}
-  header{display:flex; align-items:center; justify-content:space-between; padding:22px 0}
-  .logo{display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px}
-  .logo .mark{
-    width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+  .wrap{max-width:980px; margin:0 auto; padding:0 22px}
+  a{color:var(--accent)}
+
+  /* Шапка */
+  header{display:flex; align-items:center; justify-content:space-between; padding:22px 0; gap:16px; flex-wrap:wrap}
+  .logo{display:flex; align-items:center; gap:11px; font-weight:800; font-size:20px; color:var(--text); text-decoration:none}
+  .mark{
+    width:36px; height:36px; border-radius:11px; display:grid; place-items:center;
     background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
     font-weight:900; font-size:21px;
   }
-  nav a{color:var(--sub); text-decoration:none; margin-left:22px; font-size:15px; font-weight:600}
-  nav a:hover{color:var(--text)}
-  .hero{text-align:center; padding:70px 0 40px}
-  .hero .orb{
-    width:150px; height:150px; margin:0 auto 28px; border-radius:50%;
-    background:radial-gradient(circle at 50% 40%,#272C36,#1D2129);
+  nav{display:flex; flex-wrap:wrap; gap:6px}
+  nav a{color:var(--sub); text-decoration:none; padding:7px 12px; border-radius:9px; font-size:15px; font-weight:600}
+  nav a:hover{color:var(--text); background:rgba(255,255,255,.05)}
+
+  /* Первый экран */
+  .hero{text-align:center; padding:64px 0 44px}
+  .orb{
+    width:148px; height:148px; margin:0 auto 30px; border-radius:50%;
+    background:radial-gradient(circle at 50% 38%,#272C36,#1B1F27);
     border:2px solid rgba(91,140,255,.55);
-    box-shadow:0 0 60px rgba(91,140,255,.35); display:grid; place-items:center;
+    box-shadow:0 0 70px rgba(91,140,255,.32); display:grid; place-items:center;
   }
-  .hero .orb svg{width:52px; height:52px; fill:var(--accent)}
-  .hero h1{font-size:clamp(34px,7vw,58px); font-weight:900; letter-spacing:-1px; line-height:1.05}
-  .hero .grad{background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent}
-  .hero p{color:var(--sub); font-size:clamp(16px,2.5vw,20px); max-width:600px; margin:18px auto 0}
-  .btns{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:34px}
+  .orb svg{width:52px; height:52px; fill:var(--accent)}
+  .hero h1{font-size:clamp(32px,6.5vw,56px); font-weight:900; letter-spacing:-1.2px; line-height:1.06}
+  .grad{background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .hero p{color:var(--sub); font-size:clamp(16px,2.4vw,19px); max-width:620px; margin:20px auto 0}
+  .btns{display:flex; gap:13px; justify-content:center; flex-wrap:wrap; margin-top:34px}
   .btn{
-    display:inline-flex; align-items:center; gap:9px; padding:15px 28px; border-radius:15px;
+    display:inline-flex; align-items:center; gap:9px; padding:15px 27px; border-radius:15px;
     font-weight:700; font-size:16px; text-decoration:none; border:1px solid var(--stroke);
     color:var(--text); background:var(--card); transition:transform .12s ease, border-color .2s
   }
   .btn:hover{transform:translateY(-2px); border-color:var(--accent)}
   .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; color:#fff}
-  .features{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; padding:50px 0}
+  .btn.primary:hover{border:none}
+
+  /* Секции */
+  section{padding:52px 0}
+  h2.title{font-size:clamp(24px,4vw,32px); font-weight:800; letter-spacing:-.5px; text-align:center}
+  .lead{color:var(--sub); text-align:center; max-width:620px; margin:12px auto 0; font-size:16px}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(238px,1fr)); gap:16px; margin-top:34px}
   .feat{background:var(--card); border:1px solid var(--stroke); border-radius:18px; padding:24px}
-  .feat .ico{font-size:26px}
-  .feat h3{margin:12px 0 6px; font-size:18px}
+  .feat .ico{font-size:25px; line-height:1}
+  .feat h3{margin:13px 0 6px; font-size:17px; font-weight:700}
   .feat p{color:var(--sub); font-size:15px}
+
+  /* Протоколы */
+  .chips{display:flex; flex-wrap:wrap; gap:9px; justify-content:center; margin-top:28px}
+  .chip{
+    background:var(--card); border:1px solid var(--stroke); border-radius:999px;
+    padding:8px 16px; font-size:14px; font-weight:600; color:var(--body)
+  }
+
+  /* О компании */
+  .company{
+    background:var(--card); border:1px solid var(--stroke); border-radius:22px;
+    padding:34px; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:28px; margin-top:32px
+  }
+  .company h3{font-size:17px; font-weight:700; margin-bottom:10px}
+  .company p{color:var(--sub); font-size:15px}
+  .company .legal{color:var(--body); font-style:normal}
+  .company .legal strong{color:var(--text); font-size:16px}
+
+  /* Призыв */
   .cta{
     text-align:center; background:var(--card); border:1px solid var(--stroke);
-    border-radius:24px; padding:46px 24px; margin:20px 0 60px
+    border-radius:24px; padding:46px 24px; margin-bottom:56px
   }
-  .cta h2{font-size:clamp(24px,4vw,34px); font-weight:800}
-  .cta p{color:var(--sub); margin:12px 0 26px}
-  footer{border-top:1px solid var(--stroke); padding:34px 0; color:var(--sub); font-size:14px;
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px}
-  footer a{color:var(--sub); text-decoration:none; margin-right:18px}
-  footer a:hover{color:var(--text)}
+  .cta h2{font-size:clamp(23px,4vw,32px); font-weight:800}
+  .cta p{color:var(--sub); margin:12px auto 26px; max-width:520px}
+
+  /* Подвал */
+  footer{border-top:1px solid var(--stroke); padding:34px 0 44px; color:var(--sub); font-size:14px}
+  .fgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:24px}
+  footer strong{color:var(--text); font-size:15px; display:block; margin-bottom:7px}
+  footer address{font-style:normal; line-height:1.75}
+  footer nav{display:block}
+  footer nav a{display:block; padding:3px 0; color:var(--sub); text-decoration:none}
+  footer nav a:hover{color:var(--text); background:none}
+  .copy{border-top:1px solid var(--stroke); margin-top:26px; padding-top:20px; font-size:13px}
 </style>
 </head>
 <body>
 <div class="wrap">
+
   <header>
-    <div class="logo"><span class="mark">Z</span> Zyng</div>
+    <a class="logo" href="index.html"><span class="mark">Z</span> Zyng</a>
     <nav>
       <a href="#features">Возможности</a>
+      <a href="#company">О компании</a>
       <a href="support.html">Поддержка</a>
       <a href="privacy.html">Конфиденциальность</a>
     </nav>
@@ -80,9 +132,9 @@
       <svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
     </div>
     <h1>Интернет без границ.<br><span class="grad">Просто. Быстро. Безопасно.</span></h1>
-    <p>Zyng — современный VPN. Вставь ключ или ссылку-подписку и подключайся одним касанием. Никакой рекламы и лишних настроек.</p>
+    <p>Zyng — VPN-клиент для iPhone. Вставь ключ или ссылку-подписку своего провайдера и подключайся одним касанием. Без рекламы, без регистрации, без лишних настроек.</p>
     <div class="btns">
-      <a class="btn primary" href="#">
+      <a class="btn primary" href="#features">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1H7a3 3 0 0 0-3 3v16a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3zm-5 21a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8z"/></svg>
         Скоро в App Store
       </a>
@@ -90,34 +142,96 @@
     </div>
   </section>
 
-  <section class="features" id="features">
-    <div class="feat"><div class="ico">⚡</div><h3>Молниеносно</h3><p>Современные протоколы для стабильной скорости даже при слабом сигнале.</p></div>
-    <div class="feat"><div class="ico">🔒</div><h3>Приватность</h3><p>Мы не ведём журналы твоей активности и не продаём данные третьим лицам.</p></div>
-    <div class="feat"><div class="ico">🌍</div><h3>Серверы мира</h3><p>Добавляй любые ключи и подписки — десятки стран в одном приложении.</p></div>
-    <div class="feat"><div class="ico">✨</div><h3>Простой дизайн</h3><p>Одна большая кнопка. Подключение одним касанием, без сложных меню.</p></div>
+  <section id="features">
+    <h2 class="title">Что умеет Zyng</h2>
+    <p class="lead">Всё нужное — и ничего лишнего.</p>
+    <div class="grid">
+      <div class="feat"><div class="ico">⚡</div><h3>Молниеносно</h3><p>Современные протоколы держат скорость даже при слабом сигнале.</p></div>
+      <div class="feat"><div class="ico">🔒</div><h3>Приватность</h3><p>Мы не ведём журналы активности и не продаём данные третьим лицам.</p></div>
+      <div class="feat"><div class="ico">🌍</div><h3>Серверы мира</h3><p>Добавляй ключи и подписки — десятки стран в одном приложении.</p></div>
+      <div class="feat"><div class="ico">✨</div><h3>Простой дизайн</h3><p>Одна большая кнопка. Подключение одним касанием, без сложных меню.</p></div>
+      <div class="feat"><div class="ico">📊</div><h3>Задержка серверов</h3><p>Видно отклик каждого сервера в миллисекундах — выбирай самый быстрый.</p></div>
+      <div class="feat"><div class="ico">🔁</div><h3>Подписки</h3><p>Список серверов обновляется сам. Видно расход трафика и срок действия.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="title">Поддерживаемые протоколы</h2>
+    <p class="lead">Работают TLS и Reality, транспорты WebSocket, gRPC, HTTP/2, HTTPUpgrade и QUIC.</p>
+    <div class="chips">
+      <span class="chip">VLESS</span>
+      <span class="chip">VMess</span>
+      <span class="chip">Trojan</span>
+      <span class="chip">Shadowsocks</span>
+      <span class="chip">Hysteria2</span>
+      <span class="chip">TUIC</span>
+      <span class="chip">SOCKS</span>
+    </div>
+  </section>
+
+  <section id="company">
+    <h2 class="title">О компании</h2>
+    <p class="lead">Zyng — продукт компании KERIMLI CORP., зарегистрированной в США.</p>
+    <div class="company">
+      <div>
+        <h3>Реквизиты</h3>
+        <address class="legal">
+          <strong>KERIMLI CORP.</strong>
+          1942 E 8th St, Apt 2F<br>
+          Brooklyn, NY 11223-3216<br>
+          United States<br>
+          D-U-N-S: 132397245
+        </address>
+      </div>
+      <div>
+        <h3>Связаться</h3>
+        <p>
+          Общие вопросы и поддержка:<br>
+          <a href="mailto:support@zyng.online">support@zyng.online</a>
+        </p>
+        <p style="margin-top:12px">
+          Отвечаем на русском и английском.
+        </p>
+      </div>
+      <div>
+        <h3>Чем занимаемся</h3>
+        <p>Разрабатываем приложения для iOS. Zyng — наш VPN-клиент: он не продаёт доступ к серверам, а помогает подключиться к тем, что у пользователя уже есть.</p>
+      </div>
+    </div>
   </section>
 
   <section class="cta">
     <h2>Подключайся к Zyng</h2>
-    <p>Красивый и понятный VPN для iPhone. Вставил ключ — и готово.</p>
-    <a class="btn primary" href="#">Скоро в App Store</a>
+    <p>Понятный VPN для iPhone. Вставил ключ — и готово.</p>
+    <a class="btn primary" href="support.html">Как начать</a>
   </section>
+
 </div>
 
 <footer>
-  <div class="wrap" style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px; width:100%">
-    <div>
-      <strong style="color:var(--text)">KERIMLI CORP.</strong><br>
-      1942 E 8th St, Apt 2F<br>
-      Brooklyn, NY 11223-3216, United States<br>
-      <a href="mailto:support@zyng.online" style="margin:0">support@zyng.online</a>
-      <div style="margin-top:12px">© 2026 KERIMLI CORP. Все права защищены.</div>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <strong>KERIMLI CORP.</strong>
+        <address>
+          1942 E 8th St, Apt 2F<br>
+          Brooklyn, NY 11223-3216<br>
+          United States
+        </address>
+      </div>
+      <div>
+        <strong>Контакты</strong>
+        <a href="mailto:support@zyng.online">support@zyng.online</a>
+      </div>
+      <nav>
+        <strong>Разделы</strong>
+        <a href="support.html">Поддержка</a>
+        <a href="privacy.html">Политика конфиденциальности</a>
+      </nav>
     </div>
-    <div>
-      <a href="privacy.html">Политика конфиденциальности</a>
-      <a href="support.html">Поддержка</a>
-    </div>
+    <div class="copy">© 2026 KERIMLI CORP. Все права защищены.</div>
   </div>
 </footer>
+
 </body>
 </html>
