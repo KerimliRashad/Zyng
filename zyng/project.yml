@@ -24,6 +24,24 @@ settings:
     SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
+# Схемы задаём явно. Без этого XcodeGen их не пишет вовсе, а Xcode создаёт
+# сам и не всегда все: в списке оставались только расширения, схемы приложения
+# не было — и пункт Product → Archive оказывался недоступен.
+schemes:
+
+  Zyng:
+    build:
+      targets:
+        Zyng: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
 targets:
 
   Zyng:
