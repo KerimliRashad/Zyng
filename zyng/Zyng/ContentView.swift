@@ -102,6 +102,33 @@ func flagFor(_ name: String) -> String {
     return "🌐"
 }
 
+/// Флаг, уже вписанный в название сервера самой панелью.
+///
+/// Почти все панели ставят его в начало имени. Свой флаг слева от такого имени
+/// давал два одинаковых значка подряд — вынимаем вписанный и показываем только
+/// его, а имя оставляем без него.
+func splitLeadingFlag(_ name: String) -> (name: String, flag: String?) {
+    var rest = Substring(name.trimmingCharacters(in: .whitespaces))
+
+    guard let first = rest.first,
+          first.unicodeScalars.count == 2,
+          first.unicodeScalars.allSatisfy({ (0x1F1E6...0x1F1FF).contains($0.value) })
+    else {
+        return (name, nil)
+    }
+
+    let flag = String(first)
+    rest = rest.dropFirst()
+    // Отделитель сразу после флага убираем, а дефис внутри имени
+    // («germany - резерв») трогать нельзя — до него есть буквы.
+    while let c = rest.first, c == " " || c == "·" || c == "-" || c == "|" {
+        rest = rest.dropFirst()
+    }
+
+    let cleaned = String(rest).trimmingCharacters(in: .whitespaces)
+    return cleaned.isEmpty ? (name, flag) : (cleaned, flag)
+}
+
 func parseServer(_ raw: String) -> Server? {
     let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard let r = s.range(of: "://") else { return nil }
@@ -125,15 +152,18 @@ func parseServer(_ raw: String) -> Server? {
     }
 
     let transport = transportOf(s, scheme: scheme)
+    let (displayName, embeddedFlag) = splitLeadingFlag(name)
 
     return Server(
         raw: s,
-        name: name,
+        name: displayName,
         proto: proto,
         transport: transport.uppercased(),
         isSupported: SingBoxConfig.supports(transport: transport),
         usesDatagrams: ["hysteria2", "hy2", "tuic"].contains(scheme),
-        flag: flagFor(name)
+        // Флаг из имени точнее нашего угадывания по словам: панель знает
+        // страну сервера, а мы её только предполагаем.
+        flag: embeddedFlag ?? flagFor(name)
     )
 }
 
