@@ -39,6 +39,12 @@ schemes:
         Zyng: all
     run:
       config: Debug
+      # Xcode при запуске подсовывает приложению свои отладочные библиотеки
+      # через DYLD_INSERT_LIBRARIES. Если подпись установленной на устройстве
+      # копии не совпадает с той, чем подписывает Xcode, dyld не может их
+      # загрузить и убивает процесс ещё до нашего кода — SIGKILL со стеком
+      # loadInsertedLibraries. Приложению они не нужны, поэтому выключаем.
+      disableMainThreadChecker: true
     profile:
       config: Release
     analyze:
