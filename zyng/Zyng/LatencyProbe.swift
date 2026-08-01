@@ -93,10 +93,12 @@ final class LatencyProbe: ObservableObject {
         // Сторож. Если замер по любой причине не завершится, через deadline
         // крутилки всё равно погаснут и превратятся в «нет ответа».
         let watched = pending.map(\.raw)
+        // Task внутри @MainActor-метода наследует главный актор, поэтому giveUp
+        // зовётся уже на нём — await здесь был бы лишним, переключаться не на что.
         let watchdog = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(ProbeConfig.deadline * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            await self?.giveUp(on: watched)
+            self?.giveUp(on: watched)
         }
         defer { watchdog.cancel() }
 
