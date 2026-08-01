@@ -163,30 +163,7 @@ func padBase64(_ s: String) -> String {
     return t
 }
 
-// MARK: - Палитра
-
-extension Color {
-    init(hex: String) {
-        let s = Scanner(string: hex); var v: UInt64 = 0; s.scanHexInt64(&v)
-        self.init(red: Double((v>>16)&0xFF)/255,
-                  green: Double((v>>8)&0xFF)/255,
-                  blue: Double(v&0xFF)/255)
-    }
-}
-
-/// Не private: палитрой пользуются и другие экраны.
-enum JT {
-    static let bg1     = Color(hex:"0E1014")
-    static let bg2     = Color(hex:"171A20")
-    static let card    = Color(hex:"1D2129")
-    static let cardHi  = Color(hex:"272C36")
-    static let stroke  = Color(hex:"2E343F")
-    static let text    = Color.white
-    static let sub     = Color(hex:"8A94A6")
-    static let accent  = Color(hex:"5B8CFF")
-    static let green   = Color(hex:"39D98A")
-    static let red     = Color(hex:"FF5C5C")
-}
+// Палитра и тема живут в Theme.swift, строки интерфейса — в L10n.swift.
 
 // MARK: - Главный экран
 
@@ -212,6 +189,9 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var input = ""
     @State private var status = ""
+    /// Удачным ли был последний результат. Раньше это выяснялось поиском слова
+    /// «Добавлено» в самой строке — на другом языке проверка молча ломалась.
+    @State private var statusIsGood = false
     @State private var loading = false
 
     /// Контроллер — синглтон, мы его не создаём, поэтому ObservedObject, а не StateObject.
@@ -238,8 +218,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors:[JT.bg1, JT.bg2], startPoint:.top, endPoint:.bottom)
-                .ignoresSafeArea()
+            JT.backdrop.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -291,6 +270,9 @@ struct ContentView: View {
         .onChange(of: vpn.status) { _, newStatus in
             handle(newStatus)
         }
+        // Тема применяется к корню — отсюда её наследуют и открытые поверх
+        // листы, иначе настройки оставались бы в системной теме.
+        .preferredColorScheme(settings.theme.colorScheme)
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             // Пока приложение было свёрнуто, уведомления о смене статуса не
@@ -455,7 +437,8 @@ struct ContentView: View {
                         .foregroundColor(color)
                         .scaleEffect(state == .on ? boltScale : 1)
 
-                    Text(state == .on ? "ВКЛ" : (state == .connecting ? "…" : "ВЫКЛ"))
+                    Text(state == .on ? tr("ВКЛ", "ON")
+                                     : (state == .connecting ? "…" : tr("ВЫКЛ", "OFF")))
                         .font(.system(size: 13, weight: .bold)).tracking(2)
                         .foregroundColor(JT.sub)
                 }
@@ -516,9 +499,9 @@ struct ContentView: View {
     private var statusPill: some View {
         let t: String; let c: Color
         switch state {
-        case .off:        t = "Отключено";     c = JT.sub
-        case .connecting: t = "Подключение…";  c = JT.accent
-        case .on:         t = "Защищено";      c = JT.green
+        case .off:        t = tr("Отключено", "Disconnected");   c = JT.sub
+        case .connecting: t = tr("Подключение…", "Connecting…");  c = JT.accent
+        case .on:         t = tr("Защищено", "Protected");        c = JT.green
         }
         return HStack(spacing: 8) {
             Circle().fill(c).frame(width: 8, height: 8)
@@ -555,13 +538,13 @@ struct ContentView: View {
                     .font(.system(size: 11, weight: .semibold))
 
                 if let ms = ping.latency {
-                    Text("\(ms) мс")
+                    Text("\(ms) \(tr("мс", "ms"))")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 } else if ping.failed {
-                    Text("нет ответа")
+                    Text(tr("нет ответа", "no response"))
                         .font(.system(size: 12, weight: .medium))
                 } else {
-                    Text("измеряю…")
+                    Text(tr("измеряю…", "measuring…"))
                         .font(.system(size: 12, weight: .medium))
                 }
             }
@@ -592,16 +575,16 @@ struct ContentView: View {
             HStack(spacing: 14) {
                 Text(selected?.flag ?? "🌐").font(.system(size: 30))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(selected?.name ?? "Сервер не выбран")
+                    Text(selected?.name ?? tr("Сервер не выбран", "No server selected"))
                         .foregroundColor(JT.text)
                         .font(.system(size: 16, weight: .semibold)).lineLimit(1)
                     HStack(spacing: 6) {
                         Text(selected.map { "\($0.proto) · \($0.transport)" }
-                             ?? "Добавь ключ или подписку")
+                             ?? tr("Добавь ключ или подписку", "Add a key or subscription"))
                             .foregroundColor(JT.sub).font(.system(size: 12))
 
                         if let selected, !selected.isSupported {
-                            Text("не поддерживается")
+                            Text(tr("не поддерживается", "unsupported"))
                                 .foregroundColor(JT.red)
                                 .font(.system(size: 11, weight: .semibold))
                         }
@@ -621,7 +604,7 @@ struct ContentView: View {
         Button { status = ""; showAdd = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "plus")
-                Text("Добавить ключ / подписку")
+                Text(tr("Добавить ключ / подписку", "Add key / subscription"))
             }
             .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
             .frame(maxWidth: .infinity).padding(.vertical, 15)
@@ -644,16 +627,17 @@ struct ContentView: View {
             JT.bg1.ignoresSafeArea()
             VStack(spacing: 16) {
                 Capsule().fill(JT.stroke).frame(width: 40, height: 5).padding(.top, 10)
-                Text("Добавить ключ / подписку").foregroundColor(JT.text)
+                Text(tr("Добавить ключ / подписку", "Add key / subscription")).foregroundColor(JT.text)
                     .font(.system(size: 18, weight: .bold)).padding(.top, 6)
 
-                Text("Вставь ключ vless:// vmess:// trojan:// ss://\nили ссылку-подписку https://…")
+                Text(tr("Вставь ключ vless:// vmess:// trojan:// ss://\nили ссылку-подписку https://…",
+                        "Paste a vless:// vmess:// trojan:// ss:// key\nor an https:// subscription link"))
                     .foregroundColor(JT.sub).font(.system(size: 13))
                     .multilineTextAlignment(.center)
 
                 TextField("", text: $input, axis: .vertical)
                     .placeholder(when: input.isEmpty) {
-                        Text("vless://…  или  https://подписка")
+                        Text(tr("vless://…  или  https://подписка", "vless://…  or  https://subscription"))
                             .foregroundColor(JT.sub.opacity(0.6))
                     }
                     .foregroundColor(JT.text).tint(JT.accent)
@@ -668,13 +652,13 @@ struct ContentView: View {
                 Button { input = jtClipboard() ?? input } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "doc.on.clipboard")
-                        Text("Вставить из буфера")
+                        Text(tr("Вставить из буфера", "Paste from clipboard"))
                     }.font(.system(size: 13, weight: .semibold)).foregroundColor(JT.accent)
                 }
 
                 if !status.isEmpty {
                     Text(status)
-                        .foregroundColor(status.contains("Добавлено") ? JT.green : JT.sub)
+                        .foregroundColor(statusIsGood ? JT.green : JT.sub)
                         .font(.system(size: 13, weight: .medium))
                         .multilineTextAlignment(.center).padding(.horizontal, 20)
                 }
@@ -682,7 +666,7 @@ struct ContentView: View {
                 Button(action: addKey) {
                     HStack(spacing: 8) {
                         if loading { ProgressView().tint(.white) }
-                        Text(loading ? "Загружаю…" : "Добавить")
+                        Text(loading ? tr("Загружаю…", "Loading…") : tr("Добавить", "Add"))
                     }
                     .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
@@ -691,7 +675,7 @@ struct ContentView: View {
                                              startPoint:.leading, endPoint:.trailing)))
                 }.padding(.horizontal, 20).disabled(loading)
 
-                Button("Закрыть") { showAdd = false }.foregroundColor(JT.sub)
+                Button(tr("Закрыть", "Close")) { showAdd = false }.foregroundColor(JT.sub)
                 Spacer()
             }
         }
@@ -722,19 +706,26 @@ struct ContentView: View {
 
     func addKey() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { status = "Пусто"; return }
+        guard !text.isEmpty else {
+            statusIsGood = false
+            status = tr("Пусто", "Empty")
+            return
+        }
 
         // Ссылка — это подписка, она будет обновляться сама.
         if text.lowercased().hasPrefix("http") {
             loading = true
-            status = "Загружаю подписку…"
+            statusIsGood = false
+            status = tr("Загружаю подписку…", "Loading subscription…")
             Task {
                 await store.addSubscription(url: text)
                 loading = false
                 if let error = store.lastError {
+                    statusIsGood = false
                     status = error
                 } else {
-                    status = "Подписка добавлена"
+                    statusIsGood = true
+                    status = tr("Подписка добавлена", "Subscription added")
                     input = ""
                     showAdd = false
                 }
@@ -743,9 +734,11 @@ struct ContentView: View {
         }
 
         let added = store.addSingleKeys(from: text)
+        statusIsGood = added > 0
         status = added > 0
-            ? "Добавлено ключей: \(added)"
-            : "Не похоже на ключ (нужен vless:// и т.п.)"
+            ? tr("Добавлено ключей: \(added)", "Keys added: \(added)")
+            : tr("Не похоже на ключ (нужен vless:// и т.п.)",
+                 "Doesn't look like a key (vless:// and similar)")
         if added > 0 {
             input = ""
             showAdd = false

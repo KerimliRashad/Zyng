@@ -9,6 +9,9 @@ struct ServerListView: View {
 
     @ObservedObject var store: ServerStore
     @StateObject private var probe = LatencyProbe()
+    /// Нужен ради темы и языка: без подписки на настройки экран не
+    /// перерисовывался бы при их смене и оставался в прежнем оформлении.
+    @ObservedObject private var settings = AppSettings.shared
 
     let onPicked: () -> Void
     let onAdd: () -> Void
@@ -26,7 +29,7 @@ struct ServerListView: View {
 
     var body: some View {
         ZStack {
-            JT.bg1.ignoresSafeArea()
+            JT.backdrop.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -43,19 +46,29 @@ struct ServerListView: View {
             }
         }
         .alert(
-            "Этот сервер не подойдёт",
+            tr("Этот сервер не подойдёт", "This server won't work"),
             isPresented: Binding(get: { unsupported != nil },
                                  set: { if !$0 { unsupported = nil } })
         ) {
-            Button("Понятно", role: .cancel) { unsupported = nil }
+            Button(tr("Понятно", "OK"), role: .cancel) { unsupported = nil }
         } message: {
-            Text("Транспорт «\(unsupported?.transport ?? "")» ядро Zyng не умеет. "
-               + "Выбери сервер, у которого указан TCP, WS, gRPC или QUIC.")
+            let t = unsupported?.transport ?? ""
+            Text(tr("Транспорт «\(t)» ядро Zyng не умеет. Выбери сервер с пометкой "
+                  + "TCP, WS, GRPC, HTTP, HTTPUPGRADE или QUIC.",
+                    "Zyng's core does not support the «\(t)» transport. Pick a server "
+                  + "marked TCP, WS, GRPC, HTTP, HTTPUPGRADE or QUIC."))
         }
         .task {
             selectTabIfNeeded()
             await store.refreshStale()
             selectTabIfNeeded()
+            // Замер сам, без нажатия на секундомер: список без задержек
+            // бесполезен, а вручную его запускал не каждый.
+            await probe.measure(visibleServers)
+        }
+        .onChange(of: tab) { _, _ in
+            // У соседней вкладки своя подписка и свои серверы — их ещё не мерили.
+            Task { await probe.measure(visibleServers) }
         }
     }
 
@@ -88,7 +101,7 @@ struct ServerListView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text("Серверы")
+            Text(tr("Серверы", "Servers"))
                 .foregroundColor(JT.text)
                 .font(.system(size: 20, weight: .bold))
 
@@ -96,7 +109,9 @@ struct ServerListView: View {
 
             Button {
                 jtHaptic()
-                Task { await probe.measure(visibleServers) }
+                // Нажали сами — значит, хотят пересчитать всё, включая те
+                // серверы, что в прошлый раз не ответили.
+                Task { await probe.measure(visibleServers, force: true) }
             } label: {
                 Group {
                     if probe.isRunning {
@@ -143,7 +158,7 @@ struct ServerListView: View {
                 }
 
                 tabChip(
-                    title: "Ключи",
+                    title: tr("Ключи", "Keys"),
                     count: store.singleKeys.count,
                     tab: .singles
                 )
@@ -187,8 +202,9 @@ struct ServerListView: View {
             if servers.isEmpty {
                 emptyState(
                     icon: "arrow.triangle.2.circlepath",
-                    title: "Подписка пустая",
-                    hint: "Обнови её — возможно, панель ещё не отдала серверы"
+                    title: tr("Подписка пустая", "Subscription is empty"),
+                    hint: tr("Обнови её — возможно, панель ещё не отдала серверы",
+                             "Refresh it — the provider may not have sent servers yet")
                 )
             } else {
                 ForEach(servers) { server in
@@ -198,14 +214,15 @@ struct ServerListView: View {
         } else if store.subscriptions.isEmpty && store.singleServers.isEmpty {
             emptyState(
                 icon: "server.rack",
-                title: "Серверов пока нет",
-                hint: "Добавь ссылку-подписку или отдельный ключ"
+                title: tr("Серверов пока нет", "No servers yet"),
+                hint: tr("Добавь ссылку-подписку или отдельный ключ",
+                         "Add a subscription link or a single key")
             )
         } else if store.singleServers.isEmpty {
             emptyState(
                 icon: "key",
-                title: "Отдельных ключей нет",
-                hint: "Вставь ключ vless:// или другой"
+                title: tr("Отдельных ключей нет", "No single keys"),
+                hint: tr("Вставь ключ vless:// или другой", "Paste a vless:// key or another")
             )
         } else {
             ForEach(store.singleServers) { server in
@@ -251,14 +268,14 @@ struct ServerListView: View {
                 Menu {
                     if let page = sub.webPage, let url = URL(string: page) {
                         Link(destination: url) {
-                            Label("Личный кабинет", systemImage: "safari")
+                            Label(tr("Личный кабинет", "Provider page"), systemImage: "safari")
                         }
                     }
                     Button(role: .destructive) {
                         store.removeSubscription(sub.id)
                         selectTabIfNeeded()
                     } label: {
-                        Label("Удалить подписку", systemImage: "trash")
+                        Label(tr("Удалить подписку", "Remove subscription"), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -320,12 +337,13 @@ struct ServerListView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy"
 
-        guard date > Date() else { return "истекла \(formatter.string(from: date))" }
+        let stamp = formatter.string(from: date)
+        guard date > Date() else { return tr("истекла \(stamp)", "expired \(stamp)") }
 
         let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
         return days <= 30
-            ? "осталось \(days) дн."
-            : "до \(formatter.string(from: date))"
+            ? tr("осталось \(days) дн.", "\(days) days left")
+            : tr("до \(stamp)", "until \(stamp)")
     }
 
     private func subtitle(for sub: Subscription) -> String {
@@ -336,10 +354,11 @@ struct ServerListView: View {
             formatter.dateFormat = "dd.MM HH:mm"
             parts.append(formatter.string(from: updated))
         } else {
-            parts.append("не обновлялась")
+            parts.append(tr("не обновлялась", "never refreshed"))
         }
 
-        parts.append("автообновление — \(sub.autoUpdateHours) ч.")
+        parts.append(tr("автообновление — \(sub.autoUpdateHours) ч.",
+                        "auto-refresh every \(sub.autoUpdateHours) h"))
         return parts.joined(separator: " • ")
     }
 
@@ -363,7 +382,7 @@ struct ServerListView: View {
                         .font(.system(size: 11))
 
                     if !server.isSupported {
-                        Text("не поддерживается")
+                        Text(tr("не поддерживается", "unsupported"))
                             .foregroundColor(JT.red)
                             .font(.system(size: 10, weight: .semibold))
                             .padding(.horizontal, 6)
@@ -380,12 +399,7 @@ struct ServerListView: View {
             } else if server.usesDatagrams {
                 // Замерить нельзя, но сервер рабочий — так и пишем, вместо
                 // прочерка, который читается как «не отвечает».
-                Text("UDP")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(JT.sub)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(JT.cardHi))
+                badge(text: "UDP", color: JT.sub)
             }
 
             if isSelected {
@@ -426,20 +440,41 @@ struct ServerListView: View {
         }
     }
 
-    /// Три состояния: не мерили, не ответил, ответил за N мс.
+    /// Четыре состояния: ещё меряем, не мерили, не ответил, ответил за N мс.
+    ///
+    /// Раньше на время замера строка была пустой, и казалось, что часть серверов
+    /// проверку просто пропустили. Теперь у каждой видно, что происходит.
     @ViewBuilder
     private func latencyLabel(for server: Server) -> some View {
         if let measured = probe.latency(for: server) {
             if let ms = measured {
-                Text("\(ms) мс")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(color(forLatency: ms))
+                badge(text: "\(ms) \(tr("мс", "ms"))",
+                      color: color(forLatency: ms),
+                      monospaced: true)
             } else {
-                Text("—")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(JT.red.opacity(0.8))
+                badge(text: tr("нет ответа", "no response"), color: JT.red)
             }
+        } else if probe.isRunning {
+            ProgressView()
+                .controlSize(.mini)
+                .tint(JT.sub)
         }
+    }
+
+    /// Значок справа в строке — одинаковый для задержки, UDP и отказа.
+    private func badge(text: String, color: Color, monospaced: Bool = false) -> some View {
+        Text(text)
+            .font(.system(size: 11,
+                          weight: .semibold,
+                          design: monospaced ? .monospaced : .default))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.14))
+                    .overlay(Capsule().stroke(color.opacity(0.22), lineWidth: 1))
+            )
     }
 
     private func color(forLatency ms: Int) -> Color {
@@ -464,7 +499,7 @@ struct ServerListView: View {
                 .foregroundColor(JT.sub)
                 .font(.system(size: 13))
                 .multilineTextAlignment(.center)
-            Button("Добавить") { onAdd() }
+            Button(tr("Добавить", "Add")) { onAdd() }
                 .foregroundColor(JT.accent)
                 .font(.system(size: 15, weight: .semibold))
                 .padding(.top, 4)

@@ -16,15 +16,18 @@ enum SingBoxConfig {
         var errorDescription: String? {
             switch self {
             case .emptyKey:
-                return "Ключ пустой"
+                return tr("Ключ пустой", "The key is empty")
             case .unsupportedScheme(let s):
-                return "Протокол «\(s)» не поддерживается"
+                return tr("Протокол «\(s)» не поддерживается", "The «\(s)» protocol is not supported")
             case .unsupportedTransport(let t):
-                return "Транспорт «\(t)» умеет только Xray, а Zyng работает "
-                     + "на sing-box. Выбери в этой же подписке сервер той же "
-                     + "страны с пометкой tcp, ws, grpc, http или httpupgrade."
+                return tr("Транспорт «\(t)» умеет только Xray, а Zyng работает "
+                        + "на sing-box. Выбери в этой же подписке сервер той же "
+                        + "страны с пометкой tcp, ws, grpc, http или httpupgrade.",
+                          "Only Xray supports the «\(t)» transport, and Zyng runs on "
+                        + "sing-box. Pick a server for the same country in this "
+                        + "subscription marked tcp, ws, grpc, http or httpupgrade.")
             case .malformed(let why):
-                return "Ключ повреждён: \(why)"
+                return tr("Ключ повреждён: \(why)", "The key is malformed: \(why)")
             }
         }
     }

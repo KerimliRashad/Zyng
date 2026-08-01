@@ -18,14 +18,14 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [JT.bg1, JT.bg2], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+            JT.backdrop.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
 
                 ScrollView {
                     VStack(spacing: 22) {
+                        appearanceSection
                         dnsSection
                         behaviourSection
                         aboutSection
@@ -41,7 +41,7 @@ struct SettingsView: View {
 
     private var header: some View {
         HStack {
-            Text("Настройки")
+            Text(tr("Настройки", "Settings"))
                 .foregroundColor(JT.text)
                 .font(.system(size: 22, weight: .bold))
 
@@ -58,10 +58,104 @@ struct SettingsView: View {
         .padding(.bottom, 18)
     }
 
+    // MARK: - Оформление
+
+    private var appearanceSection: some View {
+        section(title: tr("Оформление", "Appearance"), hint: nil) {
+            VStack(spacing: 8) {
+                pickerRow(
+                    icon: "paintbrush.fill",
+                    title: tr("Тема", "Theme"),
+                    subtitle: settings.theme.subtitle,
+                    value: settings.theme.title
+                ) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Button {
+                            if settings.haptics { jtHaptic() }
+                            settings.theme = theme
+                        } label: {
+                            Label(theme.title, systemImage: theme.icon)
+                        }
+                    }
+                }
+
+                pickerRow(
+                    icon: "character.bubble.fill",
+                    title: tr("Язык", "Language"),
+                    subtitle: tr("Меняется сразу, перезапуск не нужен",
+                                 "Applies immediately, no restart needed"),
+                    value: "\(settings.language.flag)  \(settings.language.title)"
+                ) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Button {
+                            if settings.haptics { jtHaptic() }
+                            settings.language = language
+                        } label: {
+                            Text("\(language.flag)  \(language.title)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Строка с выпадающим меню — для настроек, у которых больше двух значений.
+    private func pickerRow<Content: View>(icon: String,
+                                          title: String,
+                                          subtitle: String,
+                                          value: String,
+                                          @ViewBuilder menu: () -> Content) -> some View {
+        Menu {
+            menu()
+        } label: {
+            HStack(spacing: 13) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(JT.accent)
+                        .frame(width: 34, height: 34)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .foregroundColor(JT.text)
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(subtitle)
+                        .foregroundColor(JT.sub)
+                        .font(.system(size: 11))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 5) {
+                    Text(value)
+                        .foregroundColor(JT.accent)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .foregroundColor(JT.sub)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(JT.bg2)
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(JT.stroke, lineWidth: 1))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - DNS
 
     private var dnsSection: some View {
-        section(title: "DNS-сервер", hint: "Через него идут запросы внутри туннеля") {
+        section(title: tr("DNS-сервер", "DNS server"),
+                hint: tr("Через него идут запросы внутри туннеля",
+                         "Queries inside the tunnel go through it")) {
             VStack(spacing: 8) {
                 ForEach(AppSettings.DNSProvider.allCases) { provider in
                     dnsRow(provider)
@@ -70,7 +164,8 @@ struct SettingsView: View {
                 if needsReconnect {
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle.fill")
-                        Text("Переподключись, чтобы применить")
+                        Text(tr("Переподключись, чтобы применить",
+                                "Reconnect to apply"))
                     }
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(JT.accent)
@@ -134,26 +229,28 @@ struct SettingsView: View {
     // MARK: - Поведение
 
     private var behaviourSection: some View {
-        section(title: "Поведение", hint: nil) {
+        section(title: tr("Поведение", "Behaviour"), hint: nil) {
             VStack(spacing: 8) {
                 toggleRow(
                     icon: "arrow.clockwise.circle.fill",
-                    title: "Держать соединение",
-                    subtitle: "Система сама поднимет туннель, если он оборвался или сменилась сеть. Применяется при следующем подключении",
+                    title: tr("Держать соединение", "Keep connected"),
+                    subtitle: tr("Система сама поднимет туннель, если он оборвался или сменилась сеть. Применяется при следующем подключении",
+                                 "The system brings the tunnel back up if it drops or the network changes. Takes effect on the next connection"),
                     isOn: $settings.autoConnect
                 )
 
                 toggleRow(
                     icon: "bolt.shield.fill",
                     title: "Live Activity",
-                    subtitle: "Статус соединения на экране блокировки и в Dynamic Island. Появляется при запуске туннеля из приложения",
+                    subtitle: tr("Статус соединения на экране блокировки и в Dynamic Island. Появляется при запуске туннеля из приложения",
+                                 "Connection status on the Lock Screen and in the Dynamic Island. Appears when the tunnel starts from the app"),
                     isOn: $settings.liveActivity
                 )
 
                 toggleRow(
                     icon: "iphone.radiowaves.left.and.right",
-                    title: "Вибрация",
-                    subtitle: "Отклик при нажатии кнопок",
+                    title: tr("Вибрация", "Haptics"),
+                    subtitle: tr("Отклик при нажатии кнопок", "Feedback when you tap buttons"),
                     isOn: $settings.haptics
                 )
             }
@@ -202,21 +299,30 @@ struct SettingsView: View {
     // MARK: - О приложении
 
     private var aboutSection: some View {
-        section(title: "О приложении", hint: nil) {
+        section(title: tr("О приложении", "About"), hint: nil) {
             VStack(spacing: 8) {
-                infoRow(title: "Версия", value: settings.appVersion)
+                infoRow(title: tr("Версия", "Version"), value: settings.appVersion)
+
+                linkRow(
+                    icon: "questionmark.circle.fill",
+                    title: tr("Помощь", "Help"),
+                    subtitle: tr("Как добавить ключ и что делать при ошибках",
+                                 "Adding keys and fixing common errors"),
+                    url: "https://zyng.online/support.html"
+                )
 
                 linkRow(
                     icon: "hand.raised.fill",
-                    title: "Политика конфиденциальности",
-                    subtitle: "Что приложение делает с данными",
+                    title: tr("Политика конфиденциальности", "Privacy policy"),
+                    subtitle: tr("Что приложение делает с данными",
+                                 "What the app does with your data"),
                     url: "https://zyng.online/privacy.html"
                 )
 
                 linkRow(
                     icon: "paperplane.fill",
-                    title: "Канал в Telegram",
-                    subtitle: "Новости, ключи и помощь",
+                    title: tr("Канал в Telegram", "Telegram channel"),
+                    subtitle: tr("Новости, ключи и помощь", "News, keys and support"),
                     url: "https://t.me/jeffvpn"
                 )
             }

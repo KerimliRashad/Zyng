@@ -150,12 +150,12 @@ final class ServerStore: ObservableObject {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = URL(string: trimmed),
               parsed.scheme == "http" || parsed.scheme == "https" else {
-            lastError = "Это не похоже на ссылку подписки"
+            lastError = tr("Это не похоже на ссылку подписки", "That does not look like a subscription link")
             return
         }
 
         let sub = Subscription(
-            name: name?.isEmpty == false ? name! : (parsed.host ?? "Подписка"),
+            name: name?.isEmpty == false ? name! : (parsed.host ?? tr("Подписка", "Subscription")),
             url: trimmed
         )
 
@@ -187,7 +187,8 @@ final class ServerStore: ObservableObject {
         do {
             let profile = try await fetchProfile(from: subscriptions[index].url)
             guard !profile.keys.isEmpty else {
-                lastError = "Подписка не вернула ни одного сервера"
+                lastError = tr("Подписка не вернула ни одного сервера",
+                               "The subscription returned no servers")
                 return
             }
 
@@ -211,7 +212,8 @@ final class ServerStore: ObservableObject {
             fixSelectionIfNeeded()
             persist()
         } catch {
-            lastError = "Не удалось обновить: \(error.localizedDescription)"
+            lastError = tr("Не удалось обновить: \(error.localizedDescription)",
+                           "Could not refresh: \(error.localizedDescription)")
         }
     }
 
@@ -277,7 +279,9 @@ final class ServerStore: ObservableObject {
                    !(200..<300).contains(http.statusCode) {
                     lastError = NSError(
                         domain: "Zyng", code: http.statusCode,
-                        userInfo: [NSLocalizedDescriptionKey: "сервер ответил \(http.statusCode)"]
+                        userInfo: [NSLocalizedDescriptionKey:
+                                    tr("сервер ответил \(http.statusCode)",
+                                       "server replied \(http.statusCode)")]
                     )
                     continue
                 }

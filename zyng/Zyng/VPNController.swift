@@ -155,7 +155,7 @@ final class VPNController: NSObject, ObservableObject {
     func connect(key: String) async {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            errorMessage = "Ключ пустой"
+            errorMessage = tr("Ключ пустой", "The key is empty")
             return
         }
 
@@ -265,17 +265,22 @@ final class VPNController: NSObject, ObservableObject {
         }
         switch code {
         case .configurationInvalid:
-            return "Конфигурация VPN недействительна. Проверь, что Bundle ID расширения — \(providerBundleIdentifier)."
+            return tr("Конфигурация VPN недействительна. Проверь, что Bundle ID расширения — \(providerBundleIdentifier).",
+                      "The VPN configuration is invalid. Check that the extension bundle ID is \(providerBundleIdentifier).")
         case .configurationDisabled:
-            return "Конфигурация VPN отключена в Настройках → VPN."
+            return tr("Конфигурация VPN отключена в Настройках → VPN.",
+                      "The VPN configuration is disabled in Settings → VPN.")
         case .configurationStale:
-            return "Конфигурация устарела, повтори попытку."
+            return tr("Конфигурация устарела, повтори попытку.",
+                      "The configuration is stale, try again.")
         case .configurationReadWriteFailed:
-            return "Нет доступа к настройкам VPN. Проверь entitlements Personal VPN и Network Extension."
+            return tr("Нет доступа к настройкам VPN. Проверь entitlements Personal VPN и Network Extension.",
+                      "No access to VPN settings. Check the Personal VPN and Network Extension entitlements.")
         case .connectionFailed:
-            return "Не удалось установить соединение с сервером."
+            return tr("Не удалось установить соединение с сервером.",
+                      "Could not establish a connection to the server.")
         case .configurationUnknown:
-            return "Конфигурация VPN не найдена."
+            return tr("Конфигурация VPN не найдена.", "The VPN configuration was not found.")
         @unknown default:
             return ns.localizedDescription
         }

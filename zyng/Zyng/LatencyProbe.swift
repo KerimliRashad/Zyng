@@ -31,11 +31,22 @@ final class LatencyProbe: ObservableObject {
     @Published private(set) var results: [String: Int?] = [:]
     @Published private(set) var isRunning = false
 
-    private static let timeout: TimeInterval = 3
+    /// Три секунды хватало не всегда: на сотовой сети первое обращение к серверу
+    /// включает ещё и разрешение имени, и замер обрывался на полпути — сервер
+    /// показывался мёртвым, хотя подключался нормально.
+    private static let timeout: TimeInterval = 6
+
+    /// Сколько раз пробовать. Одиночный отказ на мобильной сети — обычное дело,
+    /// и из-за него у части серверов вместо задержки стоял прочерк.
+    private static let attempts = 2
 
     /// Меряет все переданные серверы. Параллельно, но не больше восьми разом,
     /// иначе на мобильной сети замеры мешают друг другу и врут.
-    func measure(_ servers: [Server]) async {
+    /// `force` — мерить всё заново. Без него уже измеренные серверы
+    /// пропускаются: автозамер при открытии списка и при смене вкладки не
+    /// должен каждый раз гонять всё по кругу.
+    func measure(_ servers: [Server], force: Bool = false) async {
+        let servers = force ? servers : servers.filter { results[$0.raw] == nil }
         guard !isRunning, !servers.isEmpty else { return }
         isRunning = true
         defer { isRunning = false }
@@ -83,7 +94,20 @@ final class LatencyProbe: ObservableObject {
         return (server.host, UInt16(server.port))
     }
 
+    /// Пробует несколько раз и возвращает лучший результат.
     private static func probe(_ raw: String) async -> Int? {
+        for attempt in 0..<attempts {
+            if let ms = await probeOnce(raw) { return ms }
+            // Небольшая пауза: подряд идущие попытки упираются в то же самое
+            // состояние сети, что и первая.
+            if attempt + 1 < attempts {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
+        return nil
+    }
+
+    private static func probeOnce(_ raw: String) async -> Int? {
         guard let (host, port) = endpoint(of: raw),
               let nwPort = NWEndpoint.Port(rawValue: port) else {
             return nil

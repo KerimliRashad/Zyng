@@ -16,6 +16,24 @@ final class AppSettings: ObservableObject {
         static let autoConnect = "settings_autoconnect"
         static let haptics = "settings_haptics"
         static let liveActivity = "settings_live_activity"
+        static let theme = "settings_theme"
+        static let language = "settings_language"
+    }
+
+    // MARK: - Оформление
+
+    @Published var theme: AppTheme {
+        didSet {
+            defaults.set(theme.rawValue, forKey: Key.theme)
+            ThemeState.isBlack = theme == .black
+        }
+    }
+
+    @Published var language: AppLanguage {
+        didSet {
+            defaults.set(language.rawValue, forKey: Key.language)
+            L10n.language = language
+        }
     }
 
     // MARK: - DNS
@@ -39,10 +57,18 @@ final class AppSettings: ObservableObject {
 
         var subtitle: String {
             switch self {
-            case .cloudflare: return "1.1.1.1 · быстрый, но блокируется у части провайдеров"
-            case .google:     return "8.8.8.8 · надёжный, работает почти везде"
-            case .adguard:    return "94.140.14.14 · режет рекламу"
-            case .quad9:      return "9.9.9.9 · блокирует вредоносное"
+            case .cloudflare:
+                return tr("1.1.1.1 · быстрый, но блокируется у части провайдеров",
+                          "1.1.1.1 · fast, but blocked by some ISPs")
+            case .google:
+                return tr("8.8.8.8 · надёжный, работает почти везде",
+                          "8.8.8.8 · reliable, works almost everywhere")
+            case .adguard:
+                return tr("94.140.14.14 · режет рекламу",
+                          "94.140.14.14 · blocks ads")
+            case .quad9:
+                return tr("9.9.9.9 · блокирует вредоносное",
+                          "9.9.9.9 · blocks malware")
             }
         }
 
@@ -95,6 +121,18 @@ final class AppSettings: ObservableObject {
         autoConnect = defaults.bool(forKey: Key.autoConnect)
         haptics = defaults.object(forKey: Key.haptics) as? Bool ?? true
         liveActivity = defaults.object(forKey: Key.liveActivity) as? Bool ?? true
+
+        let storedTheme = defaults.string(forKey: Key.theme) ?? AppTheme.dark.rawValue
+        theme = AppTheme(rawValue: storedTheme) ?? .dark
+
+        let storedLanguage = defaults.string(forKey: Key.language) ?? AppLanguage.system.rawValue
+        language = AppLanguage(rawValue: storedLanguage) ?? .system
+
+        // didSet при инициализации не срабатывает, поэтому зеркала для тем и
+        // языка нужно выставить вручную — иначе первый запуск будет с чужой
+        // темой, а тексты на чужом языке.
+        ThemeState.isBlack = theme == .black
+        L10n.language = language
     }
 
     // MARK: - Версии
