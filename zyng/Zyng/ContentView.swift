@@ -233,7 +233,6 @@ struct ContentView: View {
 
     enum ConnState { case off, connecting, on }
 
-    var servers: [Server] { store.allServers }
     var selected: Server? { store.selected }
 
     /// Состояние UI выводится напрямую из статуса системы. Отдельного флага больше

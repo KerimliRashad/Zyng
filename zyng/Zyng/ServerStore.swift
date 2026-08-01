@@ -90,12 +90,42 @@ final class ServerStore: ObservableObject {
 
     // MARK: - Разобранные серверы
 
+    /// Разобранные ключи. Ключ словаря — сама строка ключа.
+    ///
+    /// Раньше кэша не было, и каждое обращение к `allServers` или `selected`
+    /// разбирало заново все ключи всех подписок: base64, JSON, URLComponents.
+    /// Обращений много, а таймер на главном экране перерисовывается раз в
+    /// секунду — разбор шёл по кругу и держал главный поток занятым.
+    ///
+    /// Вторая, менее очевидная беда: `Server.id` создаётся при разборе, поэтому
+    /// у одного и того же сервера при каждом вызове был новый идентификатор.
+    /// Для SwiftUI это означало, что все строки списка исчезли и появились
+    /// заново, — он пересобирал их вместо того, чтобы обновить.
+    ///
+    /// Одна строка ключа всегда разбирается в одно и то же, так что кэш живёт
+    /// до тех пор, пока ключ есть в списке.
+    private var parsed: [String: Server] = [:]
+
+    private func server(for raw: String) -> Server? {
+        if let cached = parsed[raw] { return cached }
+        guard let server = parseServer(raw) else { return nil }
+        parsed[raw] = server
+        return server
+    }
+
+    /// Выбрасывает из кэша ключи, которых больше нет.
+    private func pruneParsed() {
+        var alive = Set(singleKeys)
+        for subscription in subscriptions { alive.formUnion(subscription.rawKeys) }
+        parsed = parsed.filter { alive.contains($0.key) }
+    }
+
     var singleServers: [Server] {
-        singleKeys.compactMap(parseServer)
+        singleKeys.compactMap(server(for:))
     }
 
     func servers(in subscription: Subscription) -> [Server] {
-        subscription.rawKeys.compactMap(parseServer)
+        subscription.rawKeys.compactMap(server(for:))
     }
 
     /// Все серверы разом — из них выбирается активный.
@@ -417,6 +447,7 @@ final class ServerStore: ObservableObject {
     }
 
     private func persist() {
+        pruneParsed()
         guard let url = Self.vaultURL else { return }
 
         let vault = Vault(subscriptions: subscriptions, singleKeys: singleKeys)
@@ -442,7 +473,7 @@ final class ServerStore: ObservableObject {
            let data = try? Data(contentsOf: url),
            let vault = try? JSONDecoder().decode(Vault.self, from: data) {
             subscriptions = vault.subscriptions
-            singleKeys = vault.singleKeys.filter { parseServer($0) != nil }
+            singleKeys = vault.singleKeys.filter { server(for: $0) != nil }
         } else {
             migrateFromDefaults()
         }
@@ -462,7 +493,7 @@ final class ServerStore: ObservableObject {
         let raw = defaults.string(forKey: Key.singles) ?? ""
         singleKeys = raw.split(whereSeparator: \.isNewline)
             .map(String.init)
-            .filter { parseServer($0) != nil }
+            .filter { server(for: $0) != nil }
 
         guard !subscriptions.isEmpty || !singleKeys.isEmpty else { return }
 
