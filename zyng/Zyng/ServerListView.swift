@@ -24,9 +24,6 @@ struct ServerListView: View {
 
     @State private var tab: Tab?
 
-    /// Сервер, по которому нажали, но подключиться к нему нельзя.
-    @State private var unsupported: Server?
-
     var body: some View {
         ZStack {
             JT.backdrop.ignoresSafeArea()
@@ -44,19 +41,6 @@ struct ServerListView: View {
                     .padding(.bottom, 28)
                 }
             }
-        }
-        .alert(
-            tr("Этот сервер не подойдёт", "This server won't work"),
-            isPresented: Binding(get: { unsupported != nil },
-                                 set: { if !$0 { unsupported = nil } })
-        ) {
-            Button(tr("Понятно", "OK"), role: .cancel) { unsupported = nil }
-        } message: {
-            let t = unsupported?.transport ?? ""
-            Text(tr("Транспорт «\(t)» ядро Zyng не умеет. Выбери сервер с пометкой "
-                  + "TCP, WS, GRPC, HTTP, HTTPUPGRADE или QUIC.",
-                    "Zyng's core does not support the «\(t)» transport. Pick a server "
-                  + "marked TCP, WS, GRPC, HTTP, HTTPUPGRADE or QUIC."))
         }
         .task {
             selectTabIfNeeded()
@@ -152,14 +136,16 @@ struct ServerListView: View {
                 ForEach(store.subscriptions) { sub in
                     tabChip(
                         title: sub.name,
-                        count: sub.rawKeys.count,
+                        // Считаем видимое. Раньше здесь стояло число всех ключей,
+                        // и вкладка обещала восемь серверов, а в списке было шесть.
+                        count: store.servers(in: sub).filter(\.isSupported).count,
                         tab: .subscription(sub.id)
                     )
                 }
 
                 tabChip(
                     title: tr("Ключи", "Keys"),
-                    count: store.singleKeys.count,
+                    count: store.singleServers.filter(\.isSupported).count,
                     tab: .singles
                 )
             }
@@ -198,18 +184,31 @@ struct ServerListView: View {
         if let sub = currentSubscription {
             subscriptionHeader(sub)
 
-            let servers = store.servers(in: sub)
-            if servers.isEmpty {
+            let all = store.servers(in: sub)
+            let servers = all.filter(\.isSupported)
+            let hidden = all.count - servers.count
+
+            if all.isEmpty {
                 emptyState(
                     icon: "arrow.triangle.2.circlepath",
                     title: tr("Подписка пустая", "Subscription is empty"),
                     hint: tr("Обнови её — возможно, панель ещё не отдала серверы",
                              "Refresh it — the provider may not have sent servers yet")
                 )
+            } else if servers.isEmpty {
+                emptyState(
+                    icon: "questionmark.circle",
+                    title: tr("Здесь нечего выбрать", "Nothing to pick here"),
+                    hint: tr("Все серверы этой подписки используют транспорт, "
+                           + "которого нет в ядре Zyng. Загляни в соседнюю вкладку",
+                             "Every server in this subscription uses a transport "
+                           + "the Zyng core does not have. Try another tab")
+                )
             } else {
                 ForEach(servers) { server in
                     serverRow(server, showDelete: false)
                 }
+                hiddenNote(hidden)
             }
         } else if store.subscriptions.isEmpty && store.singleServers.isEmpty {
             emptyState(
@@ -225,9 +224,10 @@ struct ServerListView: View {
                 hint: tr("Вставь ключ vless:// или другой", "Paste a vless:// key or another")
             )
         } else {
-            ForEach(store.singleServers) { server in
+            ForEach(store.singleServers.filter(\.isSupported)) { server in
                 serverRow(server, showDelete: true)
             }
+            hiddenNote(store.singleServers.filter { !$0.isSupported }.count)
         }
     }
 
@@ -362,6 +362,24 @@ struct ServerListView: View {
         return parts.joined(separator: " • ")
     }
 
+    /// Сколько серверов скрыто и почему.
+    ///
+    /// Раньше такие серверы показывались помеченными, и нажатие на них
+    /// открывало окно с объяснением. Выбрать их всё равно было нельзя, так что
+    /// окно только мешало. Теперь их просто нет в списке, а короткая строка
+    /// внизу объясняет, почему серверов меньше, чем обещает вкладка.
+    @ViewBuilder
+    private func hiddenNote(_ count: Int) -> some View {
+        if count > 0 {
+            Text(tr("Скрыто серверов: \(count) — их транспорт не поддерживается",
+                    "\(count) server(s) hidden — their transport is unsupported"))
+                .font(.system(size: 11))
+                .foregroundColor(JT.sub.opacity(0.7))
+                .frame(maxWidth: .infinity)
+                .padding(.top, 6)
+        }
+    }
+
     // MARK: - Строка сервера
 
     private func serverRow(_ server: Server, showDelete: Bool) -> some View {
@@ -372,29 +390,18 @@ struct ServerListView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(server.name)
-                    .foregroundColor(server.isSupported ? JT.text : JT.sub)
+                    .foregroundColor(JT.text)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
 
-                HStack(spacing: 5) {
-                    Text("\(server.proto) · \(server.transport)")
-                        .foregroundColor(JT.sub)
-                        .font(.system(size: 11))
-
-                    if !server.isSupported {
-                        Text(tr("не поддерживается", "unsupported"))
-                            .foregroundColor(JT.red)
-                            .font(.system(size: 10, weight: .semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(JT.red.opacity(0.15)))
-                    }
-                }
+                Text("\(server.proto) · \(server.transport)")
+                    .foregroundColor(JT.sub)
+                    .font(.system(size: 11))
             }
 
             Spacer(minLength: 8)
 
-            if server.isSupported && !server.usesDatagrams {
+            if !server.usesDatagrams {
                 latencyLabel(for: server)
             } else if server.usesDatagrams {
                 // Замерить нельзя, но сервер рабочий — так и пишем, вместо
@@ -425,15 +432,8 @@ struct ServerListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? JT.green.opacity(0.4) : JT.stroke, lineWidth: 1))
         )
-        .opacity(server.isSupported ? 1 : 0.55)
         .contentShape(Rectangle())
         .onTapGesture {
-            // Неподдерживаемый транспорт выбрать можно, но соединения не будет.
-            // Не блокируем — вдруг в подписке нет других, — но и не молчим.
-            guard server.isSupported else {
-                unsupported = server
-                return
-            }
             jtHaptic()
             store.select(server)
             onPicked()
