@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,6 +12,27 @@
 <meta property="og:type" content="website">
 <link rel="canonical" href="https://zyng.online/">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235B8CFF'/><text x='50' y='72' font-size='68' font-family='Arial' font-weight='900' fill='white' text-anchor='middle'>Z</text></svg>">
+
+<!--
+  Язык выбирается до отрисовки страницы.
+  Если оставить это на конец документа, посетитель успевает увидеть текст на
+  чужом языке и его подмену.
+-->
+<script>
+(function () {
+  var saved = localStorage.getItem('zyng-lang');
+  var guess = (navigator.language || 'en').slice(0, 2).toLowerCase() === 'ru' ? 'ru' : 'en';
+  var lang = saved === 'ru' || saved === 'en' ? saved : guess;
+  document.documentElement.setAttribute('data-lang', lang);
+  document.documentElement.setAttribute('lang', lang);
+  window.setLang = function (value) {
+    localStorage.setItem('zyng-lang', value);
+    document.documentElement.setAttribute('data-lang', value);
+    document.documentElement.setAttribute('lang', value);
+  };
+})();
+</script>
+
 <style>
   :root{
     --bg1:#0E1014; --bg2:#171A20; --card:#1D2129; --stroke:#2E343F;
@@ -33,6 +54,10 @@
   .wrap{max-width:980px; margin:0 auto; padding:0 22px}
   a{color:var(--accent)}
 
+  /* Показываем только выбранный язык */
+  html[data-lang="ru"] [lang="en"]{display:none}
+  html[data-lang="en"] [lang="ru"]{display:none}
+
   /* Шапка */
   header{display:flex; align-items:center; justify-content:space-between; padding:22px 0; gap:16px; flex-wrap:wrap}
   .logo{display:flex; align-items:center; gap:11px; font-weight:800; font-size:20px; color:var(--text); text-decoration:none}
@@ -41,9 +66,21 @@
     background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
     font-weight:900; font-size:21px;
   }
+  .navwrap{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
   nav{display:flex; flex-wrap:wrap; gap:6px}
   nav a{color:var(--sub); text-decoration:none; padding:7px 12px; border-radius:9px; font-size:15px; font-weight:600}
   nav a:hover{color:var(--text); background:rgba(255,255,255,.05)}
+
+  /* Переключатель языка */
+  .lang{display:flex; gap:2px; background:var(--card); border:1px solid var(--stroke); border-radius:10px; padding:3px}
+  .lang button{
+    font:inherit; font-size:13px; font-weight:700; letter-spacing:.4px;
+    color:var(--sub); background:none; border:0; cursor:pointer;
+    padding:5px 11px; border-radius:7px; transition:background .15s, color .15s;
+  }
+  .lang button:hover{color:var(--text)}
+  html[data-lang="ru"] .lang [data-set="ru"],
+  html[data-lang="en"] .lang [data-set="en"]{background:var(--accent); color:#fff}
 
   /* Первый экран */
   .hero{text-align:center; padding:64px 0 44px}
@@ -119,45 +156,95 @@
 
   <header>
     <a class="logo" href="index.html"><span class="mark">Z</span> Zyng</a>
-    <nav>
-      <a href="#features">Возможности</a>
-      <a href="#company">О компании</a>
-      <a href="support.html">Поддержка</a>
-      <a href="privacy.html">Конфиденциальность</a>
-    </nav>
+    <div class="navwrap">
+      <nav>
+        <a href="#features" lang="ru">Возможности</a>
+        <a href="#features" lang="en">Features</a>
+        <a href="#company" lang="ru">О компании</a>
+        <a href="#company" lang="en">Company</a>
+        <a href="support.html" lang="ru">Поддержка</a>
+        <a href="support.html" lang="en">Support</a>
+        <a href="privacy.html" lang="ru">Конфиденциальность</a>
+        <a href="privacy.html" lang="en">Privacy</a>
+      </nav>
+      <div class="lang">
+        <button type="button" data-set="ru" onclick="setLang('ru')">RU</button>
+        <button type="button" data-set="en" onclick="setLang('en')">EN</button>
+      </div>
+    </div>
   </header>
 
   <section class="hero">
     <div class="orb">
       <svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
     </div>
-    <h1>Интернет без границ.<br><span class="grad">Просто. Быстро. Безопасно.</span></h1>
-    <p>Zyng — VPN-клиент для iPhone. Вставь ключ или ссылку-подписку своего провайдера и подключайся одним касанием. Без рекламы, без регистрации, без лишних настроек.</p>
+    <h1 lang="ru">Интернет без границ.<br><span class="grad">Просто. Быстро. Безопасно.</span></h1>
+    <h1 lang="en">The internet without borders.<br><span class="grad">Simple. Fast. Private.</span></h1>
+    <p lang="ru">Zyng — VPN-клиент для iPhone. Вставь ключ или ссылку-подписку своего провайдера и подключайся одним касанием. Без рекламы, без регистрации, без лишних настроек.</p>
+    <p lang="en">Zyng is a VPN client for iPhone. Paste a key or a subscription link from your own provider and connect with one tap. No ads, no sign-up, no clutter.</p>
     <div class="btns">
       <a class="btn primary" href="#features">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1H7a3 3 0 0 0-3 3v16a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3zm-5 21a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8z"/></svg>
-        Скоро в App Store
+        <span lang="ru">Скоро в App Store</span>
+        <span lang="en">Coming to the App Store</span>
       </a>
-      <a class="btn" href="support.html">Поддержка</a>
+      <a class="btn" href="support.html">
+        <span lang="ru">Поддержка</span>
+        <span lang="en">Support</span>
+      </a>
     </div>
   </section>
 
   <section id="features">
-    <h2 class="title">Что умеет Zyng</h2>
-    <p class="lead">Всё нужное — и ничего лишнего.</p>
+    <h2 class="title" lang="ru">Что умеет Zyng</h2>
+    <h2 class="title" lang="en">What Zyng does</h2>
+    <p class="lead" lang="ru">Всё нужное — и ничего лишнего.</p>
+    <p class="lead" lang="en">Everything you need and nothing you don't.</p>
     <div class="grid">
-      <div class="feat"><div class="ico">⚡</div><h3>Молниеносно</h3><p>Современные протоколы держат скорость даже при слабом сигнале.</p></div>
-      <div class="feat"><div class="ico">🔒</div><h3>Приватность</h3><p>Мы не ведём журналы активности и не продаём данные третьим лицам.</p></div>
-      <div class="feat"><div class="ico">🌍</div><h3>Серверы мира</h3><p>Добавляй ключи и подписки — десятки стран в одном приложении.</p></div>
-      <div class="feat"><div class="ico">✨</div><h3>Простой дизайн</h3><p>Одна большая кнопка. Подключение одним касанием, без сложных меню.</p></div>
-      <div class="feat"><div class="ico">📊</div><h3>Задержка серверов</h3><p>Видно отклик каждого сервера в миллисекундах — выбирай самый быстрый.</p></div>
-      <div class="feat"><div class="ico">🔁</div><h3>Подписки</h3><p>Список серверов обновляется сам. Видно расход трафика и срок действия.</p></div>
+      <div class="feat">
+        <div class="ico">⚡</div>
+        <h3 lang="ru">Молниеносно</h3><h3 lang="en">Fast</h3>
+        <p lang="ru">Современные протоколы держат скорость даже при слабом сигнале.</p>
+        <p lang="en">Modern protocols hold their speed even on a weak signal.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">🔒</div>
+        <h3 lang="ru">Приватность</h3><h3 lang="en">Privacy</h3>
+        <p lang="ru">Мы не ведём журналы активности и не продаём данные третьим лицам.</p>
+        <p lang="en">We keep no activity logs and sell nothing to anyone.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">🌍</div>
+        <h3 lang="ru">Серверы мира</h3><h3 lang="en">Servers worldwide</h3>
+        <p lang="ru">Добавляй ключи и подписки — десятки стран в одном приложении.</p>
+        <p lang="en">Add keys and subscriptions — dozens of countries in one app.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">✨</div>
+        <h3 lang="ru">Простой дизайн</h3><h3 lang="en">Simple by design</h3>
+        <p lang="ru">Одна большая кнопка. Подключение одним касанием, без сложных меню.</p>
+        <p lang="en">One big button. Connect with a tap, no menus to dig through.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">📊</div>
+        <h3 lang="ru">Задержка серверов</h3><h3 lang="en">Server latency</h3>
+        <p lang="ru">Видно отклик каждого сервера в миллисекундах — выбирай самый быстрый.</p>
+        <p lang="en">Every server shows its response time in milliseconds — pick the quickest.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">🔁</div>
+        <h3 lang="ru">Подписки</h3><h3 lang="en">Subscriptions</h3>
+        <p lang="ru">Список серверов обновляется сам. Видно расход трафика и срок действия.</p>
+        <p lang="en">The server list refreshes itself, with data usage and expiry in view.</p>
+      </div>
     </div>
   </section>
 
   <section>
-    <h2 class="title">Поддерживаемые протоколы</h2>
-    <p class="lead">Работают TLS и Reality, транспорты WebSocket, gRPC, HTTP/2, HTTPUpgrade и QUIC.</p>
+    <h2 class="title" lang="ru">Поддерживаемые протоколы</h2>
+    <h2 class="title" lang="en">Supported protocols</h2>
+    <p class="lead" lang="ru">Работают TLS и Reality, транспорты WebSocket, gRPC, HTTP/2, HTTPUpgrade и QUIC.</p>
+    <p class="lead" lang="en">TLS and Reality are supported, along with the WebSocket, gRPC, HTTP/2, HTTPUpgrade and QUIC transports.</p>
     <div class="chips">
       <span class="chip">VLESS</span>
       <span class="chip">VMess</span>
@@ -170,11 +257,13 @@
   </section>
 
   <section id="company">
-    <h2 class="title">О компании</h2>
-    <p class="lead">Zyng — продукт компании KERIMLI CORP., зарегистрированной в США.</p>
+    <h2 class="title" lang="ru">О компании</h2>
+    <h2 class="title" lang="en">Company</h2>
+    <p class="lead" lang="ru">Zyng — продукт компании KERIMLI CORP., зарегистрированной в США.</p>
+    <p class="lead" lang="en">Zyng is a product of KERIMLI CORP., a company registered in the United States.</p>
     <div class="company">
       <div>
-        <h3>Реквизиты</h3>
+        <h3 lang="ru">Реквизиты</h3><h3 lang="en">Legal details</h3>
         <address class="legal">
           <strong>KERIMLI CORP.</strong>
           1942 E 8th St, Apt 2F<br>
@@ -184,26 +273,35 @@
         </address>
       </div>
       <div>
-        <h3>Связаться</h3>
-        <p>
+        <h3 lang="ru">Связаться</h3><h3 lang="en">Get in touch</h3>
+        <p lang="ru">
           Общие вопросы и поддержка:<br>
-          <a href="mailto:support@zyng.online">support@zyng.online</a>
+          <a href="mailto:kerimlicorp@gmail.com">kerimlicorp@gmail.com</a>
         </p>
-        <p style="margin-top:12px">
-          Отвечаем на русском и английском.
+        <p lang="en">
+          General enquiries and support:<br>
+          <a href="mailto:kerimlicorp@gmail.com">kerimlicorp@gmail.com</a>
         </p>
+        <p style="margin-top:12px" lang="ru">Отвечаем на русском и английском.</p>
+        <p style="margin-top:12px" lang="en">We reply in English and Russian.</p>
       </div>
       <div>
-        <h3>Чем занимаемся</h3>
-        <p>Разрабатываем приложения для iOS. Zyng — наш VPN-клиент: он не продаёт доступ к серверам, а помогает подключиться к тем, что у пользователя уже есть.</p>
+        <h3 lang="ru">Чем занимаемся</h3><h3 lang="en">What we do</h3>
+        <p lang="ru">Разрабатываем приложения для iOS. Zyng — наш VPN-клиент: он не продаёт доступ к серверам, а помогает подключиться к тем, что у пользователя уже есть.</p>
+        <p lang="en">We build iOS apps. Zyng is our VPN client: it does not sell access to servers, it helps you connect to the ones you already have.</p>
       </div>
     </div>
   </section>
 
   <section class="cta">
-    <h2>Подключайся к Zyng</h2>
-    <p>Понятный VPN для iPhone. Вставил ключ — и готово.</p>
-    <a class="btn primary" href="support.html">Как начать</a>
+    <h2 lang="ru">Подключайся к Zyng</h2>
+    <h2 lang="en">Get started with Zyng</h2>
+    <p lang="ru">Понятный VPN для iPhone. Вставил ключ — и готово.</p>
+    <p lang="en">A VPN for iPhone that stays out of your way. Paste a key and you're done.</p>
+    <a class="btn primary" href="support.html">
+      <span lang="ru">Как начать</span>
+      <span lang="en">How to start</span>
+    </a>
   </section>
 
 </div>
@@ -220,16 +318,19 @@
         </address>
       </div>
       <div>
-        <strong>Контакты</strong>
-        <a href="mailto:support@zyng.online">support@zyng.online</a>
+        <strong lang="ru">Контакты</strong><strong lang="en">Contact</strong>
+        <a href="mailto:kerimlicorp@gmail.com">kerimlicorp@gmail.com</a>
       </div>
       <nav>
-        <strong>Разделы</strong>
-        <a href="support.html">Поддержка</a>
-        <a href="privacy.html">Политика конфиденциальности</a>
+        <strong lang="ru">Разделы</strong><strong lang="en">Pages</strong>
+        <a href="support.html" lang="ru">Поддержка</a>
+        <a href="support.html" lang="en">Support</a>
+        <a href="privacy.html" lang="ru">Политика конфиденциальности</a>
+        <a href="privacy.html" lang="en">Privacy policy</a>
       </nav>
     </div>
-    <div class="copy">© 2026 KERIMLI CORP. Все права защищены.</div>
+    <div class="copy" lang="ru">© 2026 KERIMLI CORP. Все права защищены.</div>
+    <div class="copy" lang="en">© 2026 KERIMLI CORP. All rights reserved.</div>
   </div>
 </footer>
 

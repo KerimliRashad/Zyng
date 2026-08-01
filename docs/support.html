@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,6 +8,22 @@
 <meta name="author" content="KERIMLI CORP.">
 <link rel="canonical" href="https://zyng.online/support.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235B8CFF'/><text x='50' y='72' font-size='68' font-family='Arial' font-weight='900' fill='white' text-anchor='middle'>Z</text></svg>">
+
+<script>
+(function () {
+  var saved = localStorage.getItem('zyng-lang');
+  var guess = (navigator.language || 'en').slice(0, 2).toLowerCase() === 'ru' ? 'ru' : 'en';
+  var lang = saved === 'ru' || saved === 'en' ? saved : guess;
+  document.documentElement.setAttribute('data-lang', lang);
+  document.documentElement.setAttribute('lang', lang);
+  window.setLang = function (value) {
+    localStorage.setItem('zyng-lang', value);
+    document.documentElement.setAttribute('data-lang', value);
+    document.documentElement.setAttribute('lang', value);
+  };
+})();
+</script>
+
 <style>
   :root{
     --bg1:#0E1014; --bg2:#171A20; --card:#1D2129; --stroke:#2E343F;
@@ -27,6 +43,9 @@
   .wrap{max-width:780px; margin:0 auto; padding:0 22px}
   a{color:var(--accent)}
 
+  html[data-lang="ru"] [lang="en"]{display:none}
+  html[data-lang="en"] [lang="ru"]{display:none}
+
   header{display:flex; align-items:center; justify-content:space-between; padding:22px 0; gap:16px; flex-wrap:wrap}
   .logo{display:flex; align-items:center; gap:11px; font-weight:800; font-size:20px; color:var(--text); text-decoration:none}
   .mark{
@@ -34,9 +53,20 @@
     background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
     font-weight:900; font-size:21px;
   }
+  .navwrap{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
   header nav{display:flex; flex-wrap:wrap; gap:6px}
   header nav a{color:var(--sub); text-decoration:none; padding:7px 12px; border-radius:9px; font-size:15px; font-weight:600}
   header nav a:hover{color:var(--text); background:rgba(255,255,255,.05)}
+
+  .lang{display:flex; gap:2px; background:var(--card); border:1px solid var(--stroke); border-radius:10px; padding:3px}
+  .lang button{
+    font:inherit; font-size:13px; font-weight:700; letter-spacing:.4px;
+    color:var(--sub); background:none; border:0; cursor:pointer;
+    padding:5px 11px; border-radius:7px; transition:background .15s, color .15s;
+  }
+  .lang button:hover{color:var(--text)}
+  html[data-lang="ru"] .lang [data-set="ru"],
+  html[data-lang="en"] .lang [data-set="en"]{background:var(--accent); color:#fff}
 
   h1{font-size:clamp(28px,5.5vw,38px); font-weight:900; letter-spacing:-.8px; margin:26px 0 18px}
   h2{font-size:20px; font-weight:700; margin:38px 0 10px}
@@ -84,22 +114,34 @@
 
   <header>
     <a class="logo" href="index.html"><span class="mark">Z</span> Zyng</a>
-    <nav>
-      <a href="index.html">Главная</a>
-      <a href="privacy.html">Конфиденциальность</a>
-    </nav>
+    <div class="navwrap">
+      <nav>
+        <a href="index.html" lang="ru">Главная</a>
+        <a href="index.html" lang="en">Home</a>
+        <a href="privacy.html" lang="ru">Конфиденциальность</a>
+        <a href="privacy.html" lang="en">Privacy</a>
+      </nav>
+      <div class="lang">
+        <button type="button" data-set="ru" onclick="setLang('ru')">RU</button>
+        <button type="button" data-set="en" onclick="setLang('en')">EN</button>
+      </div>
+    </div>
   </header>
 
-  <h1>Поддержка</h1>
+  <h1 lang="ru">Поддержка</h1>
+  <h1 lang="en">Support</h1>
 
   <div class="box">
-    <p>Возник вопрос или что-то не работает? Напиши нам — ответим и поможем.
+    <p lang="ru">Возник вопрос или что-то не работает? Напиши нам — ответим и поможем.
     Отвечаем на русском и английском.</p>
-    <a class="mail" href="mailto:support@zyng.online">✉️ support@zyng.online</a>
+    <p lang="en">Got a question, or something isn't working? Write to us — we'll help.
+    We reply in English and Russian.</p>
+    <a class="mail" href="mailto:kerimlicorp@gmail.com">✉️ kerimlicorp@gmail.com</a>
   </div>
 
-  <h2>Как начать</h2>
-  <ol class="steps">
+  <h2 lang="ru">Как начать</h2>
+  <h2 lang="en">Getting started</h2>
+  <ol class="steps" lang="ru">
     <li>Открой Zyng и нажми <b>«Добавить ключ / подписку»</b>.</li>
     <li>Вставь ключ (<code>vless://</code>, <code>vmess://</code>, <code>trojan://</code>, <code>ss://</code>)
         или ссылку-подписку <code>https://</code> от своего провайдера.</li>
@@ -107,24 +149,45 @@
     <li>Выбери сервер и нажми большую кнопку на главном экране.</li>
     <li>Разреши системный запрос на добавление VPN-конфигурации.</li>
   </ol>
+  <ol class="steps" lang="en">
+    <li>Open Zyng and tap <b>Add key / subscription</b>.</li>
+    <li>Paste a key (<code>vless://</code>, <code>vmess://</code>, <code>trojan://</code>, <code>ss://</code>)
+        or an <code>https://</code> subscription link from your provider.</li>
+    <li>Tap <b>Add</b> — the servers appear in the list.</li>
+    <li>Pick a server and press the big button on the main screen.</li>
+    <li>Allow the system prompt to add a VPN configuration.</li>
+  </ol>
 
-  <h2>Частые вопросы</h2>
+  <h2 lang="ru">Частые вопросы</h2>
+  <h2 lang="en">Frequently asked</h2>
 
-  <details>
+  <details lang="ru">
     <summary>Где взять ключ или подписку?</summary>
     <p>Zyng не продаёт доступ к серверам и не предоставляет их. Ключ или
     ссылку-подписку выдаёт провайдер, услугами которого ты уже пользуешься.
     Приложение нужно, чтобы подключиться к тому, что у тебя уже есть.</p>
   </details>
+  <details lang="en">
+    <summary>Where do I get a key or subscription?</summary>
+    <p>Zyng neither sells nor provides access to servers. The key or
+    subscription link comes from the provider you already use. The app exists
+    to connect you to what you already have.</p>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Как добавить подписку?</summary>
     <p>Скопируй ссылку подписки у провайдера, нажми «Добавить ключ / подписку»,
     вставь ссылку и нажми «Добавить». Список серверов загрузится с этого адреса
     и дальше будет обновляться сам.</p>
   </details>
+  <details lang="en">
+    <summary>How do I add a subscription?</summary>
+    <p>Copy the subscription link from your provider, tap “Add key /
+    subscription”, paste it and tap “Add”. The server list loads from that
+    address and refreshes itself from then on.</p>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Пишет «Подписка пустая или недоступна»</summary>
     <ul>
       <li>Ссылка неверная — открой её в браузере и проверь</li>
@@ -133,37 +196,70 @@
       <li>Нет интернета — проверь Wi-Fi или мобильную сеть</li>
     </ul>
   </details>
+  <details lang="en">
+    <summary>It says the subscription is empty or unavailable</summary>
+    <ul>
+      <li>The link is wrong — open it in a browser and check</li>
+      <li>You are over your provider's device limit</li>
+      <li>The provider's server is temporarily down — try later</li>
+      <li>No internet — check Wi-Fi or mobile data</li>
+    </ul>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Сервер помечен как «не поддерживается»</summary>
     <p>Значит, у него транспорт, которого нет в ядре приложения — чаще всего
     это xhttp. Выбери в той же подписке сервер той же страны с пометкой
     tcp, ws, grpc, http или httpupgrade.</p>
   </details>
+  <details lang="en">
+    <summary>A server is marked “unsupported”</summary>
+    <p>Its transport is not in the app's core — usually that means xhttp. Pick
+    a server for the same country in the same subscription marked tcp, ws,
+    grpc, http or httpupgrade.</p>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Как выбрать другой сервер?</summary>
     <p>Нажми на карточку локации или на иконку списка вверху экрана.
     Коснись нужного сервера — он будет использоваться при следующем подключении.
     Рядом с каждым сервером показана задержка в миллисекундах.</p>
   </details>
+  <details lang="en">
+    <summary>How do I switch servers?</summary>
+    <p>Tap the location card, or the list icon at the top of the screen. Tap
+    the server you want and it will be used for the next connection. Each
+    server shows its latency in milliseconds.</p>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Почему медленное соединение?</summary>
     <p>Скорость зависит от сервера и его загруженности, расстояния до него,
     качества твоего интернета и нагрузки в сети провайдера.
     Попробуй выбрать сервер с меньшей задержкой.</p>
   </details>
+  <details lang="en">
+    <summary>Why is the connection slow?</summary>
+    <p>Speed depends on the server and how busy it is, how far away it is, the
+    quality of your own connection and the load on your ISP. Try a server with
+    lower latency.</p>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Какие данные собирает Zyng?</summary>
     <p>Никаких. Мы не собираем историю сайтов, DNS-запросы, ключи, подписки,
     время использования и любые персональные данные. Приложение работает
     локально на устройстве. Подробнее — в
     <a href="privacy.html">Политике конфиденциальности</a>.</p>
   </details>
+  <details lang="en">
+    <summary>What data does Zyng collect?</summary>
+    <p>None. We collect no browsing history, DNS queries, keys, subscriptions,
+    usage times or personal data of any kind. The app runs locally on your
+    device. See the <a href="privacy.html">Privacy policy</a> for details.</p>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Какие протоколы поддерживаются?</summary>
     <ul>
       <li><b>VLESS</b> — лёгкий протокол с низкой задержкой</li>
@@ -174,15 +270,36 @@
       <li><b>SOCKS</b> — классический прокси</li>
     </ul>
   </details>
+  <details lang="en">
+    <summary>Which protocols are supported?</summary>
+    <ul>
+      <li><b>VLESS</b> — lightweight, low latency</li>
+      <li><b>VMess</b> — encrypted, with a dynamic port</li>
+      <li><b>Trojan</b> — disguises traffic as ordinary HTTPS</li>
+      <li><b>Shadowsocks</b> — a simple, fast proxy</li>
+      <li><b>Hysteria2</b> and <b>TUIC</b> — high-speed protocols over UDP</li>
+      <li><b>SOCKS</b> — the classic proxy</li>
+    </ul>
+  </details>
 
-  <details>
+  <details lang="ru">
     <summary>Приложение вылетает</summary>
     <ul>
       <li>Перезагрузи iPhone</li>
       <li>Удали и установи приложение заново</li>
       <li>Проверь, что установлена последняя версия iOS</li>
-      <li>Напиши на <a href="mailto:support@zyng.online">support@zyng.online</a>
+      <li>Напиши на <a href="mailto:kerimlicorp@gmail.com">kerimlicorp@gmail.com</a>
           с описанием проблемы, моделью iPhone и версией iOS</li>
+    </ul>
+  </details>
+  <details lang="en">
+    <summary>The app crashes</summary>
+    <ul>
+      <li>Restart your iPhone</li>
+      <li>Delete the app and install it again</li>
+      <li>Check that you are on the latest iOS</li>
+      <li>Write to <a href="mailto:kerimlicorp@gmail.com">kerimlicorp@gmail.com</a>
+          with what happened, your iPhone model and iOS version</li>
     </ul>
   </details>
 
@@ -200,16 +317,19 @@
         </address>
       </div>
       <div>
-        <strong>Контакты</strong>
-        <a href="mailto:support@zyng.online">support@zyng.online</a>
+        <strong lang="ru">Контакты</strong><strong lang="en">Contact</strong>
+        <a href="mailto:kerimlicorp@gmail.com">kerimlicorp@gmail.com</a>
       </div>
       <nav>
-        <strong>Разделы</strong>
-        <a href="index.html">Главная</a>
-        <a href="privacy.html">Политика конфиденциальности</a>
+        <strong lang="ru">Разделы</strong><strong lang="en">Pages</strong>
+        <a href="index.html" lang="ru">Главная</a>
+        <a href="index.html" lang="en">Home</a>
+        <a href="privacy.html" lang="ru">Политика конфиденциальности</a>
+        <a href="privacy.html" lang="en">Privacy policy</a>
       </nav>
     </div>
-    <div class="copy">© 2026 KERIMLI CORP. Все права защищены.</div>
+    <div class="copy" lang="ru">© 2026 KERIMLI CORP. Все права защищены.</div>
+    <div class="copy" lang="en">© 2026 KERIMLI CORP. All rights reserved.</div>
   </div>
 </footer>
 
