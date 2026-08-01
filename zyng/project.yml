@@ -15,8 +15,12 @@ options:
 
 settings:
   base:
-    # Xcode сам подставит Team из аккаунта, залогиненного в Settings → Accounts.
     CODE_SIGN_STYLE: Automatic
+    # Команда прописана явно. Раньше её подставлял Xcode, и после каждого
+    # `rm -rf Zyng.xcodeproj && ./setup.sh` она слетала. Если Team пуст хотя бы
+    # у одного таргета, вложенное расширение остаётся без подписи, и система
+    # убивает приложение на старте — SIGKILL прямо в dyld, ещё до нашего кода.
+    DEVELOPMENT_TEAM: P5FHU4567B
     SWIFT_VERSION: "5.0"
     # ВАЖНО: nonisolated, а не MainActor. Настройка MainActor делает каждый тип
     # main-actor-изолированным, включая PacketTunnelProvider — а система вызывает
