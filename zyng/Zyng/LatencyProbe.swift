@@ -191,6 +191,16 @@ private func probeOnce(_ raw: String) async -> Int? {
         // потоков, поэтому @Sendable.
         @Sendable func finish(_ value: Int?) {
             guard once.claim() else { return }
+
+            // ВАЖНО: обработчик снимаем до отмены соединения.
+            //
+            // Замыкание захватывает `connection`, а `connection` держит само
+            // замыкание — получается цикл, и объект не освобождается никогда.
+            // За каждым таким соединением остаётся жить наблюдатель за сетевым
+            // путём, и при любой его смене — а поднятие туннеля это как раз
+            // смена пути — все они разом сыпали в лог
+            // «nw_path_necp_check_for_updates Failed to copy updated result».
+            connection.stateUpdateHandler = nil
             connection.cancel()
             continuation.resume(returning: value)
         }
