@@ -75,7 +75,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng
         PRODUCT_NAME: Zyng
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "14"
+        CURRENT_PROJECT_VERSION: "15"
         CODE_SIGN_ENTITLEMENTS: Zyng/Zyng.entitlements
         INFOPLIST_FILE: Zyng/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -105,7 +105,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngTunnel
         PRODUCT_NAME: ZyngTunnel
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "14"
+        CURRENT_PROJECT_VERSION: "15"
         CODE_SIGN_ENTITLEMENTS: ZyngTunnel/ZyngTunnel.entitlements
         INFOPLIST_FILE: ZyngTunnel/Info.plist
         GENERATE_INFOPLIST_FILE: NO
@@ -118,6 +118,12 @@ targets:
       # Описание Live Activity общее с приложением: одна и та же структура
       # должна компилироваться в оба таргета, иначе система их не свяжет.
       - path: Shared/TunnelActivity.swift
+      # Строки виджета тоже переводятся. Настройки приложения виджету
+      # недоступны — он отдельный процесс, — поэтому язык он берёт из системы.
+      - path: Shared/L10n.swift
+      # Отсюда виджету нужен только идентификатор App Group: через него он
+      # читает общие настройки. Держим его в одном месте, а не копией.
+      - path: Shared/TunnelDiagnostics.swift
     dependencies:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
@@ -130,7 +136,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngWidgets
         PRODUCT_NAME: ZyngWidgets
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "14"
+        CURRENT_PROJECT_VERSION: "15"
         CODE_SIGN_ENTITLEMENTS: ZyngWidgets/ZyngWidgets.entitlements
         INFOPLIST_FILE: ZyngWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: NO

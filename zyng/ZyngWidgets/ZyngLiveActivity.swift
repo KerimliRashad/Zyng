@@ -79,7 +79,7 @@ struct ZyngLiveActivity: Widget {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Защищено")
+                Text(tr("Защищено", "Protected"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
 

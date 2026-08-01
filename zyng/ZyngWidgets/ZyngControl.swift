@@ -21,14 +21,14 @@ struct ZyngControl: ControlWidget {
                 action: ToggleTunnelIntent()
             ) { connected in
                 Label(
-                    connected ? "Защищено" : "Отключено",
+                    connected ? tr("Защищено", "Protected") : tr("Отключено", "Disconnected"),
                     systemImage: connected ? "bolt.shield.fill" : "bolt.shield"
                 )
             }
             .tint(.green)
         }
         .displayName("Zyng VPN")
-        .description("Включить или выключить туннель")
+        .description("\(tr("Включить или выключить туннель", "Turn the tunnel on or off"))")
     }
 
     /// Состояние читаем прямо у системы, а не из своих настроек: туннель могли
@@ -54,6 +54,15 @@ struct ToggleTunnelIntent: SetValueIntent {
     @Parameter(title: "Включено")
     var value: Bool
 
+    /// «Держать соединение» из настроек приложения.
+    ///
+    /// Виджет — отдельный процесс и до `AppSettings` не дотягивается, но сама
+    /// настройка лежит в общей группе, так что читаем её оттуда напрямую.
+    private var keepConnected: Bool {
+        UserDefaults(suiteName: TunnelDiagnostics.appGroup)?
+            .bool(forKey: "settings_autoconnect") ?? false
+    }
+
     func perform() async throws -> some IntentResult {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
 
@@ -64,6 +73,17 @@ struct ToggleTunnelIntent: SetValueIntent {
         }
 
         if value {
+            // Правило возвращаем на место.
+            //
+            // Выключение отсюда его снимает (иначе туннель нельзя погасить), но
+            // раньше никто его не включал обратно: одно выключение из Пункта
+            // управления — и «Держать соединение» оставалось выключенным
+            // навсегда, хотя в настройках галочка стояла.
+            if keepConnected && !manager.isOnDemandEnabled {
+                manager.isOnDemandEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+            }
             try manager.connection.startVPNTunnel()
         } else {
             // Правило «держать соединение» снимаем перед остановкой, иначе
@@ -75,6 +95,10 @@ struct ToggleTunnelIntent: SetValueIntent {
             }
             manager.connection.stopVPNTunnel()
         }
+
+        // Состояние переключателя система сама не перечитывает — без этого он
+        // остаётся в прежнем положении до следующего открытия Пункта управления.
+        ControlCenter.shared.reloadControls(ofKind: "online.zyng.Zyng.control")
 
         return .result()
     }

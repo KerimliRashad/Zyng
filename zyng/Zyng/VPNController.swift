@@ -113,11 +113,13 @@ final class VPNController: NSObject, ObservableObject {
             }
 
             guard attemptID == attempt, !reachedConnected else { return }
-            errorMessage = """
-            Туннель отключился, не подключившись, и расширение не оставило \
-            причины. Скорее всего процесс не запустился — проверь подпись \
-            расширения ZyngTunnel.
-            """
+            errorMessage = tr(
+                "Туннель отключился, не подключившись, и расширение не оставило "
+              + "причины. Скорее всего процесс не запустился — проверь подпись "
+              + "расширения ZyngTunnel.",
+                "The tunnel disconnected without ever connecting, and the extension "
+              + "left no reason. Most likely its process never started — check the "
+              + "signature of the ZyngTunnel extension.")
         }
     }
 

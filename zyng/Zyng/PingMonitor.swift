@@ -21,6 +21,14 @@ final class PingMonitor: ObservableObject {
 
     private var task: Task<Void, Never>?
 
+    /// Идёт ли замер прямо сейчас.
+    ///
+    /// `refreshNow` вызывается при возвращении из фона и мог совпасть с
+    /// очередным тиком цикла: два замера шли одновременно и записывали
+    /// результат наперегонки — показанное значение оказывалось от того, кто
+    /// закончил последним, а не от того, кто начал позже.
+    private var measuring = false
+
     /// Адреса, отдающие крошечный ответ. Пробуем по очереди: часть из них
     /// бывает недоступна у отдельных провайдеров или за конкретным сервером,
     /// и тогда замер врал бы «нет ответа» при работающем туннеле.
@@ -73,6 +81,10 @@ final class PingMonitor: ObservableObject {
     }
 
     private func measure() async {
+        guard !measuring else { return }
+        measuring = true
+        defer { measuring = false }
+
         // Начинаем с того, который отвечал в прошлый раз.
         var candidates = Self.probeURLs
         if let preferred, let index = candidates.firstIndex(of: preferred) {
