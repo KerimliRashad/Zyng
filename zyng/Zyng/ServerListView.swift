@@ -440,24 +440,22 @@ struct ServerListView: View {
         }
     }
 
-    /// Четыре состояния: ещё меряем, не мерили, не ответил, ответил за N мс.
-    ///
-    /// Раньше на время замера строка была пустой, и казалось, что часть серверов
-    /// проверку просто пропустили. Теперь у каждой видно, что происходит.
+    /// Ещё не мерили — пусто. Меряется — крутилка. Дальше результат.
     @ViewBuilder
     private func latencyLabel(for server: Server) -> some View {
-        if let measured = probe.latency(for: server) {
-            if let ms = measured {
+        if let state = probe.latency(for: server) {
+            switch state {
+            case .measuring:
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(JT.sub)
+            case .ms(let ms):
                 badge(text: "\(ms) \(tr("мс", "ms"))",
                       color: color(forLatency: ms),
                       monospaced: true)
-            } else {
+            case .failed:
                 badge(text: tr("нет ответа", "no response"), color: JT.red)
             }
-        } else if probe.isRunning {
-            ProgressView()
-                .controlSize(.mini)
-                .tint(JT.sub)
         }
     }
 

@@ -17,163 +17,201 @@ private final class OnceFlag: @unchecked Sendable {
     }
 }
 
+/// Настройки замера.
+///
+/// Вынесены из класса намеренно. `LatencyProbe` помечен `@MainActor`, и всё
+/// объявленное внутри — включая статические константы — наследует эту изоляцию.
+/// Замер идёт вне главного актора, и каждое обращение к такой константе
+/// компилятор считает выходом за пределы актора: в Swift 5 это предупреждение,
+/// в Swift 6 уже ошибка. Здесь константы ничьи, и читать их можно откуда угодно.
+private enum ProbeConfig {
+    /// Трёх секунд хватало не всегда: на сотовой сети в это время попадает ещё
+    /// и разрешение имени, и замер обрывался на полпути — рабочий сервер
+    /// показывался мёртвым.
+    static let timeout: TimeInterval = 4
+
+    /// Одиночный отказ на мобильной сети — обычное дело, из-за него у части
+    /// серверов вместо задержки оставался прочерк.
+    static let attempts = 2
+
+    /// Больше восьми разом не запускаем: на мобильной сети замеры начинают
+    /// мешать друг другу и врут.
+    static let parallel = 8
+
+    /// Через сколько сдаёмся в любом случае. Страховка на случай, если
+    /// системное соединение не позовёт ни один обработчик: крутилка в списке
+    /// не должна жить вечно, что бы ни случилось ниже.
+    static var deadline: TimeInterval { timeout * Double(attempts) + 3 }
+}
+
+/// Состояние замера одного сервера.
+///
+/// Раньше здесь был `Int??`, и «ещё не мерили» отличалось от «померяли, ответа
+/// нет» только уровнем вложенности опционала — перепутать их было слишком
+/// легко, а по такой ошибке строка списка крутилась без конца.
+enum Latency: Equatable {
+    case measuring
+    case failed
+    case ms(Int)
+
+    var value: Int? {
+        if case .ms(let v) = self { return v }
+        return nil
+    }
+}
+
 /// Измеряет задержку до серверов из списка, не поднимая туннель.
 ///
-/// Меряется время установки TCP-соединения с адресом и портом сервера —
-/// это честный отклик самого сервера. ICMP-пинг на iOS обычным приложениям
-/// недоступен, а TCP-соединение показывает ровно то, что важно: успеет ли
-/// сервер ответить и как быстро.
+/// Меряется время установки TCP-соединения с адресом и портом сервера — это
+/// честный отклик самого сервера. ICMP-пинг на iOS обычным приложениям
+/// недоступен, а TCP-соединение показывает ровно то, что важно: ответит ли
+/// сервер и как быстро.
 @MainActor
 final class LatencyProbe: ObservableObject {
 
-    /// Задержка в миллисекундах по строке ключа. Значение nil означает,
-    /// что сервер не ответил.
-    @Published private(set) var results: [String: Int?] = [:]
-    @Published private(set) var isRunning = false
+    @Published private(set) var results: [String: Latency] = [:]
 
-    /// Три секунды хватало не всегда: на сотовой сети первое обращение к серверу
-    /// включает ещё и разрешение имени, и замер обрывался на полпути — сервер
-    /// показывался мёртвым, хотя подключался нормально.
-    private static let timeout: TimeInterval = 4
+    /// Идёт ли замер хоть чего-нибудь. Выводится из состояний, а не хранится
+    /// отдельным флагом: отдельный флаг однажды уже застрял включённым.
+    var isRunning: Bool { results.values.contains(.measuring) }
 
-    /// Сколько раз пробовать. Одиночный отказ на мобильной сети — обычное дело,
-    /// и из-за него у части серверов вместо задержки стоял прочерк.
-    private static let attempts = 2
-
-    /// Ключи, которые меряются прямо сейчас.
-    ///
-    /// Раньше вместо этого стоял простой запрет входить повторно, и переключение
-    /// вкладки во время замера означало, что серверы соседней подписки не
-    /// померяют вообще — вызов молча выходил, а крутилки оставались навсегда.
-    private var inFlight: Set<String> = []
-
-    /// Меряет переданные серверы. Параллельно, но не больше восьми разом, иначе
-    /// на мобильной сети замеры мешают друг другу и врут.
-    ///
-    /// `force` — мерить заново даже то, что уже измерено. Без него автозамер
-    /// при открытии списка и при смене вкладки берёт только новое.
+    /// `force` — мерить заново даже то, что уже измерено. Без него берётся
+    /// только новое: автозамер при открытии списка и при смене вкладки не
+    /// должен каждый раз гонять весь список по кругу.
     func measure(_ servers: [Server], force: Bool = false) async {
         let pending = servers.filter { server in
-            guard !inFlight.contains(server.raw) else { return false }
-            return force || results[server.raw] == nil
+            guard let known = results[server.raw] else { return true }
+            // Уже меряется в соседнем вызове — второй раз не берём.
+            return known == .measuring ? false : force
         }
         guard !pending.isEmpty else { return }
 
-        inFlight.formUnion(pending.map(\.raw))
-        isRunning = true
-        defer {
-            inFlight.subtract(pending.map(\.raw))
-            isRunning = !inFlight.isEmpty
-        }
+        // Помечаем сразу все: пока идёт замер, строки показывают крутилку, а
+        // параллельный вызов эти же серверы уже не возьмёт.
+        for server in pending { results[server.raw] = .measuring }
 
-        await withTaskGroup(of: (String, Int?).self) { group in
+        // Сторож. Если замер по любой причине не завершится, через deadline
+        // крутилки всё равно погаснут и превратятся в «нет ответа».
+        let watched = pending.map(\.raw)
+        let watchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(ProbeConfig.deadline * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.giveUp(on: watched)
+        }
+        defer { watchdog.cancel() }
+
+        await withTaskGroup(of: (String, Latency).self) { group in
             var index = 0
-            let limit = 8
 
             func addNext() {
                 guard index < pending.count else { return }
-                let server = pending[index]
+                let raw = pending[index].raw
                 index += 1
-                group.addTask {
-                    (server.raw, await Self.probe(server.raw))
-                }
+                group.addTask { (raw, await probeServer(raw)) }
             }
 
-            for _ in 0..<min(limit, pending.count) { addNext() }
+            for _ in 0..<min(ProbeConfig.parallel, pending.count) { addNext() }
 
-            for await (raw, ms) in group {
-                results[raw] = ms
+            for await (raw, latency) in group {
+                results[raw] = latency
                 addNext()
             }
         }
     }
 
-    func latency(for server: Server) -> Int?? {
+    /// Сторож сработал — гасим всё, что так и осталось в замере.
+    private func giveUp(on keys: [String]) {
+        for key in keys where results[key] == .measuring {
+            results[key] = .failed
+        }
+    }
+
+    func latency(for server: Server) -> Latency? {
         results[server.raw]
     }
 
     func clear() {
         results = [:]
     }
+}
 
-    // MARK: - Замер одного сервера
+// MARK: - Замер одного сервера
+//
+// Свободные функции, а не методы класса: так они гарантированно вне главного
+// актора и действительно выполняются параллельно. Пока это были статические
+// методы @MainActor-класса, задачи из withTaskGroup выстраивались в очередь и
+// шли по одной — обещанной параллельности не было вовсе.
 
-    // ВАЖНО: всё ниже — nonisolated.
-    //
-    // Класс помечен @MainActor, и без этого слова статические функции наследуют
-    // его изоляцию: задачи из withTaskGroup выстраивались в очередь на главном
-    // акторе и выполнялись строго по одной. Обещанной параллельности не было
-    // вовсе, а с двумя попытками по несколько секунд список мерился так долго,
-    // что выглядел зависшим.
-
-    /// Адрес и порт достаём тем же разборщиком, что строит конфиг ядра, —
-    /// он уже умеет все форматы, включая base64 в vmess и пиров WireGuard.
-    private nonisolated static func endpoint(of raw: String) -> (String, UInt16)? {
-        guard let server = try? SingBoxConfig.serverEndpoint(from: raw),
-              server.port > 0, server.port <= 65535,
-              !server.host.isEmpty else {
-            return nil
-        }
-        return (server.host, UInt16(server.port))
+/// Адрес и порт достаём тем же разборщиком, что строит конфиг ядра, — он уже
+/// умеет все форматы, включая base64 внутри vmess.
+private func probeEndpoint(_ raw: String) -> (String, UInt16)? {
+    guard let server = try? SingBoxConfig.serverEndpoint(from: raw),
+          server.port > 0, server.port <= 65535,
+          !server.host.isEmpty else {
+        return nil
     }
+    return (server.host, UInt16(server.port))
+}
 
-    /// Пробует несколько раз и возвращает лучший результат.
-    private nonisolated static func probe(_ raw: String) async -> Int? {
-        for attempt in 0..<attempts {
-            if let ms = await probeOnce(raw) { return ms }
-            // Небольшая пауза: подряд идущие попытки упираются в то же самое
-            // состояние сети, что и первая.
-            if attempt + 1 < attempts {
-                try? await Task.sleep(nanoseconds: 300_000_000)
-            }
+private func probeServer(_ raw: String) async -> Latency {
+    for attempt in 0..<ProbeConfig.attempts {
+        if let ms = await probeOnce(raw) { return .ms(ms) }
+        // Пауза перед повтором: подряд идущие попытки упираются в то же
+        // состояние сети, что и первая.
+        if attempt + 1 < ProbeConfig.attempts {
+            try? await Task.sleep(nanoseconds: 300_000_000)
         }
+    }
+    return .failed
+}
+
+private func probeOnce(_ raw: String) async -> Int? {
+    guard let (host, port) = probeEndpoint(raw),
+          let nwPort = NWEndpoint.Port(rawValue: port) else {
         return nil
     }
 
-    private nonisolated static func probeOnce(_ raw: String) async -> Int? {
-        guard let (host, port) = endpoint(of: raw),
-              let nwPort = NWEndpoint.Port(rawValue: port) else {
-            return nil
+    let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: nwPort)
+
+    let parameters = NWParameters.tcp
+    // Нас интересует отклик сервера, а не работа через уже поднятый туннель.
+    parameters.preferNoProxies = true
+
+    return await withCheckedContinuation { continuation in
+        let connection = NWConnection(to: endpoint, using: parameters)
+        let started = Date()
+
+        // Продолжение можно возобновить только один раз, а обработчик состояния
+        // и таймаут могут сработать одновременно.
+        let once = OnceFlag()
+
+        // Зовётся и из обработчика соединения, и из таймаута — то есть с разных
+        // потоков, поэтому @Sendable.
+        @Sendable func finish(_ value: Int?) {
+            guard once.claim() else { return }
+            connection.cancel()
+            continuation.resume(returning: value)
         }
 
-        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: nwPort)
-
-        let parameters = NWParameters.tcp
-        // Нас интересует отклик сервера, а не работа через уже поднятый туннель.
-        parameters.preferNoProxies = true
-
-        return await withCheckedContinuation { continuation in
-            let connection = NWConnection(to: endpoint, using: parameters)
-            let started = Date()
-
-            // Продолжение можно возобновить только один раз, а обработчик
-            // состояния и таймаут могут сработать одновременно.
-            let once = OnceFlag()
-
-            // Вызывается из обработчика соединения и из таймаута — то есть
-            // с разных потоков, поэтому @Sendable.
-            @Sendable func finish(_ value: Int?) {
-                guard once.claim() else { return }
-                connection.cancel()
-                continuation.resume(returning: value)
-            }
-
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    finish(Int(Date().timeIntervalSince(started) * 1000))
-                case .failed, .cancelled:
-                    finish(nil)
-                default:
-                    break
-                }
-            }
-
-            connection.start(queue: .global(qos: .userInitiated))
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                finish(Int(Date().timeIntervalSince(started) * 1000))
+            case .failed, .cancelled:
                 finish(nil)
+            case .waiting:
+                // Сеть недоступна или имя не разрешается. Ждать полный таймаут
+                // здесь бессмысленно — соединение само уже не поедет.
+                finish(nil)
+            default:
+                break
             }
+        }
+
+        connection.start(queue: .global(qos: .userInitiated))
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + ProbeConfig.timeout) {
+            finish(nil)
         }
     }
 }
