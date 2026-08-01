@@ -27,6 +27,12 @@ settings:
     # его с фоновых потоков. Это ломало сборку и подвешивало расширение.
     SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # То, что Xcode предлагает в окне «Update to recommended settings».
+    # Соглашаться там нельзя: он правит Zyng.xcodeproj, а его перезапишет
+    # следующий ./setup.sh — и окно вылезет снова. Значение задаём здесь.
+    # На сам код не влияет: строковых каталогов у нас нет, переводы живут
+    # в Shared/L10n.swift.
+    LOCALIZED_STRING_SYMBOL_GENERATION: YES
 
 # Схемы задаём явно. Без этого XcodeGen их не пишет вовсе, а Xcode создаёт
 # сам и не всегда все: в списке оставались только расширения, схемы приложения
