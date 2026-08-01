@@ -21,6 +21,15 @@ final class LiveActivityController {
 
     private var activity: Activity<TunnelActivityAttributes>?
 
+    /// Последнее отправленное состояние.
+    ///
+    /// Обновить плашку просят из нескольких мест сразу: при переходе в
+    /// «подключено», при возвращении приложения на экран и на каждый новый
+    /// замер задержки. В момент подключения это совпадает, и система получала
+    /// три одинаковых обновления подряд. Вреда от них нет, но запас обновлений
+    /// у ActivityKit ограничен, и тратить его на повторы незачем.
+    private var lastState: TunnelActivityAttributes.ContentState?
+
     private init() {}
 
     var isSupported: Bool {
@@ -67,6 +76,7 @@ final class LiveActivityController {
                 attributes: TunnelActivityAttributes(),
                 content: ActivityContent(state: state, staleDate: Self.staleDate())
             )
+            lastState = state
         } catch {
             NSLog("⚠️ Zyng: не удалось запустить Live Activity: \(error.localizedDescription)")
         }
@@ -83,6 +93,9 @@ final class LiveActivityController {
     }
 
     private func update(_ state: TunnelActivityAttributes.ContentState) {
+        guard state != lastState else { return }
+        lastState = state
+
         let current = activity
         Task {
             await current?.update(ActivityContent(state: state, staleDate: Self.staleDate()))
@@ -100,6 +113,7 @@ final class LiveActivityController {
     func stop() {
         let current = activity
         activity = nil
+        lastState = nil
         Task {
             await current?.end(nil, dismissalPolicy: .immediate)
         }
@@ -108,6 +122,7 @@ final class LiveActivityController {
     /// Убирает плашки, оставшиеся от прошлого запуска — например, если
     /// приложение выгрузили, не отключив туннель.
     func cleanupStale() {
+        lastState = nil
         Task {
             for activity in Activity<TunnelActivityAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
