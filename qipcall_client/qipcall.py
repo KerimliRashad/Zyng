@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.5"
+APP_VERSION = "4.6"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -29,32 +29,35 @@ SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
 
-# Тёмно-СЕРАЯ минималистичная тема
-BG      = "#16181c"   # общий фон — тёмно-серый
-SIDE    = "#16181c"
-PANEL   = "#191c21"   # средняя панель
-CARD    = "#22262d"   # карточки
-CARD2   = "#2d323b"   # выбранная/вторичная
-BORDER  = "#363c46"   # тонкие рамки
-ACC     = "#5c6675"   # спокойный серо-стальной акцент
-ACC_D   = "#4c5563"
-TEXT    = "#e6e8ec"
-MUTED   = "#8a9099"
-OK      = "#7f8a99"   # «включено» — обычный серый, не яркий зелёный
-WARN    = "#c9a24b"
-DANGER  = "#c65b5b"
+# Палитра общая с мобильным Zyng: тёмная основа, сине-фиолетовый акцент.
+# Раньше тема была серо-стальной, и «включено» рисовалось тем же серым, что и
+# всё остальное — состояние приходилось выискивать глазами.
+BG      = "#0E1014"   # общий фон
+SIDE    = "#12151A"   # боковая панель — на тон светлее фона
+PANEL   = "#171A20"   # средняя панель
+CARD    = "#1D2129"   # карточки
+CARD2   = "#272C36"   # выбранная / вторичная
+BORDER  = "#2E343F"   # тонкие рамки
+ACC     = "#5B8CFF"   # акцент
+ACC_D   = "#4A76DB"   # он же под курсором
+ACC2    = "#7A5CFF"   # вторая половина фирменного градиента
+TEXT    = "#F2F5FA"
+MUTED   = "#8A94A6"
+OK      = "#39D98A"   # «включено» — теперь читается сразу
+WARN    = "#F0B429"
+DANGER  = "#FF5C5C"
 # Спец-цвета
-SUBCARD   = "#232830"
-SUBBORDER = "#39414c"
-UPDCARD   = "#232830"
-POWER_HOVER = "#2d323b"
-# Цветные кнопки действий (пинг / обновление)
-PING_C  = "#2f7d6b"   # пинг — приглушённый бирюзово-зелёный
-PING_CD = "#276657"
-UPD_C   = "#4a6aa5"   # обновление — спокойный синий
-UPD_CD  = "#3d5788"
-SPEED_C  = "#d1a44a"  # скорость — тёплый золотой
-SPEED_CD = "#b98f3c"
+SUBCARD   = "#1D2129"
+SUBBORDER = "#2E343F"
+UPDCARD   = "#1D2129"
+POWER_HOVER = "#272C36"
+# Цветные кнопки действий (пинг / обновление / скорость)
+PING_C  = "#2FB37A"   # пинг — зелёный из той же палитры
+PING_CD = "#269464"
+UPD_C   = "#5B8CFF"   # обновление — основной акцент
+UPD_CD  = "#4A76DB"
+SPEED_C  = "#7A5CFF"  # скорость — фиолетовый, вторая половина градиента
+SPEED_CD = "#6647E0"
 
 # Максимум серверов на подписку — защита от зависания на «толстых» подписках
 MAX_SERVERS = 400
@@ -1234,7 +1237,7 @@ class JeffTUN:
                       fg_color=PING_C, hover_color=PING_CD, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(0, 6))
         ctk.CTkButton(brow, text="⚡ Скорость", width=110, height=36, corner_radius=18,
-                      fg_color=SPEED_C, hover_color=SPEED_CD, text_color="#1a1207",
+                      fg_color=SPEED_C, hover_color=SPEED_CD, text_color="#ffffff",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.speed_test).pack(side="left")
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 8))
@@ -1411,10 +1414,11 @@ class JeffTUN:
         cx = cy = S // 2
         R = int(S * 0.40)
         if on:
-            # индиго под акцент приложения (#6c7bff)
-            core = (108, 123, 255); rim = (30, 30, 96); glowc = (124, 140, 255); sym = (240, 242, 255)
+            # Акцент приложения #5B8CFF, свечение уходит в фиолетовый #7A5CFF —
+            # тот же градиент, что на кнопке в мобильной версии.
+            core = (91, 140, 255); rim = (24, 34, 88); glowc = (122, 92, 255); sym = (242, 245, 250)
         else:
-            core = (120, 128, 168); rim = (26, 32, 58); glowc = (70, 80, 125); sym = (208, 214, 235)
+            core = (94, 102, 120); rim = (20, 24, 34); glowc = (58, 66, 84); sym = (196, 203, 216)
         im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
         # внешнее свечение
         g = Image.new("RGBA", (S, S), (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
@@ -1499,7 +1503,7 @@ class JeffTUN:
         off_x = m + 4
         on_x = W - m - 4 - d
         kx0 = off_x + (on_x - off_x) * p                 # плавное скольжение
-        knob = self._lerp_hex("#9fb0d0", "#ffffff", p)
+        knob = self._lerp_hex("#8A94A6", "#ffffff", p)
         # лёгкая тень бегунка для объёма
         cv.create_oval(kx0 + 1, ky0 + 2, kx0 + d + 1, ky0 + d + 2, fill=track, outline=track)
         cv.create_oval(kx0, ky0, kx0 + d, ky0 + d, fill=knob, outline=knob)
@@ -1633,7 +1637,7 @@ class JeffTUN:
             ctk.CTkLabel(top, text=title, font=ctk.CTkFont(FONT, 15, "bold"),
                          text_color="#ffffff", anchor="w").pack(side="left")
             ctk.CTkButton(top, text="✕  удалить", width=90, height=28, corner_radius=13,
-                          fg_color=DANGER, hover_color="#a84848", text_color="#ffffff",
+                          fg_color=DANGER, hover_color="#E04A4A", text_color="#ffffff",
                           font=ctk.CTkFont(FONT, 12, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
             info_txt = f"{si.get('traffic','∞')}   ·   {si.get('expire','')}" if si else "нажми «Обновить», если пусто"
@@ -2146,10 +2150,10 @@ class JeffTUN:
         self.update_bar.place(relx=0.5, rely=0.02, anchor="n")
         top = ctk.CTkFrame(self.update_bar, fg_color="transparent"); top.pack(fill="x")
         self._ulbl = ctk.CTkLabel(top, text=f"🎉 Новая версия {latest}",
-                                  font=ctk.CTkFont(FONT, 12, "bold"), text_color="#1a8f43")
+                                  font=ctk.CTkFont(FONT, 12, "bold"), text_color=OK)
         self._ulbl.pack(side="left", padx=14, pady=(8, 4))
         ctk.CTkButton(top, text="Обновить", width=90, height=28, corner_radius=14,
-                      fg_color=OK, hover_color="#28b14a", text_color="#08160c",
+                      fg_color=OK, hover_color="#2FB37A", text_color="#08160c",
                       font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
         if notes:
             ctk.CTkLabel(self.update_bar, text=notes, font=ctk.CTkFont(FONT, 10),
