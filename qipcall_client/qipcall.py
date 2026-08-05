@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "4.6"
+APP_VERSION = "5.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -28,6 +28,105 @@ TELEGRAM_URL = "https://t.me/jeffvpn"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
+
+# ── Темы ──────────────────────────────────────────────────────────────────
+#
+# Раньше в настройках был выбор темы, но работал он вхолостую: цвета лежали
+# обычными константами, а переключатель дёргал только appearance_mode самого
+# CustomTkinter, который про них ничего не знает. Теперь тем четыре, и каждая
+# — настоящий набор цветов.
+#
+# Виджеты берут цвет в момент создания, поэтому смена темы применяется при
+# следующем запуске; в настройках рядом есть кнопка перезапуска.
+
+THEMES = {
+    "dark": {
+        "BG": "#0E1014", "SIDE": "#12151A", "PANEL": "#171A20",
+        "CARD": "#1D2129", "CARD2": "#272C36", "BORDER": "#2E343F",
+        "TEXT": "#F2F5FA", "MUTED": "#8A94A6",
+        "SUBCARD": "#1D2129", "SUBBORDER": "#2E343F",
+        "UPDCARD": "#1D2129", "POWER_HOVER": "#272C36",
+    },
+    # Чистый чёрный: на OLED-мониторах и ноутбуках заметно экономит батарею.
+    "black": {
+        "BG": "#000000", "SIDE": "#08080A", "PANEL": "#0B0B0E",
+        "CARD": "#121216", "CARD2": "#1C1C22", "BORDER": "#26262E",
+        "TEXT": "#F2F5FA", "MUTED": "#8A8A99",
+        "SUBCARD": "#121216", "SUBBORDER": "#26262E",
+        "UPDCARD": "#121216", "POWER_HOVER": "#1C1C22",
+    },
+    "light": {
+        "BG": "#F2F4F8", "SIDE": "#E9EDF4", "PANEL": "#FFFFFF",
+        "CARD": "#FFFFFF", "CARD2": "#E9EEF7", "BORDER": "#DCE2EC",
+        "TEXT": "#111318", "MUTED": "#6B7484",
+        "SUBCARD": "#FFFFFF", "SUBBORDER": "#DCE2EC",
+        "UPDCARD": "#FFFFFF", "POWER_HOVER": "#E9EEF7",
+    },
+}
+
+def apply_theme(name):
+    """Ставит палитру темы. Вызывается до сборки окна."""
+    if name == "system":
+        # Тёмная как основа: у CustomTkinter нет надёжного способа спросить
+        # системную тему на всех платформах, а тёмная тут выглядит уместнее.
+        try:
+            name = "light" if ctk.get_appearance_mode().lower() == "light" else "dark"
+        except Exception:
+            name = "dark"
+    globals().update(THEMES.get(name, THEMES["dark"]))
+    # Акценты одинаковы во всех темах, только на светлом фоне чуть темнее,
+    # иначе выцветают и текст по ним не читается.
+    light = name == "light"
+    globals().update({
+        "ACC":  "#3F6FE8" if light else "#5B8CFF",
+        "ACC_D": "#3358C4" if light else "#4A76DB",
+        "ACC2": "#6647E0" if light else "#7A5CFF",
+        "OK":   "#1FA76A" if light else "#39D98A",
+        "WARN": "#C08A0A" if light else "#F0B429",
+        "DANGER": "#D93B3B" if light else "#FF5C5C",
+        "PING_C": "#1FA76A" if light else "#2FB37A",
+        "PING_CD": "#188554" if light else "#269464",
+        "UPD_C": "#3F6FE8" if light else "#5B8CFF",
+        "UPD_CD": "#3358C4" if light else "#4A76DB",
+        "SPEED_C": "#6647E0" if light else "#7A5CFF",
+        "SPEED_CD": "#5439BE" if light else "#6647E0",
+    })
+
+
+# ── Язык ──────────────────────────────────────────────────────────────────
+
+LANG = "ru"
+
+def tr(ru, en):
+    """Строка на текущем языке.
+
+    Оба варианта стоят рядом в месте использования: видно, что увидит
+    пользователь, и нельзя забыть перевод — без второго аргумента вызов просто
+    не сработает.
+    """
+    return ru if LANG == "ru" else en
+
+
+def apply_lang(name):
+    global LANG
+    if name == "system":
+        try:
+            import locale
+            code = (locale.getdefaultlocale()[0] or "en")[:2].lower()
+        except Exception:
+            code = "en"
+        name = "ru" if code == "ru" else "en"
+    LANG = "ru" if name == "ru" else "en"
+
+
+def _early_prefs():
+    """Тема и язык нужны раньше, чем создаётся окно, — читаем их из файла сами."""
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            return json.load(f).get("prefs", {}) or {}
+    except Exception:
+        return {}
+
 
 # Палитра общая с мобильным Zyng: тёмная основа, сине-фиолетовый акцент.
 # Раньше тема была серо-стальной, и «включено» рисовалось тем же серым, что и
@@ -1168,7 +1267,7 @@ class JeffTUN:
                                           dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 14, "bold"),
                                           command=self._on_tab_menu)
         self.tab_menu.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(srow, text="⚡ Авто", width=76, height=44, corner_radius=14,
+        ctk.CTkButton(srow, text=tr("⚡ Авто", "⚡ Auto"), width=76, height=44, corner_radius=14,
                       fg_color=PING_C, hover_color=PING_CD, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.connect_fastest).pack(side="left", padx=(8, 0))
         ctk.CTkButton(srow, text="🔄", width=48, height=44, corner_radius=14,
@@ -1183,10 +1282,11 @@ class JeffTUN:
             pass
         self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
         self.empty_lbl = ctk.CTkLabel(self.server_list,
-            text="Добавь ключ или подписку —\nкнопка «Вставить» ниже",
+            text=tr("Добавь ключ или подписку —\nкнопка «Вставить» ниже",
+                          "Add a key or subscription —\nuse the button below"),
             font=ctk.CTkFont(FONT, 12), text_color=MUTED)
         brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=3, column=0, sticky="ew", padx=18, pady=(4, 16))
-        ctk.CTkButton(brow, text="＋  Вставить ключ / подписку", height=40, corner_radius=20,
+        ctk.CTkButton(brow, text=tr("＋  Вставить ключ / подписку", "＋  Add key / subscription"), height=40, corner_radius=20,
                       fg_color=ACC, hover_color=ACC_D, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.paste_key).pack(fill="x", expand=True)
 
@@ -1220,7 +1320,7 @@ class JeffTUN:
         self.toggle_cv.grid(row=1, column=0, pady=(18, 8))
         self.toggle_cv.bind("<Button-1>", lambda e: self.toggle())
         self._draw_toggle()
-        self.status = ctk.CTkLabel(right, text="Отключено", font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
+        self.status = ctk.CTkLabel(right, text=tr("Отключено", "Disconnected"), font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
         self.status.grid(row=2, column=0, pady=(0, 0))
         # таймер КРАСИВО ПОД кнопкой (появляется при подключении)
         self.timer_lbl = ctk.CTkLabel(right, text="", text_color=ACC,
@@ -1233,10 +1333,10 @@ class JeffTUN:
         self.cur_lbl.grid(row=5, column=0, pady=(2, 0))
         bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=6, column=0, pady=(8, 6))
         brow = ctk.CTkFrame(bottom, fg_color="transparent"); brow.pack(pady=(0, 8))
-        ctk.CTkButton(brow, text="📶 Пинг", width=110, height=36, corner_radius=18,
+        ctk.CTkButton(brow, text=tr("📶 Пинг", "📶 Ping"), width=110, height=36, corner_radius=18,
                       fg_color=PING_C, hover_color=PING_CD, text_color="white",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(brow, text="⚡ Скорость", width=110, height=36, corner_radius=18,
+        ctk.CTkButton(brow, text=tr("⚡ Скорость", "⚡ Speed"), width=110, height=36, corner_radius=18,
                       fg_color=SPEED_C, hover_color=SPEED_CD, text_color="#ffffff",
                       font=ctk.CTkFont(FONT, 13, "bold"), command=self.speed_test).pack(side="left")
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
@@ -1276,7 +1376,9 @@ class JeffTUN:
         return len(added)
 
     def add_key(self):
-        dlg = ctk.CTkInputDialog(text="Вставь ключ (vless/vmess/trojan/ss) или ссылку-подписку:", title="Добавить")
+        dlg = ctk.CTkInputDialog(text=tr("Вставь ключ (vless/vmess/trojan/ss) или ссылку-подписку:",
+                                         "Paste a key (vless/vmess/trojan/ss) or a subscription link:"),
+                                 title=tr("Добавить", "Add"))
         v = (dlg.get_input() or "").strip()
         if not v:
             return
@@ -1286,37 +1388,40 @@ class JeffTUN:
             self._add_sub_url(v); return
         if "://" in v:
             n = self._add_manual([v])
-            self._flash(f"Добавлено: {n}" if n else "Такой ключ уже есть", OK if n else WARN)
+            self._flash(tr(f"Добавлено: {n}", f"Added: {n}") if n
+                        else tr("Такой ключ уже есть", "That key is already added"), OK if n else WARN)
         else:
-            self._flash("Не похоже на ключ или ссылку", DANGER)
+            self._flash(tr("Не похоже на ключ или ссылку", "That is not a key or a link"), DANGER)
 
     def paste_key(self):
         try: data = self.root.clipboard_get()
-        except Exception: self._flash("Буфер пуст", DANGER); return
+        except Exception: self._flash(tr("Буфер пуст", "Clipboard is empty"), DANGER); return
         lines = [l.strip() for l in data.splitlines() if "://" in l and not l.strip().startswith("http")]
         subs = [l.strip() for l in data.splitlines() if l.strip().startswith("http")]
         if subs:
             self._add_sub_url(subs[0]); return
         if not lines:
-            self._flash("В буфере нет ключа", DANGER); return
+            self._flash(tr("В буфере нет ключа", "No key in the clipboard"), DANGER); return
         n = self._add_manual(lines)
-        self._flash(f"Добавлено серверов: {n}", OK)
+        self._flash(tr(f"Добавлено серверов: {n}", f"Servers added: {n}"), OK)
 
     def add_sub(self):
-        dlg = ctk.CTkInputDialog(text="Вставь ссылку-подписку (https://…):", title="Подписка")
+        dlg = ctk.CTkInputDialog(text=tr("Вставь ссылку-подписку (https://…):",
+                                         "Paste a subscription link (https://…):"),
+                                 title=tr("Подписка", "Subscription"))
         v = dlg.get_input()
         if v and v.startswith("http"):
             self._add_sub_url(v.strip())
 
     def _add_sub_url(self, url):
         if any(s["url"] == url for s in self.subs):
-            self._flash("Подписка уже добавлена", WARN)
+            self._flash(tr("Подписка уже добавлена", "Subscription already added"), WARN)
         else:
             self.subs.append({"url": url, "title": _sub_title(url)})
         self.sub_url = url
         self.active_tab = url
         self.render_tabs()
-        self._flash("Загружаю подписку…", MUTED)
+        self._flash(tr("Загружаю подписку…", "Loading subscription…"), MUTED)
         # ЗАГРУЗКА В ФОНЕ — интерфейс не зависает
         def worker():
             try:
@@ -1330,7 +1435,8 @@ class JeffTUN:
                             s["title"] = info["title"]
                     self.selected_idx = 0
                     self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
-                    self._flash(f"Серверов: {len(links)} ✓" if links else "Подписка пустая",
+                    self._flash(tr(f"Серверов: {len(links)} ✓", f"Servers: {len(links)} ✓") if links
+                                else tr("Подписка пустая", "Subscription is empty"),
                                 OK if links else WARN)
                 self.root.after(0, done)
             except Exception as e:
@@ -1372,10 +1478,14 @@ class JeffTUN:
                 pass
         threading.Thread(target=worker, daemon=True).start()
 
-    def _flash(self, txt, color=MUTED):
-        self.status.configure(text=txt, text_color=color)
+    def _flash(self, txt, color=None):
+        # Не color=MUTED в сигнатуре: значения по умолчанию вычисляются при
+        # импорте модуля, а тема применяется позже — цвет остался бы от
+        # палитры, которая была на момент загрузки файла.
+        self.status.configure(text=txt, text_color=color or MUTED)
         self.root.after(2500, lambda: self.status.configure(
-            text=("Подключено" if self.connected else "Отключено"),
+            text=(tr("Подключено", "Connected") if self.connected
+                  else tr("Отключено", "Disconnected")),
             text_color=(OK if self.connected else MUTED)))
 
     @staticmethod
@@ -1600,12 +1710,12 @@ class JeffTUN:
         if self.manual_links:
             tabs.append(("manual", "Мои ключи"))
         for s in self.subs:
-            tabs.append((s["url"], s.get("title") or "Подписка"))
+            tabs.append((s["url"], s.get("title") or tr("Подписка", "Subscription")))
         # уникальные подписи для выпадающего списка
         self._tab_map = {}
         values = []
         for key, label in tabs:
-            lab = "".join(c for c in label if c.isprintable()).strip() or "Подписка"
+            lab = "".join(c for c in label if c.isprintable()).strip() or tr("Подписка", "Subscription")
             base = lab; i = 2
             while lab in self._tab_map:
                 lab = f"{base} ({i})"; i += 1
@@ -1629,14 +1739,14 @@ class JeffTUN:
         if show_sub:
             si = self.sub_info or {}
             del_url = cur_sub["url"] if cur_sub else self.subs[-1]["url"]
-            title = (cur_sub.get("title") if cur_sub else None) or si.get("title") or "Подписка"
+            title = (cur_sub.get("title") if cur_sub else None) or si.get("title") or tr("Подписка", "Subscription")
             card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
                                 border_width=0)
             card.pack(fill="x", pady=(0, 8))
             top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(12, 2))
             ctk.CTkLabel(top, text=title, font=ctk.CTkFont(FONT, 15, "bold"),
                          text_color="#ffffff", anchor="w").pack(side="left")
-            ctk.CTkButton(top, text="✕  удалить", width=90, height=28, corner_radius=13,
+            ctk.CTkButton(top, text=tr("✕  удалить", "✕  remove"), width=90, height=28, corner_radius=13,
                           fg_color=DANGER, hover_color="#E04A4A", text_color="#ffffff",
                           font=ctk.CTkFont(FONT, 12, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
@@ -1646,7 +1756,8 @@ class JeffTUN:
                          anchor="w").pack(anchor="w", padx=14, pady=(0, 12))
         if not self.links:
             self.empty_lbl = ctk.CTkLabel(self.server_list,
-                text="Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
+                text=tr("Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
+                     "Add a key or subscription —\nuse ＋ or the button below"),
                 font=ctk.CTkFont(FONT, 12), text_color=MUTED)
             self.empty_lbl.pack(pady=40)
             return
@@ -1742,9 +1853,9 @@ class JeffTUN:
             self._rebuild_links()
             self.render_servers()
             self.save(silent=True); self.do_ping()
-            self._flash("Сервер удалён", MUTED)
+            self._flash(tr("Сервер удалён", "Server removed"), MUTED)
         except Exception as e:
-            self._flash(f"Не удалось удалить: {e}", DANGER)
+            self._flash(tr(f"Не удалось удалить: {e}", f"Could not remove: {e}"), DANGER)
 
     def delete_subscription(self, url):
         try:
@@ -1756,14 +1867,14 @@ class JeffTUN:
             self.pings = {}; self.selected_idx = 0
             self._rebuild_links(); self.render_servers()
             self.save(silent=True); self.do_ping()
-            self._flash("Подписка удалена", MUTED)
+            self._flash(tr("Подписка удалена", "Subscription removed"), MUTED)
         except Exception as e:
             self._flash(f"Ошибка: {e}", DANGER)
 
     def clear_servers(self):
         try:
             if not self.links:
-                self._flash("Список уже пуст", MUTED); return
+                self._flash(tr("Список уже пуст", "The list is already empty"), MUTED); return
             if self.connected: self.disconnect()
             # чистим ТОЛЬКО активную вкладку, чтобы можно было удалять по подпискам
             tab = self.active_tab
@@ -1778,7 +1889,7 @@ class JeffTUN:
             self.pings = {}; self.selected_idx = 0
             self._rebuild_links(); self.render_servers()
             self.save(silent=True)
-            self._flash("Очищено", MUTED)
+            self._flash(tr("Очищено", "Cleared"), MUTED)
         except Exception as e:
             self._flash(f"Ошибка: {e}", DANGER)
 
@@ -1790,8 +1901,8 @@ class JeffTUN:
     def connect_fastest(self):
         """Пингует все серверы и подключается к самому быстрому."""
         if not self.links:
-            self._flash("Нет серверов", DANGER); return
-        self._flash("Ищу быстрый сервер…", MUTED)
+            self._flash(tr("Нет серверов", "No servers"), DANGER); return
+        self._flash(tr("Ищу быстрый сервер…", "Looking for the fastest server…"), MUTED)
         def worker():
             best = None; bestms = None
             for i, ln in enumerate(self.links):
@@ -1803,7 +1914,7 @@ class JeffTUN:
                     bestms = ms; best = i
             def done():
                 if best is None:
-                    self._flash("Серверы не отвечают", WARN); return
+                    self._flash(tr("Серверы не отвечают", "No server responded"), WARN); return
                 self.selected_idx = best
                 nm = clean_name(unquote(self.links[best].split("#", 1)[1])) if "#" in self.links[best] else "Сервер"
                 self._update_current(nm); self.render_servers()
@@ -1811,7 +1922,7 @@ class JeffTUN:
                     self.disconnect(); self.connect()
                 else:
                     self.connect()
-                self._flash(f"⚡ Быстрый: {nm} ({bestms} мс)", OK)
+                self._flash(tr(f"⚡ Быстрый: {nm} ({bestms} мс)", f"⚡ Fastest: {nm} ({bestms} ms)"), OK)
             self.root.after(0, done)
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1819,12 +1930,12 @@ class JeffTUN:
         """Копирует ссылку выбранного сервера в буфер обмена."""
         link = self._current_link()
         if not link:
-            self._flash("Сервер не выбран", WARN); return
+            self._flash(tr("Сервер не выбран", "No server selected"), WARN); return
         try:
             self.root.clipboard_clear(); self.root.clipboard_append(link)
-            self._flash("Ключ скопирован ✓", OK)
+            self._flash(tr("Ключ скопирован ✓", "Key copied ✓"), OK)
         except Exception:
-            self._flash("Не удалось скопировать", DANGER)
+            self._flash(tr("Не удалось скопировать", "Could not copy"), DANGER)
 
     # ── Пинг ── (меряем все серверы разом и показываем в каждой строке)
     def do_ping(self):
@@ -1832,14 +1943,14 @@ class JeffTUN:
         if link:
             host, port = link_host_port(link)
             if host:
-                self.ping_lbl.configure(text="Проверка…", text_color=MUTED)
+                self.ping_lbl.configure(text=tr("Проверка…", "Checking…"), text_color=MUTED)
                 def w0(h=host, p=port):
                     ms = tcp_ping(h, p)
                     def show():
-                        if ms is None: self.ping_lbl.configure(text="Пинг: нет ответа", text_color=MUTED)
+                        if ms is None: self.ping_lbl.configure(text=tr("Пинг: нет ответа", "Ping: no response"), text_color=MUTED)
                         else:
                             col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
-                            self.ping_lbl.configure(text=f"Пинг: {ms} мс", text_color=col)
+                            self.ping_lbl.configure(text=tr(f"Пинг: {ms} мс", f"Ping: {ms} ms"), text_color=col)
                     self.root.after(0, show)
                 threading.Thread(target=w0, daemon=True).start()
         # очередь всех серверов + ограниченный пул воркеров (не спамим сокетами)
@@ -1884,7 +1995,7 @@ class JeffTUN:
     def connect(self):
         link = self._current_link()
         if not link:
-            self._flash("Добавь и выбери сервер", DANGER); return
+            self._flash(tr("Добавь и выбери сервер", "Add a server and select it"), DANGER); return
         use_sb = link.strip().startswith("sb://")
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         env = dict(os.environ)
@@ -1894,7 +2005,7 @@ class JeffTUN:
                 outbound = _parse_sblink(link)
                 engine = resource_path("sing-box.exe" if os.name == "nt" else "sing-box")
                 if not os.path.exists(engine):
-                    self._flash("Не найден sing-box", DANGER); return
+                    self._flash(tr("Не найден sing-box", "sing-box not found"), DANGER); return
                 cfg = os.path.join(cfgdir, ".jeffton_singbox.json")
                 with open(cfg, "w", encoding="utf-8") as f:
                     json.dump(build_singbox_config(outbound, self.prefs), f)
@@ -1903,7 +2014,7 @@ class JeffTUN:
                 outbound = parse_link(link)
                 engine = resource_path("xray.exe" if os.name == "nt" else "xray")
                 if not os.path.exists(engine):
-                    self._flash("Не найден xray", DANGER); return
+                    self._flash(tr("Не найден xray", "xray not found"), DANGER); return
                 # geoip.dat/geosite.dat лежат рядом с ядром — укажем ядру, где их искать
                 env["XRAY_LOCATION_ASSET"] = os.path.dirname(engine)
                 cfg = os.path.join(cfgdir, ".jeffton_xray.json")
@@ -1911,12 +2022,12 @@ class JeffTUN:
                     json.dump(build_xray_config(outbound, self.prefs), f)
                 cmd = [engine, "run", "-config", cfg]
         except Exception as e:
-            self._flash(f"Неверный ключ: {e}", DANGER); return
+            self._flash(tr(f"Неверный ключ: {e}", f"Invalid key: {e}"), DANGER); return
         try:
             self.proc = subprocess.Popen(cmd, env=env,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         except Exception as e:
-            self._flash(f"Ядро: {e}", DANGER); return
+            self._flash(tr(f"Ядро: {e}", f"Core: {e}"), DANGER); return
         # TUN-режим: весь трафик системы через sing-box tun → наш локальный socks
         self.tun_proc = None
         if self.prefs.get("tun_mode"):
@@ -1931,7 +2042,7 @@ class JeffTUN:
                     time.sleep(0.6)
                     if self.tun_proc.poll() is not None:   # упал — скорее всего нет прав админа
                         self.tun_proc = None
-                        self._flash("TUN не запущен — запусти от администратора", WARN)
+                        self._flash(tr("TUN не запущен — запусти от администратора", "TUN did not start — run as administrator"), WARN)
                 except Exception:
                     self.tun_proc = None
         if not self.tun_proc:                              # прокси-режим (или TUN не поднялся)
@@ -1965,15 +2076,15 @@ class JeffTUN:
         s = int(time.time() - self._connect_time)
         hhmmss = f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
         self.timer_lbl.configure(text=f"⏱ {hhmmss}")
-        self.status.configure(text="Подключено", text_color=OK)
+        self.status.configure(text=tr("Подключено", "Connected"), text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
     def _auto_reconnect(self):
         if getattr(self, "_reconnecting", False):
             return
         self._reconnecting = True
-        self._flash("Соединение потеряно — переподключаюсь…", WARN)
-        self.status.configure(text="Переподключение…", text_color=WARN)
+        self._flash(tr("Соединение потеряно — переподключаюсь…", "Connection lost — reconnecting…"), WARN)
+        self.status.configure(text=tr("Переподключение…", "Reconnecting…"), text_color=WARN)
         self.disconnect()
         def again():
             self.connect()
@@ -2000,7 +2111,7 @@ class JeffTUN:
             pass
         self._animate_toggle()
         self.timer_lbl.configure(text="")
-        self.status.configure(text="Отключено", text_color=MUTED)
+        self.status.configure(text=tr("Отключено", "Disconnected"), text_color=MUTED)
 
     # ── Сохранение ──
     def save(self, silent=False):
@@ -2010,7 +2121,7 @@ class JeffTUN:
                            "subs": self.subs, "sub_cache": self.sub_cache,
                            "active_tab": self.active_tab,
                            "autoconnect": self.autoconnect, "prefs": self.prefs}, f)
-            if not silent: self._flash("Сохранено ✓", OK)
+            if not silent: self._flash(tr("Сохранено ✓", "Saved ✓"), OK)
         except Exception:
             pass
 
@@ -2072,14 +2183,14 @@ class JeffTUN:
 
     def update_sub(self):
         if not self.subs:
-            self._flash("Нет подписок", DANGER); return
+            self._flash(tr("Нет подписок", "No subscriptions"), DANGER); return
         self._pull_all_subs(reconnect=True)
 
     def _pull_all_subs(self, reconnect=False):
         if getattr(self, "_subs_updating", False):
             return
         self._subs_updating = True
-        self._flash("Обновление подписок…", MUTED)
+        self._flash(tr("Обновление подписок…", "Refreshing subscriptions…"), MUTED)
         subs = list(self.subs)
         # ВСЁ в фоне — интерфейс не зависает, ключи можно вставлять параллельно
         def worker():
@@ -2100,9 +2211,9 @@ class JeffTUN:
                             s["title"] = info["title"]
                 self._rebuild_links(); self.render_servers(); self.save(silent=True); self.do_ping()
                 if results:
-                    self._flash(f"Обновлено подписок: {len(results)}", OK)
+                    self._flash(tr(f"Обновлено подписок: {len(results)}", f"Subscriptions refreshed: {len(results)}"), OK)
                 else:
-                    self._flash("Нет интернета или подписки недоступны", WARN)
+                    self._flash(tr("Нет интернета или подписки недоступны", "No internet, or subscriptions unreachable"), WARN)
                 if reconnect and self.connected: self.disconnect(); self.connect()
             self.root.after(0, done)
         threading.Thread(target=worker, daemon=True).start()
@@ -2149,10 +2260,10 @@ class JeffTUN:
         self.update_bar = ctk.CTkFrame(self.root, fg_color=UPDCARD, corner_radius=14, border_width=1, border_color=OK)
         self.update_bar.place(relx=0.5, rely=0.02, anchor="n")
         top = ctk.CTkFrame(self.update_bar, fg_color="transparent"); top.pack(fill="x")
-        self._ulbl = ctk.CTkLabel(top, text=f"🎉 Новая версия {latest}",
+        self._ulbl = ctk.CTkLabel(top, text=tr(f"🎉 Новая версия {latest}", f"🎉 New version {latest}"),
                                   font=ctk.CTkFont(FONT, 12, "bold"), text_color=OK)
         self._ulbl.pack(side="left", padx=14, pady=(8, 4))
-        ctk.CTkButton(top, text="Обновить", width=90, height=28, corner_radius=14,
+        ctk.CTkButton(top, text=tr("Обновить", "Update"), width=90, height=28, corner_radius=14,
                       fg_color=OK, hover_color="#2FB37A", text_color="#08160c",
                       font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
         if notes:
@@ -2260,10 +2371,10 @@ class JeffTUN:
 
     # ── Настройки ──
     def open_settings(self):
-        win = ctk.CTkToplevel(self.root); win.title("Настройки"); win.geometry("420x600")
+        win = ctk.CTkToplevel(self.root); win.title(tr("Настройки", "Settings")); win.geometry("420x640")
         win.configure(fg_color=BG)
         win.after(250, lambda: (win.lift(), win.focus_force()))
-        ctk.CTkLabel(win, text="Настройки", font=ctk.CTkFont(FONT, 20, "bold"), text_color=TEXT).pack(pady=(16, 8))
+        ctk.CTkLabel(win, text=tr("Настройки", "Settings"), font=ctk.CTkFont(FONT, 20, "bold"), text_color=TEXT).pack(pady=(16, 8))
         sc = ctk.CTkScrollableFrame(win, fg_color="transparent"); sc.pack(fill="both", expand=True, padx=10)
         def section(t):
             ctk.CTkLabel(sc, text=t, font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED).pack(anchor="w", padx=10, pady=(14, 4))
@@ -2286,50 +2397,111 @@ class JeffTUN:
             ctk.CTkOptionMenu(row, values=opts, variable=var, width=130, fg_color=CARD2,
                               text_color=TEXT, button_color=ACC, button_hover_color=ACC_D,
                               command=_cb).pack(side="right")
-        def link(card, text, cmd, color=TEXT):
+        def link(card, text, cmd, color=None):
+            color = color or TEXT
             ctk.CTkButton(card, text=text, anchor="w", height=38, corner_radius=0, fg_color="transparent",
                           hover_color=CARD2, text_color=color, font=ctk.CTkFont(FONT, 13), command=cmd).pack(fill="x", padx=4, pady=1)
 
-        c = section("ИНТЕРФЕЙС")
-        def _theme(v):
-            ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(v, "light"))
-        choice(c, "Тема", "theme", ["Тёмная", "Светлая", "Системная"], "Тёмная", on_change=_theme)
-        c = section("ЗАПУСК")
+        c = section(tr("ОФОРМЛЕНИЕ", "APPEARANCE"))
+
+        # Значение в настройках хранится кодом ("dark"), а показывается словом.
+        # Раньше хранилось само слово — при смене языка выбор бы потерялся.
+        theme_names = {
+            "system": tr("Как в системе", "System"),
+            "light":  tr("Светлая", "Light"),
+            "dark":   tr("Тёмная", "Dark"),
+            "black":  tr("Чёрная", "Black"),
+        }
+        lang_names = {"system": tr("Как в системе", "System"), "ru": "Русский", "en": "English"}
+
+        def coded_choice(card, text, key, names, default, hint=None):
+            row = ctk.CTkFrame(card, fg_color="transparent"); row.pack(fill="x", padx=14, pady=8)
+            left = ctk.CTkFrame(row, fg_color="transparent"); left.pack(side="left", anchor="w")
+            ctk.CTkLabel(left, text=text, font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(anchor="w")
+            if hint:
+                ctk.CTkLabel(left, text=hint, font=ctk.CTkFont(FONT, 10),
+                             text_color=MUTED).pack(anchor="w")
+            current = self.prefs.get(key, default)
+            var = ctk.StringVar(value=names.get(current, names[default]))
+            back = {v: k for k, v in names.items()}
+            def _cb(shown):
+                self.prefs[key] = back.get(shown, default); self.save(silent=True)
+                self._need_restart(win)
+            ctk.CTkOptionMenu(row, values=list(names.values()), variable=var, width=140,
+                              fg_color=CARD2, text_color=TEXT, button_color=ACC,
+                              button_hover_color=ACC_D, command=_cb).pack(side="right")
+
+        coded_choice(c, tr("Тема", "Theme"), "theme", theme_names, "dark",
+                     hint=tr("Чёрная экономит батарею на OLED",
+                             "Black saves battery on OLED"))
+        coded_choice(c, tr("Язык", "Language"), "lang", lang_names, "system")
+        c = section(tr("ЗАПУСК", "STARTUP"))
         srow = ctk.CTkFrame(c, fg_color="transparent"); srow.pack(fill="x", padx=14, pady=8)
-        ctk.CTkLabel(srow, text="Автозапуск при входе", font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
+        ctk.CTkLabel(srow, text=tr("Автозапуск при входе", "Launch at login"), font=ctk.CTkFont(FONT, 13), text_color=TEXT).pack(side="left")
         asv = ctk.StringVar(value="on" if get_autostart() else "off")
         ctk.CTkSwitch(srow, text="", variable=asv, onvalue="on", offvalue="off",
                       command=lambda: set_autostart(asv.get() == "on"), progress_color=ACC).pack(side="right")
         arow = ctk.CTkFrame(c, fg_color="transparent"); arow.pack(fill="x", padx=14, pady=8)
-        ctk.CTkLabel(arow, text="Автоподключение", font=ctk.CTkFont(FONT, 13)).pack(side="left")
+        ctk.CTkLabel(arow, text=tr("Автоподключение", "Connect on launch"), font=ctk.CTkFont(FONT, 13)).pack(side="left")
         acv = ctk.StringVar(value="on" if self.autoconnect else "off")
         ctk.CTkSwitch(arow, text="", variable=acv, onvalue="on", offvalue="off",
                       command=lambda: (setattr(self, "autoconnect", acv.get() == "on"), self.save(silent=True)),
                       progress_color=ACC).pack(side="right")
-        sw(c, "Автопереподключение при обрыве", "auto_reconnect", True)
-        c = section("ТУННЕЛЬ")
-        sw(c, "Фрагментация TLS (обход DPI)", "fragment", False,
+        sw(c, tr("Автопереподключение при обрыве", "Reconnect automatically"), "auto_reconnect", True)
+        c = section(tr("ТУННЕЛЬ", "TUNNEL"))
+        sw(c, tr("Фрагментация TLS (обход DPI)", "TLS fragmentation (DPI bypass)"), "fragment", False,
            cmd=lambda _v: self._reconnect_note())
-        sw(c, "Доступ из локальной сети (LAN)", "lan", False,
+        sw(c, tr("Доступ из локальной сети (LAN)", "Allow LAN access"), "lan", False,
            cmd=lambda _v: self._reconnect_note())
-        c = section("МАРШРУТИЗАЦИЯ")
-        sw(c, "Умная (RU-сайты напрямую)", "route_smart", False,
+        c = section(tr("МАРШРУТИЗАЦИЯ", "ROUTING"))
+        sw(c, tr("Умная (RU-сайты напрямую)", "Smart (local sites go direct)"), "route_smart", False,
            cmd=lambda _v: self._reconnect_note())
-        sw(c, "Steam-загрузки напрямую (быстрые игры)", "steam_direct", False,
+        sw(c, tr("Steam-загрузки напрямую (быстрые игры)", "Steam downloads go direct"), "steam_direct", False,
            cmd=lambda _v: self._reconnect_note())
-        sw(c, "Режим TUN — весь ПК (нужен админ)", "tun_mode", False,
+        sw(c, tr("Режим TUN — весь ПК (нужен админ)", "TUN mode — whole PC (needs admin)"), "tun_mode", False,
            cmd=lambda _v: self._reconnect_note())
-        c = section("ДАННЫЕ")
-        link(c, "📋 Скопировать текущий ключ", self.copy_key, color=ACC)
-        link(c, "🗑 Сброс (удалить ключи)", self._reset_key, color=DANGER)
-        c = section("ПОДРОБНЕЕ")
-        link(c, f"⬆ Проверить обновление (v{APP_VERSION})", self.do_self_update)
-        link(c, "❓ FAQ", self._faq)
+        c = section(tr("ДАННЫЕ", "DATA"))
+        link(c, tr("📋 Скопировать текущий ключ", "📋 Copy current key"), self.copy_key, color=ACC)
+        link(c, tr("🗑 Сброс (удалить ключи)", "🗑 Reset (delete all keys)"), self._reset_key, color=DANGER)
+        c = section(tr("ПОДРОБНЕЕ", "MORE"))
+        link(c, tr(f"⬆ Проверить обновление (v{APP_VERSION})", f"⬆ Check for updates (v{APP_VERSION})"), self.do_self_update)
+        link(c, tr("❓ FAQ", "❓ FAQ"), self._faq)
         link(c, "✈ Telegram  @jeffvpn", lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
-        link(c, "ℹ О приложении", self._about)
+        link(c, tr("ℹ О приложении", "ℹ About"), self._about)
+
+    def _need_restart(self, win):
+        """Показывает в окне настроек, что тема или язык применятся после перезапуска.
+
+        Виджеты CustomTkinter берут цвета и подписи в момент создания, поэтому
+        перекрасить и перевести уже собранное окно нельзя — проще пересоздать
+        приложение целиком.
+        """
+        if getattr(self, "_restart_bar", None):
+            return
+        self._restart_bar = ctk.CTkFrame(win, fg_color=CARD, corner_radius=14,
+                                         border_width=1, border_color=ACC)
+        self._restart_bar.pack(fill="x", side="bottom", padx=10, pady=10)
+        ctk.CTkLabel(self._restart_bar,
+                     text=tr("Применится после перезапуска", "Applies after a restart"),
+                     font=ctk.CTkFont(FONT, 12), text_color=TEXT).pack(side="left", padx=14, pady=10)
+
+        def _go():
+            if restart_app():
+                self.root.after(200, self.on_close)
+            else:
+                self._flash(tr("Перезапусти приложение вручную",
+                               "Please restart the app manually"), WARN)
+
+        ctk.CTkButton(self._restart_bar, text=tr("Перезапустить", "Restart"),
+                      width=120, height=30, corner_radius=12,
+                      fg_color=ACC, hover_color=ACC_D, text_color="#ffffff",
+                      font=ctk.CTkFont(FONT, 12, "bold"), command=_go).pack(side="right", padx=10, pady=8)
+
+        # Окно закроют — ссылка на плашку должна умереть вместе с ним.
+        win.protocol("WM_DELETE_WINDOW", lambda: (setattr(self, "_restart_bar", None), win.destroy()))
 
     def _reset_key(self):
-        if not messagebox.askyesno(APP_NAME, "Удалить все ключи?"): return
+        if not messagebox.askyesno(APP_NAME, tr("Удалить все ключи?", "Delete all keys?")): return
         self.links = []; self.manual_links = []; self.subs = []; self.sub_cache = {}
         self.sub_url = ""; self.active_tab = "all"; self.selected_idx = 0; self.render_servers()
         try: os.remove(CONFIG_FILE)
@@ -2337,13 +2509,13 @@ class JeffTUN:
 
     def _reconnect_note(self):
         if self.connected:
-            self._flash("Переподключись, чтобы применить", WARN)
+            self._flash(tr("Переподключись, чтобы применить", "Reconnect to apply"), WARN)
 
     def speed_test(self):
         """Реальный тест скорости загрузки через активное соединение (Мбит/с)."""
         if not self.connected:
-            self._flash("Сначала подключись", WARN); return
-        self._flash("Замеряю скорость…", MUTED)
+            self._flash(tr("Сначала подключись", "Connect first"), WARN); return
+        self._flash(tr("Замеряю скорость…", "Measuring speed…"), MUTED)
         def worker():
             try:
                 import ssl
@@ -2361,32 +2533,63 @@ class JeffTUN:
                         if time.time() - t0 > 12: break     # хватит для оценки
                 dt = max(0.001, time.time() - t0)
                 mbps = (got * 8) / dt / 1_000_000
-                self.root.after(0, lambda: self._flash(f"⚡ Скорость: {mbps:.1f} Мбит/с", OK))
+                self.root.after(0, lambda: self._flash(tr(f"⚡ Скорость: {mbps:.1f} Мбит/с", f"⚡ Speed: {mbps:.1f} Mbps"), OK))
             except Exception:
-                self.root.after(0, lambda: self._flash("Не удалось замерить скорость", DANGER))
+                self.root.after(0, lambda: self._flash(tr("Не удалось замерить скорость", "Could not measure speed"), DANGER))
         threading.Thread(target=worker, daemon=True).start()
 
     def _about(self):
-        messagebox.showinfo("О приложении", f"JeffTUN VPN v{APP_VERSION}\n\nБыстрый VPN с обходом блокировок.\n"
-            "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/jeffvpn")
+        messagebox.showinfo(
+            tr("О приложении", "About"),
+            tr(f"JeffTUN VPN v{APP_VERSION}\n\nБыстрый VPN с обходом блокировок.\n"
+               "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/jeffvpn",
+               f"JeffTUN VPN v{APP_VERSION}\n\nA fast VPN that gets around blocking.\n"
+               "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/jeffvpn"))
 
     def _stats(self):
-        st = "Подключено" if self.connected else "Отключено"
-        messagebox.showinfo("Статистика", f"Статус: {st}\nСерверов: {len(self.links)}\n"
-            f"SOCKS 127.0.0.1:{SOCKS_PORT} · HTTP :{HTTP_PORT}")
+        st = tr("Подключено", "Connected") if self.connected else tr("Отключено", "Disconnected")
+        messagebox.showinfo(
+            tr("Статистика", "Statistics"),
+            tr(f"Статус: {st}\nСерверов: {len(self.links)}\n"
+               f"SOCKS 127.0.0.1:{SOCKS_PORT} · HTTP :{HTTP_PORT}",
+               f"Status: {st}\nServers: {len(self.links)}\n"
+               f"SOCKS 127.0.0.1:{SOCKS_PORT} · HTTP :{HTTP_PORT}"))
 
     def _faq(self):
-        messagebox.showinfo("FAQ", "• ＋ или «Вставить» — добавь ключ/подписку.\n• Выбери страну слева.\n"
-            "• Нажми круглую кнопку — подключение.\n• «Тест пинга» — скорость сервера.\n\nt.me/jeffvpn")
+        messagebox.showinfo("FAQ", tr(
+            "• ＋ или «Вставить» — добавь ключ/подписку.\n• Выбери страну слева.\n"
+            "• Нажми круглую кнопку — подключение.\n• «Пинг» — отклик сервера.\n\nt.me/jeffvpn",
+            "• ＋ or the Add button — add a key or subscription.\n• Pick a country on the left.\n"
+            "• Press the round button to connect.\n• “Ping” shows server response time.\n\nt.me/jeffvpn"))
 
     def on_close(self):
         if self.connected: self.disconnect()
         self.root.destroy()
 
 
+def restart_app():
+    """Перезапускает приложение — тема и язык подхватятся при старте."""
+    try:
+        args = [sys.executable] if getattr(sys, "frozen", False) \
+            else [sys.executable, os.path.abspath(sys.argv[0])]
+        clean_env = {k: v for k, v in os.environ.items()
+                     if not (k.startswith("_MEIPASS") or k.startswith("_PYI"))}
+        kwargs = {"env": clean_env}
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        subprocess.Popen(args, **kwargs)
+        return True
+    except Exception:
+        return False
+
+
 def main():
     try:
-        ctk.set_appearance_mode("dark"); ctk.set_default_color_theme("blue")
+        prefs = _early_prefs()
+        apply_lang(prefs.get("lang", "system"))
+        apply_theme(prefs.get("theme", "dark"))
+        ctk.set_appearance_mode("light" if BG.upper() == "#F2F4F8" else "dark")
+        ctk.set_default_color_theme("blue")
         root = ctk.CTk(); root.configure(fg_color=BG)
         JeffTUN(root); root.mainloop()
     except Exception:
