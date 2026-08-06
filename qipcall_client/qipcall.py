@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.0"
+APP_VERSION = "5.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1302,7 +1302,14 @@ class JeffTUN:
             from PIL import Image
             lp = resource_path("logo_white.png")
             if os.path.exists(lp):
-                im = Image.open(lp); ratio = im.width / im.height
+                im = Image.open(lp).convert("RGBA"); ratio = im.width / im.height
+                # Логотип белый, и на светлой теме он сливался с фоном.
+                # Перекрашиваем силуэт в цвет текста, прозрачность сохраняем.
+                if TEXT.upper() != "#FFFFFF":
+                    r, g, b = (int(TEXT[i:i + 2], 16) for i in (1, 3, 5))
+                    tint = Image.new("RGBA", im.size, (r, g, b, 0))
+                    tint.putalpha(im.getchannel("A"))
+                    im = tint
                 # крупнее и шире
                 H = 82
                 img = ctk.CTkImage(im, size=(int(H * ratio * 1.08), H))
@@ -1342,7 +1349,7 @@ class JeffTUN:
         self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
         self.ping_lbl.pack(pady=(0, 8))
         foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn",
-                            font=ctk.CTkFont(FONT, 10, "bold"), text_color="#ffffff", cursor="hand2")
+                            font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED, cursor="hand2")
         foot.grid(row=7, column=0, pady=(0, 10))
         foot.bind("<Button-1>", lambda e: self._open_tg())
         self._connect_time = None
@@ -1497,92 +1504,6 @@ class JeffTUN:
                                 "connection", "network is unreachable", "ssl")):
             return "Нет интернета или сервер недоступен"
         return "Не удалось выполнить"
-
-    def _orb_image(self, on, bright=1.0, size=172):
-        """Загружает картинку-пузырь (orb_on.png / orb_off.png) с яркостью для анимации."""
-        try:
-            from PIL import Image, ImageEnhance
-            p = resource_path("orb_on.png" if on else "orb_off.png")
-            if not os.path.exists(p):
-                return None
-            im = Image.open(p).convert("RGBA")
-            if bright != 1.0:
-                im = ImageEnhance.Brightness(im).enhance(bright)
-            im = im.resize((size, size), Image.LANCZOS)
-            return ctk.CTkImage(im, size=(size, size))
-        except Exception:
-            return None
-
-    def _make_orb(self, on, glow=1.0, size=150):
-        """Рисует реалистичную «водяную» кнопку-сферу с неоновым символом питания.
-        on=True — синее свечение; on=False — бледно-серая."""
-        try:
-            from PIL import Image, ImageDraw, ImageFilter
-        except Exception:
-            return self._power_icon("#ffffff" if on else MUTED, 64)
-        S = size * 3
-        cx = cy = S // 2
-        R = int(S * 0.40)
-        if on:
-            # Акцент приложения #5B8CFF, свечение уходит в фиолетовый #7A5CFF —
-            # тот же градиент, что на кнопке в мобильной версии.
-            core = (91, 140, 255); rim = (24, 34, 88); glowc = (122, 92, 255); sym = (242, 245, 250)
-        else:
-            core = (94, 102, 120); rim = (20, 24, 34); glowc = (58, 66, 84); sym = (196, 203, 216)
-        im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        # внешнее свечение
-        g = Image.new("RGBA", (S, S), (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
-        pad = int(S * 0.05)
-        gd.ellipse([cx - R - pad, cy - R - pad, cx + R + pad, cy + R + pad],
-                   fill=glowc + (int((150 if on else 70) * glow),))
-        im = Image.alpha_composite(im, g.filter(ImageFilter.GaussianBlur(S * 0.055)))
-        # сфера: радиальный градиент (ярче к центру)
-        sph = Image.new("RGBA", (S, S), (0, 0, 0, 0)); sd = ImageDraw.Draw(sph)
-        steps = 64
-        for i in range(steps):
-            t = i / steps
-            r = int(R * (1 - t))
-            col = tuple(int(rim[j] + (core[j] - rim[j]) * (t ** 1.3)) for j in range(3))
-            sd.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col + (255,))
-        im = Image.alpha_composite(im, sph)
-        # ободок-стекло
-        rd = ImageDraw.Draw(im)
-        rd.ellipse([cx - R, cy - R, cx + R, cy + R], outline=(200, 225, 255, 90), width=int(S * 0.012))
-        # глянцевый блик сверху
-        hl = Image.new("RGBA", (S, S), (0, 0, 0, 0)); hd = ImageDraw.Draw(hl)
-        hd.ellipse([cx - int(R * 0.62), cy - int(R * 0.85), cx + int(R * 0.62), cy - int(R * 0.05)],
-                   fill=(255, 255, 255, 70))
-        im = Image.alpha_composite(im, hl.filter(ImageFilter.GaussianBlur(S * 0.03)))
-        # символ питания + свечение
-        smb = Image.new("RGBA", (S, S), (0, 0, 0, 0)); md = ImageDraw.Draw(smb)
-        w = int(S * 0.030); spad = int(S * 0.32)
-        md.arc([spad, spad, S - spad, S - spad], start=-60, end=240, fill=sym + (255,), width=w)
-        md.line([(cx, int(S * 0.26)), (cx, int(S * 0.50))], fill=sym + (255,), width=w)
-        if on:
-            gsm = smb.filter(ImageFilter.GaussianBlur(S * 0.018))
-            im = Image.alpha_composite(im, gsm)
-            im = Image.alpha_composite(im, gsm)
-        im = Image.alpha_composite(im, smb)
-        im = im.resize((size, size), Image.LANCZOS)
-        return ctk.CTkImage(im, size=(size, size))
-
-    def _power_icon(self, color, size=72):
-        """Рисует символ питания (кольцо с разрывом + вертикальная черта)."""
-        try:
-            from PIL import Image, ImageDraw
-            S = size * 4  # рисуем крупно и уменьшаем — сглаживание
-            im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-            d = ImageDraw.Draw(im)
-            w = int(S * 0.09)
-            pad = int(S * 0.22)
-            # разрыв кольца — СВЕРХУ (270°), там же вертикальная черта
-            d.arc([pad, pad, S - pad, S - pad], start=-60, end=240, fill=color, width=w)
-            cx = S // 2
-            d.line([(cx, int(S * 0.16)), (cx, int(S * 0.5))], fill=color, width=w)
-            im = im.resize((size, size), Image.LANCZOS)
-            return ctk.CTkImage(im, size=(size, size))
-        except Exception:
-            return None
 
     @staticmethod
     def _lerp_hex(a, b, t):
@@ -1745,14 +1666,16 @@ class JeffTUN:
             card.pack(fill="x", pady=(0, 8))
             top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(12, 2))
             ctk.CTkLabel(top, text=title, font=ctk.CTkFont(FONT, 15, "bold"),
-                         text_color="#ffffff", anchor="w").pack(side="left")
+                         text_color=TEXT, anchor="w").pack(side="left")
             ctk.CTkButton(top, text=tr("✕  удалить", "✕  remove"), width=90, height=28, corner_radius=13,
                           fg_color=DANGER, hover_color="#E04A4A", text_color="#ffffff",
                           font=ctk.CTkFont(FONT, 12, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
-            info_txt = f"{si.get('traffic','∞')}   ·   {si.get('expire','')}" if si else "нажми «Обновить», если пусто"
+            info_txt = (f"{si.get('traffic','∞')}   ·   {si.get('expire','')}" if si
+                        else tr("нажми «Обновить», если пусто",
+                                "press Refresh if this is empty"))
             ctk.CTkLabel(card, text=info_txt,
-                         font=ctk.CTkFont(FONT, 12, "bold"), text_color="#ffffff",
+                         font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED,
                          anchor="w").pack(anchor="w", padx=14, pady=(0, 12))
         if not self.links:
             self.empty_lbl = ctk.CTkLabel(self.server_list,
