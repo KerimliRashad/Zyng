@@ -4,6 +4,7 @@ JeffTUN VPN — десктопный клиент (Windows/Linux) в стиле 
 UI: CustomTkinter. Ядро: xray-core. Системный прокси.
 """
 import os
+import re
 import sys
 import json
 import time
@@ -19,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.2"
+APP_VERSION = "5.3"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -688,11 +689,48 @@ def _stream(params, net, security):
             "serverName": params.get("sni", [params.get("host", [""])[0]])[0],
             "fingerprint": params.get("fp", ["chrome"])[0],
             "allowInsecure": params.get("allowInsecure", ["0"])[0] in ("1", "true")}
+    def one(key, default=""):
+        return params.get(key, [default])[0]
+
+    path = one("path", "/") or "/"
+    host = one("host")
+
+    # Каждому транспорту нужен свой блок настроек. Раньше их было только два —
+    # ws и grpc, — а для остальных проставлялось лишь имя сети. Xray получал
+    # конфиг без параметров транспорта и соединение не поднималось: сервер
+    # выглядел мёртвым, хотя был полностью рабочим.
     if net == "ws":
-        ss["wsSettings"] = {"path": params.get("path", ["/"])[0],
-                            "headers": {"Host": params.get("host", [""])[0]} if params.get("host") else {}}
+        ss["wsSettings"] = {"path": path,
+                            "headers": {"Host": host} if host else {}}
     elif net == "grpc":
-        ss["grpcSettings"] = {"serviceName": params.get("serviceName", [""])[0]}
+        ss["grpcSettings"] = {"serviceName": one("serviceName"),
+                              "multiMode": one("mode") == "multi"}
+    elif net in ("xhttp", "splithttp"):
+        # xhttp — нынешнее имя, splithttp — прежнее. Xray понимает оба, но
+        # ключ настроек должен совпадать с именем сети.
+        ss["network"] = net
+        block = {"path": path, "host": host}
+        if one("mode"):
+            block["mode"] = one("mode")
+        ss[net + "Settings"] = block
+    elif net == "httpupgrade":
+        ss["httpupgradeSettings"] = {"path": path, "host": host}
+    elif net in ("h2", "http"):
+        ss["network"] = "h2"
+        ss["httpSettings"] = {"path": path,
+                              "host": [h for h in host.split(",") if h]}
+    elif net == "kcp":
+        ss["kcpSettings"] = {"seed": one("seed"),
+                             "header": {"type": one("headerType", "none") or "none"}}
+    elif net == "quic":
+        ss["quicSettings"] = {"security": one("quicSecurity", "none") or "none",
+                              "key": one("key"),
+                              "header": {"type": one("headerType", "none") or "none"}}
+    elif net in ("tcp", "raw"):
+        # Маскировка под обычный HTTP — у части серверов обязательна.
+        if one("headerType") == "http":
+            ss["tcpSettings"] = {"header": {"type": "http",
+                                            "request": {"headers": {"Host": [h for h in host.split(",") if h]}}}}
     return ss
 
 
@@ -1042,6 +1080,15 @@ def _sub_headers(ua):
     }
 
 
+# Ключ где угодно в тексте: перед ним начало строки, пробел, кавычка или
+# скобка, а заканчивается он на первом символе, который в ссылке не встречается.
+_LINK_RE = re.compile(
+    r'(?<![A-Za-z0-9/:._-])'
+    r'(?:vless|vmess|trojan|ss|socks5?|wireguard|wg|hysteria2?|hy2|tuic)://'
+    r'[^\s"\'<>\\\]\},]+'
+)
+
+
 def _fetch_sub_once(url, ua, ctx):
     url = _norm_sub_url(url)
     req = urllib.request.Request(url, headers=_sub_headers(ua))
@@ -1078,6 +1125,22 @@ def _fetch_sub_once(url, ua, ctx):
             ln = ln.strip()
             if ln.startswith(VALID) and not _is_stub(ln) and ln not in links:
                 links.append(ln)
+
+    # 4) Последняя попытка: ищем ключи по всему телу ответа.
+    #
+    # Выше строка засчитывалась, только если начиналась с протокола. Но часть
+    # панелей вместо голого списка отдаёт свою HTML-страницу, а ключи лежат
+    # внутри неё — в JavaScript, в JSON или в атрибуте кнопки «скопировать».
+    # Тогда ни одна строка с протокола не начинается, и подписка выглядела
+    # пустой при живом ответе.
+    if not links:
+        for c in candidates:
+            text = c.replace("&amp;", "&").replace("\\/", "/")
+            for m in _LINK_RE.finditer(text):
+                ln = m.group(0).rstrip(".,;")
+                if not _is_stub(ln) and ln not in links:
+                    links.append(ln)
+
     return links, title, userinfo
 
 
@@ -1309,6 +1372,11 @@ class JeffTUN:
         ctk.CTkButton(srow, text="🔄", width=48, height=44, corner_radius=14,
                       fg_color=UPD_C, hover_color=UPD_CD, text_color="white",
                       font=ctk.CTkFont(FONT, 17), command=self.update_sub).pack(side="left", padx=(8, 0))
+        # Настройки. Метод open_settings существовал давно, но кнопки для него
+        # в интерфейсе не было вовсе — попасть в настройки было нельзя.
+        ctk.CTkButton(srow, text="⚙", width=48, height=44, corner_radius=14,
+                      fg_color=CARD, hover_color=CARD2, text_color=TEXT,
+                      font=ctk.CTkFont(FONT, 19), command=self.open_settings).pack(side="left", padx=(8, 0))
         self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
                                                   scrollbar_button_color=PANEL,
                                                   scrollbar_button_hover_color=PANEL)
