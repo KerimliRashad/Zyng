@@ -19,7 +19,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.1"
+APP_VERSION = "5.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -978,7 +978,9 @@ def get_autostart():
 # Многие панели по User-Agent решают, какой формат отдать. С незнакомым UA
 # отдают заглушку «App not supported». Перебираем UA известных клиентов.
 SUB_USER_AGENTS = [
-    "Happ/1.0",
+    # Строка полная, с версией и платформой: панели, которые сверяют
+    # User-Agent строго, огрызок «Happ/1.0» не узнают и отдают 404.
+    "Happ/1.16.0 (Windows)",
     "v2rayNG/1.9.5",
     "v2rayN/6.45",
     "Streisand",
@@ -1079,6 +1081,25 @@ def _fetch_sub_once(url, ua, ctx):
     return links, title, userinfo
 
 
+def _sub_url_variants(url):
+    """Адреса, по которым панели отдают конфиг.
+
+    Часть панелей на голый адрес подписки показывает HTML-страницу или отвечает
+    404, а сам конфиг лежит рядом — под суффиксом клиента или за параметром
+    format. Единого стандарта нет, поэтому пробуем известные варианты по
+    очереди. Ответ принимается только если в нём действительно есть ключи, так
+    что неудачная догадка ничего не портит.
+    """
+    base = _norm_sub_url(url).rstrip("/")
+    sep = "&" if "?" in base else "?"
+    out = [base]
+    for suffix in ("/v2ray", "/v2ray-json", "/sing-box", "/singbox", "/clash", "/clash-meta"):
+        out.append(base + suffix)
+    for fmt in ("v2ray", "v2ray-json", "sing-box", "clash"):
+        out.append(f"{base}{sep}format={fmt}")
+    return out
+
+
 def fetch_subscription(url):
     """Возвращает (список_ключей, инфо_подписки). Перебирает User-Agent'ы,
     пока панель не отдаст настоящие серверы (а не «App not supported»)."""
@@ -1100,6 +1121,21 @@ def fetch_subscription(url):
                 best = (links, title, userinfo)
         except Exception as e:
             last_err = e
+
+    # Ни один User-Agent не помог. Значит дело может быть не в клиенте, а в
+    # адресе: пробуем те же запросы по соседним путям, которыми панели отдают
+    # конфиг. Берём только два-три агента, иначе перебор растянется надолго.
+    for alt in _sub_url_variants(url)[1:]:
+        for ua in SUB_USER_AGENTS[:3]:
+            try:
+                links, title, userinfo = _fetch_sub_once(alt, ua, ctx)
+                if links:
+                    return links, _parse_userinfo(userinfo, title)
+                if (title or userinfo) and not (best[1] or best[2]):
+                    best = (links, title, userinfo)
+            except Exception:
+                pass
+
     if best[1] or best[2]:
         return best[0], _parse_userinfo(best[2], best[1])
     if last_err:

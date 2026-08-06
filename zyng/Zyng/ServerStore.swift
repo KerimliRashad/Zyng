@@ -292,20 +292,65 @@ final class ServerStore: ObservableObject {
         var webPage: String?
     }
 
+    /// Адреса, по которым панели отдают конфиг.
+    ///
+    /// Часть панелей на голый адрес подписки показывает HTML-страницу или
+    /// отвечает 404, а конфиг лежит рядом — под суффиксом клиента или за
+    /// параметром format. Единого стандарта нет, поэтому пробуем известные
+    /// варианты. Ответ принимается только если в нём есть ключи, так что
+    /// неудачная догадка ничего не портит.
+    private static func urlVariants(of raw: String) -> [String] {
+        var base = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+
+        var out = [base]
+        for suffix in ["/v2ray", "/v2ray-json", "/sing-box", "/singbox", "/clash", "/clash-meta"] {
+            out.append(base + suffix)
+        }
+        let separator = base.contains("?") ? "&" : "?"
+        for format in ["v2ray", "v2ray-json", "sing-box", "clash"] {
+            out.append("\(base)\(separator)format=\(format)")
+        }
+        return out
+    }
+
     private func fetchProfile(from url: String) async throws -> Profile {
+        let variants = Self.urlVariants(of: url)
+
+        for (index, variant) in variants.enumerated() {
+            // По исходному адресу перебираем все User-Agent, по запасным —
+            // только первые три: иначе ожидание растянется на минуты.
+            let agents = index == 0 ? Self.userAgents : Array(Self.userAgents.prefix(3))
+            // Пустой профиль за успех не считаем: запасной адрес мог ответить
+            // и не отдать ни одного ключа.
+            if let profile = try? await fetchProfile(from: variant, agents: agents),
+               !profile.keys.isEmpty {
+                return profile
+            }
+        }
+
+        // Ни один вариант не дал ключей — повторяем исходный запрос, чтобы
+        // вернуть настоящую причину, а не молчаливый провал.
+        return try await fetchProfile(from: url, agents: Self.userAgents)
+    }
+
+    private func fetchProfile(from url: String, agents: [String]) async throws -> Profile {
         guard let parsed = URL(string: url) else { return Profile() }
 
         var lastError: Error?
         /// Панель ответила успешно, но ключей не прислала.
         var answeredWithoutKeys = false
 
-        for agent in Self.userAgents {
+        for agent in agents {
             var request = URLRequest(url: parsed)
             request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
             // Перебор идёт по пяти User-Agent подряд, поэтому долгий таймаут
             // умножается на пять. Восьми секунд хватает живой панели с запасом.
             request.timeoutInterval = 8
             request.setValue(agent, forHTTPHeaderField: "User-Agent")
+            // Без Accept часть панелей и защитных прослоек отбивает запрос,
+            // хотя подписка живая. Настольный клиент его слал всегда.
+            request.setValue("*/*", forHTTPHeaderField: "Accept")
 
             // Панели, которые считают устройства по подписке, ждут именно эти
             // заголовки — без них часть из них отдаёт пустой список.
