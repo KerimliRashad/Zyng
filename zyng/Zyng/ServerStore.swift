@@ -266,8 +266,18 @@ final class ServerStore: ObservableObject {
 
     /// Панели часто отдают список только знакомым клиентам, поэтому
     /// представляемся по очереди разными и берём первый непустой ответ.
+    ///
+    /// Строки нарочно полные, с версиями. Раньше здесь стояли огрызки вроде
+    /// «Happ/1.0» и «Streisand» — панели, которые сверяют User-Agent строго,
+    /// таких клиентов не узнавали и отвечали 404, хотя подписка была живой.
     private static let userAgents = [
-        "Happ/1.0", "v2rayNG/1.8.5", "Streisand", "SFI/2.0", "Zyng/1.0"
+        "Happ/1.16.0 (iPhone; iOS 18.0)",
+        "v2rayNG/1.9.16",
+        "Shadowrocket/2.2.28 CFNetwork/1568 Darwin/24.0.0",
+        "Streisand/1.6.30",
+        "SFI/1.11.0 (iOS)",
+        "sing-box/1.10.0",
+        "Zyng/1.0"
     ]
 
     /// Что удалось вытащить из ответа панели.
@@ -286,6 +296,8 @@ final class ServerStore: ObservableObject {
         guard let parsed = URL(string: url) else { return Profile() }
 
         var lastError: Error?
+        /// Панель ответила успешно, но ключей не прислала.
+        var answeredWithoutKeys = false
 
         for agent in Self.userAgents {
             var request = URLRequest(url: parsed)
@@ -317,18 +329,37 @@ final class ServerStore: ObservableObject {
                 }
 
                 let keys = expand(String(decoding: data, as: UTF8.self))
-                if !keys.isEmpty {
-                    var profile = Profile(keys: keys)
-                    if let http = response as? HTTPURLResponse {
-                        Self.readHeaders(http, into: &profile)
-                    }
-                    return profile
+                if keys.isEmpty {
+                    // Ответ есть, ключей в нём нет — обычно это HTML-страница
+                    // подписки: панель не узнала клиента и показала её вместо
+                    // конфига. Запоминаем отдельно, иначе поверх ляжет код
+                    // ошибки от следующего User-Agent и причина будет неверной.
+                    answeredWithoutKeys = true
+                    continue
                 }
+
+                var profile = Profile(keys: keys)
+                if let http = response as? HTTPURLResponse {
+                    Self.readHeaders(http, into: &profile)
+                }
+                return profile
             } catch {
                 lastError = error
             }
         }
 
+        // Успешный, но пустой ответ важнее кода ошибки от другого агента:
+        // он означает, что панель жива и достижима, а проблема в другом.
+        if answeredWithoutKeys {
+            throw NSError(
+                domain: "Zyng", code: 204,
+                userInfo: [NSLocalizedDescriptionKey:
+                            tr("панель ответила, но ключей не прислала — "
+                             + "возможно, она не узнала приложение",
+                               "the panel answered but sent no keys — "
+                             + "it may not recognise this app")]
+            )
+        }
         if let lastError { throw lastError }
         return Profile()
     }
