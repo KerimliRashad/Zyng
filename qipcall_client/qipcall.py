@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.0.0"
+APP_VERSION = "6.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1512,19 +1512,16 @@ class JeffTUN:
             ctk.CTkLabel(h, text="JeffTUN", font=ctk.CTkFont(FONT, 22, "bold"),
                          text_color=TEXT).pack()
 
-        # Круглая кнопка со светящимися кольцами — как в Zyng.
-        self.orb_size = 240
-        self._orb_outer = 0.0          # угол внешнего кольца
-        self._orb_inner = 0.0          # угол внутреннего, крутится в другую сторону
-        self._orb_glow = 0.0           # фаза дыхания свечения
-        self._orb_pressed = False
-        self.toggle_cv = tk.Canvas(right, width=self.orb_size, height=self.orb_size,
+        # Тумблер — тот же, что был до 6.0. Круглая кнопка со сферой в Tkinter
+        # получилась плохо: символ питания ⏻ в системных шрифтах Windows
+        # отсутствует и разъезжается, а дуги без сглаживания выглядят рваными.
+        self.toggle_w, self.toggle_h = 132, 62
+        self._tgl_pos = 0.0
+        self.toggle_cv = tk.Canvas(right, width=self.toggle_w, height=self.toggle_h,
                                    bg=BG, highlightthickness=0, bd=0, cursor="hand2")
-        self.toggle_cv.grid(row=2, column=0)
-        self.toggle_cv.bind("<Button-1>", lambda e: (self._press(True), self.toggle()))
-        self.toggle_cv.bind("<ButtonRelease-1>", lambda e: self._press(False))
+        self.toggle_cv.grid(row=2, column=0, pady=(10, 0))
+        self.toggle_cv.bind("<Button-1>", lambda e: self.toggle())
         self._draw_toggle()
-        self._animate_orb()
 
         # Статус-пилюля
         self.status_cv = tk.Canvas(right, width=190, height=34, bg=BG,
@@ -1732,91 +1729,43 @@ class JeffTUN:
         vals = [int(int(a[i:i+2], 16) + (int(b[i:i+2], 16) - int(a[i:i+2], 16)) * t) for i in (0, 2, 4)]
         return "#%02x%02x%02x" % tuple(vals)
 
-    def _pill(self, cv, x0, y0, x1, y1, fill):
-        """Рисует «пилюлю» (скруглённый прямоугольник) на Canvas."""
-        d = y1 - y0
-        cv.create_oval(x0, y0, x0 + d, y1, fill=fill, outline=fill)
-        cv.create_oval(x1 - d, y0, x1, y1, fill=fill, outline=fill)
-        cv.create_rectangle(x0 + d / 2, y0, x1 - d / 2, y1, fill=fill, outline=fill)
-
-    def _press(self, down):
-        """Отклик на нажатие: кнопка чуть подаётся внутрь."""
-        self._orb_pressed = down
-        self._draw_toggle()
-
     def _draw_toggle(self):
-        """Круглая кнопка подключения с вращающимися кольцами.
-
-        Имя метода прежнее: его зовут connect и disconnect. Раньше здесь
-        рисовался тумблер, теперь — сфера, как на главном экране Zyng.
-        """
+        """Рисует тумблер по текущей позиции анимации self._tgl_pos (0..1)."""
         cv = getattr(self, "toggle_cv", None)
         if cv is None:
             return
-        try:
-            cv.delete("all")
-        except Exception:
-            return
-
-        S = self.orb_size
-        c = S / 2
-        col = OK if self.connected else (ACC if self._connecting() else MUTED)
-        squeeze = 0.96 if self._orb_pressed else 1.0
-
-        # Свечение: несколько полупрозрачных кругов подряд — альфа-канала на
-        # Canvas нет, поэтому мягкость набираем оттенками к фону.
-        glow = 1.0 + 0.06 * self._orb_glow
-        for i, k in enumerate((1.00, 0.86, 0.72)):
-            rr = c * 0.92 * k * glow
-            cv.create_oval(c - rr, c - rr, c + rr, c + rr,
-                           fill=self._lerp_hex(BG, col, 0.05 + i * 0.04), outline="")
-
-        # Два кольца-дуги, вращаются навстречу друг другу.
-        r1 = c * 0.80
-        cv.create_arc(c - r1, c - r1, c + r1, c + r1,
-                      start=self._orb_outer, extent=260, style="arc",
-                      outline=self._lerp_hex(BG, col, 0.55), width=2)
-        r2 = c * 0.67
-        cv.create_arc(c - r2, c - r2, c + r2, c + r2,
-                      start=self._orb_inner, extent=160, style="arc",
-                      outline=self._lerp_hex(BG, col, 0.75), width=2)
-
-        # Ободок и сама кнопка.
-        r3 = c * 0.74
-        cv.create_oval(c - r3, c - r3, c + r3, c + r3,
-                       outline=self._lerp_hex(BG, col, 0.22), width=1)
-        r4 = c * 0.58 * squeeze
-        cv.create_oval(c - r4, c - r4, c + r4, c + r4,
-                       fill=CARD2, outline=self._lerp_hex(BG, col, 0.7), width=2)
-
-        # Символ питания и подпись под ним.
-        sym = "⚡" if self.connected else "⏻"
-        cv.create_text(c, c - 8 * squeeze, text=sym, fill=col,
-                       font=(FONT, int(34 * squeeze), "bold"))
-        label = (tr("ВКЛ", "ON") if self.connected
-                 else ("…" if self._connecting() else tr("ВЫКЛ", "OFF")))
-        cv.create_text(c, c + 26 * squeeze, text=label, fill=MUTED,
-                       font=(FONT, 10, "bold"))
-
-    def _connecting(self):
-        return bool(self.proc) and not self.connected
-
-    def _animate_orb(self):
-        """Кольца крутятся всегда: быстро при подключении, спокойно в покое."""
-        step = 3.5 if self._connecting() else (1.1 if self.connected else 0.45)
-        self._orb_outer = (self._orb_outer - step) % 360
-        self._orb_inner = (self._orb_inner + step * 0.7) % 360
-        self._orb_glow = (self._orb_glow + 0.06) % 6.283
-        try:
-            self._draw_toggle()
-            self.root.after(40, self._animate_orb)
-        except Exception:
-            pass
+        cv.delete("all")
+        W, H = self.toggle_w, self.toggle_h
+        m = 5
+        p = getattr(self, "_tgl_pos", 0.0)
+        track = self._lerp_hex(CARD2, ACC, p)            # плавный перелив дорожки
+        self._pill(cv, m, m, W - m, H - m, track)
+        d = (H - 2 * m) - 8                              # диаметр бегунка
+        ky0 = m + 4
+        off_x = m + 4
+        on_x = W - m - 4 - d
+        kx0 = off_x + (on_x - off_x) * p                 # плавное скольжение
+        knob = self._lerp_hex("#8A94A6", "#ffffff", p)
+        # лёгкая тень бегунка для объёма
+        cv.create_oval(kx0 + 1, ky0 + 2, kx0 + d + 1, ky0 + d + 2, fill=track, outline=track)
+        cv.create_oval(kx0, ky0, kx0 + d, ky0 + d, fill=knob, outline=knob)
 
     def _animate_toggle(self):
-        """Прежнее имя — его зовут connect и disconnect. Перерисовки достаточно:
-        кольца крутит собственный цикл."""
-        self._draw_toggle()
+        """Плавно перегоняет бегунок в целевое состояние (ease-out)."""
+        target = 1.0 if self.connected else 0.0
+        try:
+            if getattr(self, "_tgl_after", None):
+                self.root.after_cancel(self._tgl_after); self._tgl_after = None
+        except Exception:
+            pass
+        def step():
+            diff = target - self._tgl_pos
+            if abs(diff) < 0.02:
+                self._tgl_pos = target; self._draw_toggle(); return
+            self._tgl_pos += diff * 0.30                 # мягкое замедление
+            self._draw_toggle()
+            self._tgl_after = self.root.after(16, step)
+        step()
 
     def _flag_image(self, code):
         if code in self._flag_cache:
