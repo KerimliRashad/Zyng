@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "5.3"
+APP_VERSION = "6.0.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1315,6 +1315,87 @@ def _register_custom_font():
 _register_custom_font()
 
 
+
+# ══ ВИДЖЕТЫ В СТИЛЕ ZYNG ═════════════════════════════════════════════════════
+#
+# CustomTkinter не умеет градиенты и капсулы с обводкой, поэтому рисуем их
+# сами на Canvas — ровно так, как выглядит мобильная версия.
+
+class GradientButton(tk.Canvas):
+    """Кнопка с горизонтальным градиентом от акцента к фиолетовому."""
+
+    def __init__(self, master, text, command, height=46, **kw):
+        super().__init__(master, height=height, highlightthickness=0, bd=0,
+                         bg=BG, cursor="hand2", **kw)
+        self._text = text
+        self._command = command
+        self._h = height
+        self.bind("<Configure>", lambda e: self._render())
+        self.bind("<Button-1>", lambda e: self._command())
+
+    def _render(self):
+        self.delete("all")
+        w, h = self.winfo_width(), self._h
+        if w < 2:
+            return
+        r = h // 2
+        a = tuple(int(ACC[i:i + 2], 16) for i in (1, 3, 5))
+        b = tuple(int(ACC2[i:i + 2], 16) for i in (1, 3, 5))
+
+        # Градиент рисуем вертикальными полосками — в Tkinter градиентной
+        # заливки нет вовсе. Высоту каждой полоски берём по окружности, так
+        # скругление получается само собой, без закрашивания углов.
+        for x in range(w):
+            t = x / (w - 1)
+            col = "#%02x%02x%02x" % tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+            if x < r:
+                dy = r - int((r * r - (r - x) ** 2) ** 0.5)
+            elif x > w - r:
+                dy = r - int((r * r - (x - (w - r)) ** 2) ** 0.5)
+            else:
+                dy = 0
+            self.create_line(x, dy, x, h - dy, fill=col)
+
+        self.create_text(w // 2, h // 2, text=self._text, fill="#ffffff",
+                         font=(FONT, 13, "bold"))
+
+
+class _PillLabel:
+    """Статус в виде капсулы с точкой — как pill на главном экране Zyng."""
+
+    def __init__(self, canvas, app):
+        self.cv = canvas
+        self.app = app
+        self._text = ""
+        self._color = MUTED
+
+    def configure(self, text=None, text_color=None):
+        if text is not None:
+            self._text = text
+        if text_color is not None:
+            self._color = text_color
+        self._render()
+
+    # Совместимость с CTkLabel: остальной код зовёт .configure(...)
+    config = configure
+
+    def _render(self):
+        cv = self.cv
+        cv.delete("all")
+        w = int(cv["width"]); h = int(cv["height"])
+        r = h // 2
+        # Капсула: два круга и прямоугольник между ними.
+        cv.create_oval(0, 0, h, h, fill=CARD, outline=BORDER)
+        cv.create_oval(w - h, 0, w, h, fill=CARD, outline=BORDER)
+        cv.create_rectangle(r, 0, w - r, h, fill=CARD, outline="")
+        cv.create_line(r, 0, w - r, 0, fill=BORDER)
+        cv.create_line(r, h - 1, w - r, h - 1, fill=BORDER)
+        # Точка состояния и подпись.
+        cv.create_oval(16, r - 4, 24, r + 4, fill=self._color, outline="")
+        cv.create_text(w // 2 + 6, r, text=self._text, fill=self._color,
+                       font=(FONT, 12, "bold"))
+
+
 # ══ ПРИЛОЖЕНИЕ ═══════════════════════════════════════════════════════════════
 class JeffTUN:
     def __init__(self, root):
@@ -1334,9 +1415,8 @@ class JeffTUN:
         self._flag_cache = {}
         self.pings = {}
         self._ping_lbls = {}
-        self.side_collapsed = False
 
-        root.title(APP_NAME); root.geometry("700x520"); root.minsize(640, 470)
+        root.title(APP_NAME); root.geometry("880x600"); root.minsize(820, 560)
         try:
             if os.name == "nt":
                 ico = resource_path("icon.ico")
@@ -1344,121 +1424,158 @@ class JeffTUN:
         except Exception:
             pass
 
-        # две колонки без боковой панели: серверы | кнопка (равной ширины через uniform)
-        root.grid_columnconfigure(0, weight=1, uniform="main")
-        root.grid_columnconfigure(1, weight=1, uniform="main")
+        # Раскладка как в мобильном Zyng: слева список серверов, справа — экран
+        # подключения с большой круглой кнопкой, статусом, таймером и задержкой.
+        root.configure(fg_color=BG)
+        root.grid_columnconfigure(0, weight=5, uniform="main")
+        root.grid_columnconfigure(1, weight=4, uniform="main")
         root.grid_rowconfigure(0, weight=1)
-        self.side = None
 
-        # ── СРЕДНЯЯ ПАНЕЛЬ: СЕРВЕРЫ ──
-        mid = ctk.CTkFrame(root, fg_color=PANEL, corner_radius=0)
+        # ══ ЛЕВАЯ КОЛОНКА: СЕРВЕРЫ ═══════════════════════════════════════════
+        mid = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
         mid.grid(row=0, column=0, sticky="nsew")
         mid.grid_rowconfigure(2, weight=1); mid.grid_columnconfigure(0, weight=1)
-        # один аккуратный ряд: выбор подписки + кнопка Обновить (заголовок и Пинг убраны)
-        self.search = None  # поиск убран
-        srow = ctk.CTkFrame(mid, fg_color="transparent"); srow.grid(row=1, column=0, sticky="ew", padx=18, pady=(20, 8))
+
+        head = ctk.CTkFrame(mid, fg_color="transparent")
+        head.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 4))
+        ctk.CTkLabel(head, text=tr("Серверы", "Servers"),
+                     font=ctk.CTkFont(FONT, 20, "bold"), text_color=TEXT).pack(side="left")
+        for label, cmd, tip in (("⚙", self.open_settings, None),
+                                ("🔄", self.update_sub, None),
+                                ("📶", self.do_ping, None)):
+            ctk.CTkButton(head, text=label, width=34, height=34, corner_radius=17,
+                          fg_color=CARD, hover_color=CARD2, text_color=ACC,
+                          border_width=1, border_color=BORDER,
+                          font=ctk.CTkFont(FONT, 15),
+                          command=cmd).pack(side="right", padx=(6, 0))
+
+        srow = ctk.CTkFrame(mid, fg_color="transparent")
+        srow.grid(row=1, column=0, sticky="ew", padx=20, pady=(8, 6))
         self.tabs_frame = srow
         self._tab_map = {}
-        self.tab_menu = ctk.CTkOptionMenu(srow, values=["Все"], height=44,
-                                          corner_radius=14, fg_color=CARD, button_color=CARD2,
+        self.tab_menu = ctk.CTkOptionMenu(srow, values=["Все"], height=38,
+                                          corner_radius=19, fg_color=CARD, button_color=CARD2,
                                           button_hover_color=BORDER, text_color=TEXT,
                                           dropdown_fg_color=CARD, dropdown_text_color=TEXT,
-                                          dropdown_hover_color=CARD2, font=ctk.CTkFont(FONT, 14, "bold"),
+                                          dropdown_hover_color=CARD2,
+                                          font=ctk.CTkFont(FONT, 13, "bold"),
                                           command=self._on_tab_menu)
         self.tab_menu.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(srow, text=tr("⚡ Авто", "⚡ Auto"), width=76, height=44, corner_radius=14,
-                      fg_color=PING_C, hover_color=PING_CD, text_color="white",
-                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.connect_fastest).pack(side="left", padx=(8, 0))
-        ctk.CTkButton(srow, text="🔄", width=48, height=44, corner_radius=14,
-                      fg_color=UPD_C, hover_color=UPD_CD, text_color="white",
-                      font=ctk.CTkFont(FONT, 17), command=self.update_sub).pack(side="left", padx=(8, 0))
-        # Настройки. Метод open_settings существовал давно, но кнопки для него
-        # в интерфейсе не было вовсе — попасть в настройки было нельзя.
-        ctk.CTkButton(srow, text="⚙", width=48, height=44, corner_radius=14,
-                      fg_color=CARD, hover_color=CARD2, text_color=TEXT,
-                      font=ctk.CTkFont(FONT, 19), command=self.open_settings).pack(side="left", padx=(8, 0))
-        self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
-                                                  scrollbar_button_color=PANEL,
-                                                  scrollbar_button_hover_color=PANEL)
-        try:
-            self.server_list._scrollbar.grid_forget()
-        except Exception:
-            pass
-        self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=8)
-        self.empty_lbl = ctk.CTkLabel(self.server_list,
-            text=tr("Добавь ключ или подписку —\nкнопка «Вставить» ниже",
-                          "Add a key or subscription —\nuse the button below"),
-            font=ctk.CTkFont(FONT, 12), text_color=MUTED)
-        brow = ctk.CTkFrame(mid, fg_color="transparent"); brow.grid(row=3, column=0, sticky="ew", padx=18, pady=(4, 16))
-        ctk.CTkButton(brow, text=tr("＋  Вставить ключ / подписку", "＋  Add key / subscription"), height=40, corner_radius=20,
-                      fg_color=ACC, hover_color=ACC_D, text_color="white",
-                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.paste_key).pack(fill="x", expand=True)
+        ctk.CTkButton(srow, text=tr("⚡ Авто", "⚡ Auto"), width=84, height=38, corner_radius=19,
+                      fg_color=CARD, hover_color=CARD2, text_color=ACC,
+                      border_width=1, border_color=BORDER,
+                      font=ctk.CTkFont(FONT, 13, "bold"),
+                      command=self.connect_fastest).pack(side="left", padx=(8, 0))
 
-        # ── ПРАВАЯ ПАНЕЛЬ: КНОПКА ВКЛ ──
+        self.server_list = ctk.CTkScrollableFrame(mid, fg_color="transparent",
+                                                  scrollbar_button_color=CARD2,
+                                                  scrollbar_button_hover_color=BORDER)
+        self.server_list.grid(row=2, column=0, sticky="nsew", padx=14, pady=(4, 6))
+        self.empty_lbl = None
+
+        brow = ctk.CTkFrame(mid, fg_color="transparent")
+        brow.grid(row=3, column=0, sticky="ew", padx=20, pady=(2, 18))
+        self.add_btn = GradientButton(
+            brow, text=tr("＋  Добавить ключ / подписку", "＋  Add key / subscription"),
+            command=self.paste_key, height=46)
+        self.add_btn.pack(fill="x")
+
+        # ══ ПРАВАЯ КОЛОНКА: ПОДКЛЮЧЕНИЕ ══════════════════════════════════════
         right = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
         right.grid(row=0, column=1, sticky="nsew")
-        right.grid_rowconfigure(0, weight=1); right.grid_rowconfigure(6, weight=1)
         right.grid_columnconfigure(0, weight=1)
-        # логотип сверху
-        h = ctk.CTkFrame(right, fg_color="transparent"); h.grid(row=0, column=0, pady=(16, 0), sticky="s")
+        right.grid_rowconfigure(1, weight=1)   # воздух над кнопкой
+        right.grid_rowconfigure(7, weight=1)   # воздух под ней
+
+        # Шапка: логотип и название — единственное, что осталось от прежнего вида.
+        h = ctk.CTkFrame(right, fg_color="transparent")
+        h.grid(row=0, column=0, pady=(20, 0))
         self._logo_ref = None
         try:
             from PIL import Image
             lp = resource_path("logo_white.png")
             if os.path.exists(lp):
                 im = Image.open(lp).convert("RGBA"); ratio = im.width / im.height
-                # Логотип белый, и на светлой теме он сливался с фоном.
-                # Перекрашиваем силуэт в цвет текста, прозрачность сохраняем.
+                # Логотип белый — на светлой теме он сливался с фоном.
                 if TEXT.upper() != "#FFFFFF":
                     r, g, b = (int(TEXT[i:i + 2], 16) for i in (1, 3, 5))
                     tint = Image.new("RGBA", im.size, (r, g, b, 0))
                     tint.putalpha(im.getchannel("A"))
                     im = tint
-                # крупнее и шире
-                H = 82
+                H = 40
                 img = ctk.CTkImage(im, size=(int(H * ratio * 1.08), H))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
         except Exception:
             pass
         if self._logo_ref is None:
-            ctk.CTkLabel(h, text="JEFF", font=ctk.CTkFont(FONT, 26, "bold"), text_color=ACC).pack()
-        # тумблер-переключатель (как iOS/W3Schools switch) вместо круглой кнопки
-        self.toggle_w, self.toggle_h = 108, 54
-        self._tgl_pos = 0.0                              # 0 = выкл, 1 = вкл (для анимации)
-        self.toggle_cv = tk.Canvas(right, width=self.toggle_w, height=self.toggle_h,
+            ctk.CTkLabel(h, text="JeffTUN", font=ctk.CTkFont(FONT, 22, "bold"),
+                         text_color=TEXT).pack()
+
+        # Круглая кнопка со светящимися кольцами — как в Zyng.
+        self.orb_size = 240
+        self._orb_outer = 0.0          # угол внешнего кольца
+        self._orb_inner = 0.0          # угол внутреннего, крутится в другую сторону
+        self._orb_glow = 0.0           # фаза дыхания свечения
+        self._orb_pressed = False
+        self.toggle_cv = tk.Canvas(right, width=self.orb_size, height=self.orb_size,
                                    bg=BG, highlightthickness=0, bd=0, cursor="hand2")
-        self.toggle_cv.grid(row=1, column=0, pady=(18, 8))
-        self.toggle_cv.bind("<Button-1>", lambda e: self.toggle())
+        self.toggle_cv.grid(row=2, column=0)
+        self.toggle_cv.bind("<Button-1>", lambda e: (self._press(True), self.toggle()))
+        self.toggle_cv.bind("<ButtonRelease-1>", lambda e: self._press(False))
         self._draw_toggle()
-        self.status = ctk.CTkLabel(right, text=tr("Отключено", "Disconnected"), font=ctk.CTkFont(FONT, 16, "bold"), text_color=MUTED)
-        self.status.grid(row=2, column=0, pady=(0, 0))
-        # таймер КРАСИВО ПОД кнопкой (появляется при подключении)
-        self.timer_lbl = ctk.CTkLabel(right, text="", text_color=ACC,
-                                      font=ctk.CTkFont(FONT, 18, "bold"))
-        self.timer_lbl.grid(row=3, column=0, pady=(2, 0))
-        # текущий сервер (флаг + имя)
-        self.cur_flag = tk.Label(right, bg=BG)
-        self.cur_flag.grid(row=4, column=0, pady=(8, 0))
-        self.cur_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 13, "bold"), text_color=TEXT)
-        self.cur_lbl.grid(row=5, column=0, pady=(2, 0))
-        bottom = ctk.CTkFrame(right, fg_color="transparent"); bottom.grid(row=6, column=0, pady=(8, 6))
-        brow = ctk.CTkFrame(bottom, fg_color="transparent"); brow.pack(pady=(0, 8))
-        ctk.CTkButton(brow, text=tr("📶 Пинг", "📶 Ping"), width=110, height=36, corner_radius=18,
-                      fg_color=PING_C, hover_color=PING_CD, text_color="white",
-                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.do_ping).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(brow, text=tr("⚡ Скорость", "⚡ Speed"), width=110, height=36, corner_radius=18,
-                      fg_color=SPEED_C, hover_color=SPEED_CD, text_color="#ffffff",
-                      font=ctk.CTkFont(FONT, 13, "bold"), command=self.speed_test).pack(side="left")
-        self.ping_lbl = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED)
-        self.ping_lbl.pack(pady=(0, 8))
-        foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/jeffvpn",
+        self._animate_orb()
+
+        # Статус-пилюля
+        self.status_cv = tk.Canvas(right, width=190, height=34, bg=BG,
+                                   highlightthickness=0, bd=0)
+        self.status_cv.grid(row=3, column=0, pady=(16, 0))
+        self.status = _PillLabel(self.status_cv, self)
+        self.status.configure(text=tr("Отключено", "Disconnected"), text_color=MUTED)
+
+        self.timer_lbl = ctk.CTkLabel(right, text="00:00:00", text_color=MUTED,
+                                      font=ctk.CTkFont("Consolas" if os.name == "nt" else "monospace",
+                                                       16, "bold"))
+        self.timer_lbl.grid(row=4, column=0, pady=(10, 0))
+
+        self.ping_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12, "bold"),
+                                     text_color=MUTED)
+        self.ping_lbl.grid(row=5, column=0, pady=(6, 0))
+
+        # Карточка выбранного сервера — открывает список слева.
+        card = ctk.CTkFrame(right, fg_color=CARD, corner_radius=18,
+                            border_width=1, border_color=BORDER)
+        card.grid(row=6, column=0, sticky="ew", padx=22, pady=(18, 0))
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="x", padx=14, pady=12)
+        self.cur_flag = tk.Label(inner, bg=CARD)
+        self.cur_flag.pack(side="left", padx=(0, 12))
+        txt = ctk.CTkFrame(inner, fg_color="transparent"); txt.pack(side="left", fill="x", expand=True)
+        self.cur_lbl = ctk.CTkLabel(txt, text=tr("Сервер не выбран", "No server selected"),
+                                    font=ctk.CTkFont(FONT, 14, "bold"),
+                                    text_color=TEXT, anchor="w")
+        self.cur_lbl.pack(anchor="w")
+        self.cur_sub_lbl = ctk.CTkLabel(txt, text=tr("Добавь ключ или подписку",
+                                                     "Add a key or subscription"),
+                                        font=ctk.CTkFont(FONT, 11), text_color=MUTED, anchor="w")
+        self.cur_sub_lbl.pack(anchor="w")
+
+        # Кнопка замера скорости — под карточкой, чтобы не спорить с главной.
+        ctk.CTkButton(right, text=tr("⚡ Проверить скорость", "⚡ Test speed"),
+                      height=36, corner_radius=18,
+                      fg_color=CARD, hover_color=CARD2, text_color=ACC,
+                      border_width=1, border_color=BORDER,
+                      font=ctk.CTkFont(FONT, 12, "bold"),
+                      command=self.speed_test).grid(row=8, column=0, sticky="ew",
+                                                    padx=22, pady=(10, 4))
+
+        foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/zyngfast",
                             font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED, cursor="hand2")
-        foot.grid(row=7, column=0, pady=(0, 10))
+        foot.grid(row=9, column=0, pady=(0, 14))
         foot.bind("<Button-1>", lambda e: self._open_tg())
         self._connect_time = None
 
-        # плашка обновления (поверх, снизу справа при апдейте)
+        # плашка обновления (поверх, сверху по центру)
         self.update_bar = None
 
         self.load_saved()
@@ -1622,43 +1739,84 @@ class JeffTUN:
         cv.create_oval(x1 - d, y0, x1, y1, fill=fill, outline=fill)
         cv.create_rectangle(x0 + d / 2, y0, x1 - d / 2, y1, fill=fill, outline=fill)
 
+    def _press(self, down):
+        """Отклик на нажатие: кнопка чуть подаётся внутрь."""
+        self._orb_pressed = down
+        self._draw_toggle()
+
     def _draw_toggle(self):
-        """Рисует тумблер по текущей позиции анимации self._tgl_pos (0..1)."""
+        """Круглая кнопка подключения с вращающимися кольцами.
+
+        Имя метода прежнее: его зовут connect и disconnect. Раньше здесь
+        рисовался тумблер, теперь — сфера, как на главном экране Zyng.
+        """
         cv = getattr(self, "toggle_cv", None)
         if cv is None:
             return
-        cv.delete("all")
-        W, H = self.toggle_w, self.toggle_h
-        m = 5
-        p = getattr(self, "_tgl_pos", 0.0)
-        track = self._lerp_hex(CARD2, ACC, p)            # плавный перелив дорожки
-        self._pill(cv, m, m, W - m, H - m, track)
-        d = (H - 2 * m) - 8                              # диаметр бегунка
-        ky0 = m + 4
-        off_x = m + 4
-        on_x = W - m - 4 - d
-        kx0 = off_x + (on_x - off_x) * p                 # плавное скольжение
-        knob = self._lerp_hex("#8A94A6", "#ffffff", p)
-        # лёгкая тень бегунка для объёма
-        cv.create_oval(kx0 + 1, ky0 + 2, kx0 + d + 1, ky0 + d + 2, fill=track, outline=track)
-        cv.create_oval(kx0, ky0, kx0 + d, ky0 + d, fill=knob, outline=knob)
-
-    def _animate_toggle(self):
-        """Плавно перегоняет бегунок в целевое состояние (ease-out)."""
-        target = 1.0 if self.connected else 0.0
         try:
-            if getattr(self, "_tgl_after", None):
-                self.root.after_cancel(self._tgl_after); self._tgl_after = None
+            cv.delete("all")
+        except Exception:
+            return
+
+        S = self.orb_size
+        c = S / 2
+        col = OK if self.connected else (ACC if self._connecting() else MUTED)
+        squeeze = 0.96 if self._orb_pressed else 1.0
+
+        # Свечение: несколько полупрозрачных кругов подряд — альфа-канала на
+        # Canvas нет, поэтому мягкость набираем оттенками к фону.
+        glow = 1.0 + 0.06 * self._orb_glow
+        for i, k in enumerate((1.00, 0.86, 0.72)):
+            rr = c * 0.92 * k * glow
+            cv.create_oval(c - rr, c - rr, c + rr, c + rr,
+                           fill=self._lerp_hex(BG, col, 0.05 + i * 0.04), outline="")
+
+        # Два кольца-дуги, вращаются навстречу друг другу.
+        r1 = c * 0.80
+        cv.create_arc(c - r1, c - r1, c + r1, c + r1,
+                      start=self._orb_outer, extent=260, style="arc",
+                      outline=self._lerp_hex(BG, col, 0.55), width=2)
+        r2 = c * 0.67
+        cv.create_arc(c - r2, c - r2, c + r2, c + r2,
+                      start=self._orb_inner, extent=160, style="arc",
+                      outline=self._lerp_hex(BG, col, 0.75), width=2)
+
+        # Ободок и сама кнопка.
+        r3 = c * 0.74
+        cv.create_oval(c - r3, c - r3, c + r3, c + r3,
+                       outline=self._lerp_hex(BG, col, 0.22), width=1)
+        r4 = c * 0.58 * squeeze
+        cv.create_oval(c - r4, c - r4, c + r4, c + r4,
+                       fill=CARD2, outline=self._lerp_hex(BG, col, 0.7), width=2)
+
+        # Символ питания и подпись под ним.
+        sym = "⚡" if self.connected else "⏻"
+        cv.create_text(c, c - 8 * squeeze, text=sym, fill=col,
+                       font=(FONT, int(34 * squeeze), "bold"))
+        label = (tr("ВКЛ", "ON") if self.connected
+                 else ("…" if self._connecting() else tr("ВЫКЛ", "OFF")))
+        cv.create_text(c, c + 26 * squeeze, text=label, fill=MUTED,
+                       font=(FONT, 10, "bold"))
+
+    def _connecting(self):
+        return bool(self.proc) and not self.connected
+
+    def _animate_orb(self):
+        """Кольца крутятся всегда: быстро при подключении, спокойно в покое."""
+        step = 3.5 if self._connecting() else (1.1 if self.connected else 0.45)
+        self._orb_outer = (self._orb_outer - step) % 360
+        self._orb_inner = (self._orb_inner + step * 0.7) % 360
+        self._orb_glow = (self._orb_glow + 0.06) % 6.283
+        try:
+            self._draw_toggle()
+            self.root.after(40, self._animate_orb)
         except Exception:
             pass
-        def step():
-            diff = target - self._tgl_pos
-            if abs(diff) < 0.02:
-                self._tgl_pos = target; self._draw_toggle(); return
-            self._tgl_pos += diff * 0.30                 # мягкое замедление
-            self._draw_toggle()
-            self._tgl_after = self.root.after(16, step)
-        step()
+
+    def _animate_toggle(self):
+        """Прежнее имя — его зовут connect и disconnect. Перерисовки достаточно:
+        кольца крутит собственный цикл."""
+        self._draw_toggle()
 
     def _flag_image(self, code):
         if code in self._flag_cache:
@@ -1722,9 +1880,6 @@ class JeffTUN:
         except Exception:
             pass
 
-    def toggle_side(self):
-        pass  # левой панели больше нет
-
     def _on_tab_menu(self, label):
         key = self._tab_map.get(label)
         if key is not None:
@@ -1756,72 +1911,76 @@ class JeffTUN:
         self.render_tabs()
         for w in self.server_list.winfo_children():
             w.destroy()
-        q = (self.search.get() if getattr(self, "search", None) else "").lower().strip()
-        # Карточка подписки с кнопкой удаления — показываем ВСЕГДА, когда активна
-        # вкладка-подписка (даже если она пустая), иначе её нельзя было бы удалить.
+
+        # Карточка подписки: имя, расход трафика, срок и кнопка удаления.
         cur_sub = next((s for s in self.subs if s["url"] == self.active_tab), None)
         show_sub = cur_sub or (self.sub_info and self.subs)
         if show_sub:
             si = self.sub_info or {}
             del_url = cur_sub["url"] if cur_sub else self.subs[-1]["url"]
-            title = (cur_sub.get("title") if cur_sub else None) or si.get("title") or tr("Подписка", "Subscription")
-            card = ctk.CTkFrame(self.server_list, fg_color=SUBCARD, corner_radius=12,
-                                border_width=0)
-            card.pack(fill="x", pady=(0, 8))
-            top = ctk.CTkFrame(card, fg_color="transparent"); top.pack(fill="x", padx=14, pady=(12, 2))
+            title = (cur_sub.get("title") if cur_sub else None) or si.get("title") \
+                or tr("Подписка", "Subscription")
+            card = ctk.CTkFrame(self.server_list, fg_color=CARD, corner_radius=16,
+                                border_width=1, border_color=BORDER)
+            card.pack(fill="x", pady=(0, 10))
+            top = ctk.CTkFrame(card, fg_color="transparent")
+            top.pack(fill="x", padx=14, pady=(12, 2))
             ctk.CTkLabel(top, text=title, font=ctk.CTkFont(FONT, 15, "bold"),
                          text_color=TEXT, anchor="w").pack(side="left")
-            ctk.CTkButton(top, text=tr("✕  удалить", "✕  remove"), width=90, height=28, corner_radius=13,
-                          fg_color=DANGER, hover_color="#E04A4A", text_color="#ffffff",
-                          font=ctk.CTkFont(FONT, 12, "bold"),
+            ctk.CTkButton(top, text="✕", width=30, height=28, corner_radius=14,
+                          fg_color="transparent", hover_color=CARD2, text_color=DANGER,
+                          font=ctk.CTkFont(FONT, 14, "bold"),
                           command=lambda u=del_url: self.delete_subscription(u)).pack(side="right")
             info_txt = (f"{si.get('traffic','∞')}   ·   {si.get('expire','')}" if si
                         else tr("нажми «Обновить», если пусто",
                                 "press Refresh if this is empty"))
-            ctk.CTkLabel(card, text=info_txt,
-                         font=ctk.CTkFont(FONT, 12, "bold"), text_color=MUTED,
-                         anchor="w").pack(anchor="w", padx=14, pady=(0, 12))
+            ctk.CTkLabel(card, text=info_txt, font=ctk.CTkFont(FONT, 11),
+                         text_color=MUTED, anchor="w").pack(anchor="w", padx=14, pady=(0, 12))
+
         if not self.links:
-            self.empty_lbl = ctk.CTkLabel(self.server_list,
-                text=tr("Добавь ключ или подписку —\nкнопка ＋ или «Вставить»",
-                     "Add a key or subscription —\nuse ＋ or the button below"),
-                font=ctk.CTkFont(FONT, 12), text_color=MUTED)
-            self.empty_lbl.pack(pady=40)
+            self.empty_lbl = ctk.CTkLabel(
+                self.server_list,
+                text=tr("Серверов пока нет\n\nДобавь ключ или ссылку-подписку",
+                        "No servers yet\n\nAdd a key or a subscription link"),
+                font=ctk.CTkFont(FONT, 13), text_color=MUTED, justify="center")
+            self.empty_lbl.pack(pady=60)
             return
+
         self._ping_lbls = {}
         self._rows = {}
-        # Лёгкие tk-строки вместо CTk — прокрутка в разы быстрее (нет canvas на каждый виджет)
+        # Лёгкие tk-виджеты вместо CTk: строк бывает несколько сотен, и на
+        # каждый CTk-виджет приходится свой canvas — прокрутка начинает дёргаться.
         for i, ln in enumerate(self.links):
             raw = unquote(ln.split("#", 1)[1]) if "#" in ln else f"Сервер {i+1}"
             name = clean_name(raw)
-            if q and q not in name.lower():
-                continue
-            code = country_of(raw); sel = (i == self.selected_idx)
+            code = country_of(raw)
+            sel = (i == self.selected_idx)
             bg = CARD2 if sel else CARD
-            row = tk.Frame(self.server_list, bg=bg, height=46)
+
+            row = tk.Frame(self.server_list, bg=bg, height=56)
             row.pack(fill="x", pady=4); row.pack_propagate(False)
+
             ph = self._flag_tk(code)
-            if ph:
-                badge = tk.Label(row, image=ph, bg=bg)
-            else:
-                # нет картинки флага — показываем эмодзи-глобус (рисуется на всех ОС)
-                badge = tk.Label(row, text="🌐", bg=bg, font=(FONT, 17))
+            badge = (tk.Label(row, image=ph, bg=bg) if ph
+                     else tk.Label(row, text="🌐", bg=bg, font=(FONT, 18)))
             badge.pack(side="left", padx=(14, 12))
+
             m = tk.Frame(row, bg=bg); m.pack(side="left", fill="both", expand=True)
-            # длинные имена обрезаем многоточием, чтобы влезали в строку
-            disp = name if len(name) <= 22 else name[:21] + "…"
-            l1 = tk.Label(m, text=disp, bg=bg, fg=TEXT, font=(FONT, 10, "bold"), anchor="w")
-            l1.pack(anchor="w", pady=(7, 0))
+            disp = name if len(name) <= 24 else name[:23] + "…"
+            l1 = tk.Label(m, text=disp, bg=bg, fg=TEXT, font=(FONT, 11, "bold"), anchor="w")
+            l1.pack(anchor="w", pady=(10, 0))
             l2 = tk.Label(m, text=proto_line(ln), bg=bg, fg=MUTED, font=(FONT, 8), anchor="w")
             l2.pack(anchor="w")
+
             ptxt, pcol = self._ping_text(self.pings.get(i))
             pl = tk.Label(row, text=ptxt, bg=bg, fg=pcol, font=(FONT, 9, "bold"))
-            pl.pack(side="right", padx=(0, 12))
+            pl.pack(side="right", padx=(0, 14))
             self._ping_lbls[i] = pl
+
             chev = tk.Label(row, text=("✓" if sel else "›"), bg=bg,
-                            fg=(OK if sel else MUTED), font=(FONT, 12, "bold"))
-            chev.pack(side="right", padx=(4, 8))
-            # запоминаем виджеты строки — чтобы менять выделение без полной перерисовки (плавно)
+                            fg=(OK if sel else MUTED), font=(FONT, 13, "bold"))
+            chev.pack(side="right", padx=(4, 10))
+
             self._rows[i] = {"bg": [row, m, badge, l1, l2, pl], "chev": chev}
             for w in (row, m, badge, l1, l2, pl, chev):
                 w.bind("<Button-1>", lambda e, idx=i: self.select_server(idx))
@@ -1834,8 +1993,8 @@ class JeffTUN:
         if ms is None: return "", MUTED
         if ms == "…": return "…", MUTED
         if ms == "x": return "—", MUTED
-        col = OK if ms < 150 else (WARN if ms < 400 else DANGER)
-        return f"{ms} мс", col
+        col = OK if ms < 100 else (ACC if ms < 250 else DANGER)
+        return tr(f"{ms} мс", f"{ms} ms"), col
 
     def _recolor_row(self, i, sel):
         r = getattr(self, "_rows", {}).get(i)
@@ -2085,6 +2244,11 @@ class JeffTUN:
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
         try:
+            link = self._current_link()
+            self.cur_sub_lbl.configure(text=proto_line(link) if link else "")
+        except Exception:
+            pass
+        try:
             ph = self._flag_tk(country_of(nm), size=28)
             if ph:
                 self.cur_flag.configure(image=ph); self._cur_flag_ref = ph
@@ -2102,7 +2266,7 @@ class JeffTUN:
             self._auto_reconnect(); return
         s = int(time.time() - self._connect_time)
         hhmmss = f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
-        self.timer_lbl.configure(text=f"⏱ {hhmmss}")
+        self.timer_lbl.configure(text=hhmmss, text_color=TEXT)
         self.status.configure(text=tr("Подключено", "Connected"), text_color=OK)
         self._tick_after = self.root.after(1000, self._tick)
 
@@ -2137,7 +2301,7 @@ class JeffTUN:
         except Exception:
             pass
         self._animate_toggle()
-        self.timer_lbl.configure(text="")
+        self.timer_lbl.configure(text="00:00:00", text_color=MUTED)
         self.status.configure(text=tr("Отключено", "Disconnected"), text_color=MUTED)
 
     # ── Сохранение ──
