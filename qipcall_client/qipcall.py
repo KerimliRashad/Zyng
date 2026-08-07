@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.0.1"
+APP_VERSION = "6.0.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
@@ -1729,6 +1729,13 @@ class JeffTUN:
         vals = [int(int(a[i:i+2], 16) + (int(b[i:i+2], 16) - int(a[i:i+2], 16)) * t) for i in (0, 2, 4)]
         return "#%02x%02x%02x" % tuple(vals)
 
+    def _pill(self, cv, x0, y0, x1, y1, fill):
+        """Рисует «пилюлю» (скруглённый прямоугольник) на Canvas."""
+        d = y1 - y0
+        cv.create_oval(x0, y0, x0 + d, y1, fill=fill, outline=fill)
+        cv.create_oval(x1 - d, y0, x1, y1, fill=fill, outline=fill)
+        cv.create_rectangle(x0 + d / 2, y0, x1 - d / 2, y1, fill=fill, outline=fill)
+
     def _draw_toggle(self):
         """Рисует тумблер по текущей позиции анимации self._tgl_pos (0..1)."""
         cv = getattr(self, "toggle_cv", None)
@@ -2733,13 +2740,27 @@ def main():
         root = ctk.CTk(); root.configure(fg_color=BG)
         JeffTUN(root); root.mainloop()
     except Exception:
-        # Ни при каких сбоях (в т.ч. после самообновления) не показываем
-        # окно «Failed to execute script» — тихо логируем в файл рядом с exe.
+        # Раньше здесь стояло молчание: ошибка писалась в файл, и всё. Из-за
+        # этого сбой при запуске выглядел как «скачал, а оно не открывается» —
+        # ни окна, ни объяснения. Лог оставляем, но причину показываем.
+        text = ""
         try:
             import traceback
+            text = traceback.format_exc()
             log = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "jefftun_error.log")
             with open(log, "a", encoding="utf-8") as f:
-                f.write(traceback.format_exc() + "\n")
+                f.write(text + "\n")
+        except Exception:
+            pass
+        try:
+            from tkinter import messagebox
+            last = [l for l in text.strip().splitlines() if l.strip()][-1:] or ["неизвестная ошибка"]
+            messagebox.showerror(
+                APP_NAME,
+                "Не удалось запустить приложение.\n\n"
+                + last[0][:300]
+                + "\n\nПодробности — в файле jefftun_error.log рядом с программой.\n"
+                  "Пришли его нам: t.me/zyngfast")
         except Exception:
             pass
 
