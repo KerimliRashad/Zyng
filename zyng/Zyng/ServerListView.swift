@@ -93,11 +93,14 @@ struct ServerListView: View {
     private func sorted(_ servers: [Server]) -> [Server] {
         guard sortByLatency else { return servers }
 
+        // Здесь именно Latency?, а не Latency: «ещё не мерили» — это nil.
+        // Разворачиваем явно, иначе случаи пришлось бы писать через `?`,
+        // а `.none` читалось бы как случай самого Latency, которого там нет.
         func rank(_ server: Server) -> (Int, Int) {
-            switch probe.latency(for: server) {
+            guard let state = probe.latency(for: server) else { return (1, 0) }
+            switch state {
             case .ms(let value):  return (0, value)
             case .measuring:      return (1, 0)
-            case .none:           return (1, 0)
             case .failed:         return (2, 0)
             }
         }
