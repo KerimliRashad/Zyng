@@ -315,8 +315,13 @@ final class ServerStore: ObservableObject {
     }
 
     /// Ошибка про отсутствие связи, а не про поведение панели.
+    /// Свой домен для уже опознанной сетевой ошибки: по нему внешний перебор
+    /// понимает, что дело не в конкретном варианте адреса, и тоже прекращается.
+    private static let networkDomain = "Zyng.network"
+
     private static func isNetworkDown(_ error: Error) -> Bool {
         let error = error as NSError
+        if error.domain == Self.networkDomain { return true }
         guard error.domain == NSURLErrorDomain else { return false }
         switch error.code {
         case NSURLErrorNetworkConnectionLost,
@@ -329,6 +334,19 @@ final class ServerStore: ObservableObject {
         default:
             return false
         }
+    }
+
+    /// Системный текст вроде «The request timed out» ничего не подсказывает.
+    /// Здесь как раз тот случай, когда причина почти всегда одна и та же.
+    private static func networkError(_ underlying: Error) -> Error {
+        NSError(
+            domain: Self.networkDomain, code: (underlying as NSError).code,
+            userInfo: [NSLocalizedDescriptionKey:
+                        tr("адрес подписки недоступен из этой сети — "
+                         + "включи VPN на рабочем сервере и добавь её ещё раз",
+                           "the subscription address is unreachable from this "
+                         + "network — connect to a working server and try again")]
+        )
     }
 
     private func fetchProfile(from url: String) async throws -> Profile {
@@ -360,6 +378,8 @@ final class ServerStore: ObservableObject {
         var lastError: Error?
         /// Панель ответила успешно, но ключей не прислала.
         var answeredWithoutKeys = false
+        /// Сколько попыток подряд упёрлись в саму сеть, а не в ответ панели.
+        var networkFailures = 0
 
         for agent in agents {
             var request = URLRequest(url: parsed)
@@ -417,7 +437,13 @@ final class ServerStore: ObservableObject {
                 // добавление подписки растягивается на минуты, заваливая лог
                 // одинаковыми ошибками. Панель тут ни при чём — сдаёмся сразу
                 // и показываем настоящую причину.
-                if Self.isNetworkDown(error) { throw error }
+                if Self.isNetworkDown(error) {
+                    networkFailures += 1
+                    // Одной осечки мало: медленная панель тоже отвечает
+                    // таймаутом, и сдаваться на ней сразу — терять живую
+                    // подписку. Но и сорок попыток подряд не нужны.
+                    if networkFailures >= 2 { throw Self.networkError(error) }
+                }
                 lastError = error
             }
         }

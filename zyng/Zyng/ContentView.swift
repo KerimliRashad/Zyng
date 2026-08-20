@@ -249,6 +249,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             JT.backdrop.ignoresSafeArea()
+            ambientGlow
 
             VStack(spacing: 0) {
                 header
@@ -366,6 +367,36 @@ struct ContentView: View {
     private var activityDetail: String {
         guard let selected else { return "" }
         return "\(selected.proto) · \(selected.transport)"
+    }
+
+    /// Мягкое свечение за кнопкой, окрашенное по состоянию.
+    ///
+    /// Раньше фон был ровной заливкой, и весь экран держался на одной круглой
+    /// кнопке посередине. Подсветка связывает её с фоном и делает переход
+    /// «отключено → защищено» заметным целиком, а не только в самой кнопке.
+    /// Нажатия не перехватывает — это чистое оформление.
+    private var ambientGlow: some View {
+        let color: Color = {
+            switch state {
+            case .on:         return JT.green
+            case .connecting: return JT.accent
+            case .off:        return JT.sub
+            }
+        }()
+
+        return RadialGradient(
+            colors: [color.opacity(state == .off ? 0.10 : 0.28), .clear],
+            center: .center,
+            startRadius: 0,
+            endRadius: 340
+        )
+        .frame(height: 620)
+        .blur(radius: 60)
+        // Кнопка стоит выше середины экрана — свечение держим под ней.
+        .offset(y: -70)
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.5), value: state)
     }
 
     private var header: some View {
@@ -547,6 +578,9 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
         .background(Capsule().fill(JT.card).overlay(Capsule().stroke(JT.stroke, lineWidth: 1)))
+        // Надпись меняется мягко, а не подменяется рывком в тот же кадр, что и
+        // цвет кнопки: переход читается как одно движение.
+        .animation(.easeInOut(duration: 0.3), value: state)
     }
 
     /// Время считается прямо при отрисовке из момента подключения, который
