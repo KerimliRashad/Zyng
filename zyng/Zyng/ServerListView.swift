@@ -8,7 +8,7 @@ import SwiftUI
 struct ServerListView: View {
 
     @ObservedObject var store: ServerStore
-    @StateObject private var probe = LatencyProbe()
+    @ObservedObject private var probe = LatencyProbe.shared
     /// Нужен ради темы и языка: без подписки на настройки экран не
     /// перерисовывался бы при их смене и оставался в прежнем оформлении.
     @ObservedObject private var settings = AppSettings.shared

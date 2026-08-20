@@ -228,6 +228,7 @@ struct ContentView: View {
     @ObservedObject private var vpn = VPNController.shared
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var ping = PingMonitor()
+    @ObservedObject private var probe = LatencyProbe.shared
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -592,6 +593,10 @@ struct ContentView: View {
     /// Зелёный до 100 мс, жёлтый до 250, дальше красный.
     private var pingColor: Color {
         guard let ms = ping.latency else { return JT.sub }
+        return latencyColor(ms)
+    }
+
+    private func latencyColor(_ ms: Int) -> Color {
         switch ms {
         case ..<100:  return JT.green
         case ..<250:  return JT.accent
@@ -620,6 +625,25 @@ struct ContentView: View {
                     }
                 }
                 Spacer()
+
+                // Задержка выбранного сервера, если её уже мерили в списке.
+                // Заново не меряем: показываем то, что известно, — так на
+                // главном экране сразу видно, насколько удачен выбор.
+                if state != .on,
+                   let selected,
+                   case .ms(let value)? = probe.latency(for: selected) {
+                    Text("\(value) \(tr("мс", "ms"))")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(latencyColor(value))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(latencyColor(value).opacity(0.12))
+                                .overlay(Capsule().stroke(latencyColor(value).opacity(0.25),
+                                                          lineWidth: 1))
+                        )
+                }
+
                 Image(systemName: "chevron.right").foregroundColor(JT.sub)
             }
             .padding(16)
