@@ -156,15 +156,26 @@ private func probeEndpoint(_ raw: String) -> (String, UInt16)? {
 }
 
 private func probeServer(_ raw: String) async -> Latency {
+    var best: Int?
+
     for attempt in 0..<ProbeConfig.attempts {
-        if let ms = await probeOnce(raw) { return .ms(ms) }
-        // Пауза перед повтором: подряд идущие попытки упираются в то же
-        // состояние сети, что и первая.
+        if let ms = await probeOnce(raw) {
+            // Берём лучший результат, а не первый.
+            //
+            // Первое соединение с сервером включает разрешение имени и прогрев
+            // маршрута, поэтому оно почти всегда медленнее последующих. Раньше
+            // мы возвращали именно его, и цифра завышалась на сотню-другую
+            // миллисекунд — сравнивать серверы между собой было бессмысленно.
+            best = min(best ?? ms, ms)
+        }
         if attempt + 1 < ProbeConfig.attempts {
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            // Пауза перед повтором: подряд идущие попытки упираются в то же
+            // состояние сети, что и первая.
+            try? await Task.sleep(nanoseconds: 250_000_000)
         }
     }
-    return .failed
+
+    return best.map(Latency.ms) ?? .failed
 }
 
 private func probeOnce(_ raw: String) async -> Int? {

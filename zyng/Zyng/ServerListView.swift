@@ -24,6 +24,9 @@ struct ServerListView: View {
 
     @State private var tab: Tab?
 
+    /// Сортировать ли список по задержке. Переключается кнопкой в шапке.
+    @AppStorage("servers_sort_by_latency") private var sortByLatency = true
+
     var body: some View {
         ZStack {
             JT.backdrop.ignoresSafeArea()
@@ -73,6 +76,41 @@ struct ServerListView: View {
         return store.subscriptions.first { $0.id == id }
     }
 
+    /// Ключ самого быстрого из измеренных на текущей вкладке.
+    ///
+    /// Отмечаем его в списке: когда серверов больше десятка, глазами искать
+    /// наименьшее число утомительно, а выбирают почти всегда именно его.
+    private var fastestRaw: String? {
+        let measured = visibleServers.compactMap { server -> (String, Int)? in
+            guard case .ms(let value)? = probe.latency(for: server) else { return nil }
+            return (server.raw, value)
+        }
+        return measured.min { $0.1 < $1.1 }?.0
+    }
+
+    /// Раскладывает серверы: быстрые сверху, ещё не измеренные — следом,
+    /// не ответившие — в конце. Пока ничего не измерено, порядок исходный.
+    private func sorted(_ servers: [Server]) -> [Server] {
+        guard sortByLatency else { return servers }
+
+        func rank(_ server: Server) -> (Int, Int) {
+            switch probe.latency(for: server) {
+            case .ms(let value):  return (0, value)
+            case .measuring:      return (1, 0)
+            case .none:           return (1, 0)
+            case .failed:         return (2, 0)
+            }
+        }
+        return servers.enumerated()
+            .sorted { a, b in
+                let ra = rank(a.element), rb = rank(b.element)
+                // При равном ранге сохраняем исходный порядок: список не должен
+                // перетасовываться сам по себе между обновлениями.
+                return ra == rb ? a.offset < b.offset : ra < rb
+            }
+            .map(\.element)
+    }
+
     /// Серверы текущей вкладки — их и меряет кнопка замера.
     private var visibleServers: [Server] {
         let all = currentSubscription.map { store.servers(in: $0) } ?? store.singleServers
@@ -109,6 +147,18 @@ struct ServerListView: View {
                 .frame(width: 32, height: 32)
             }
             .disabled(probe.isRunning || visibleServers.isEmpty)
+
+            Button {
+                jtHaptic()
+                withAnimation(.easeOut(duration: 0.25)) { sortByLatency.toggle() }
+            } label: {
+                Image(systemName: sortByLatency
+                      ? "arrow.up.arrow.down.circle.fill"
+                      : "arrow.up.arrow.down.circle")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(sortByLatency ? JT.accent : JT.sub)
+                    .frame(width: 32, height: 32)
+            }
 
             Button { onAdd() } label: {
                 Image(systemName: "plus")
@@ -205,7 +255,7 @@ struct ServerListView: View {
                            + "the Zyng core does not have. Try another tab")
                 )
             } else {
-                ForEach(servers) { server in
+                ForEach(sorted(servers)) { server in
                     serverRow(server, showDelete: false)
                 }
                 hiddenNote(hidden)
@@ -224,7 +274,7 @@ struct ServerListView: View {
                 hint: tr("Вставь ключ vless:// или другой", "Paste a vless:// key or another")
             )
         } else {
-            ForEach(store.singleServers.filter(\.isSupported)) { server in
+            ForEach(sorted(store.singleServers.filter(\.isSupported))) { server in
                 serverRow(server, showDelete: true)
             }
             hiddenNote(store.singleServers.filter { !$0.isSupported }.count)
@@ -394,9 +444,24 @@ struct ServerListView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
 
-                Text("\(server.proto) · \(server.transport)")
-                    .foregroundColor(JT.sub)
-                    .font(.system(size: 11))
+                HStack(spacing: 5) {
+                    Text("\(server.proto) · \(server.transport)")
+                        .foregroundColor(JT.sub)
+                        .font(.system(size: 11))
+
+                    // Самый быстрый из измеренных. Когда серверов больше
+                    // десятка, глазами искать наименьшее число утомительно,
+                    // а выбирают почти всегда именно его.
+                    if server.raw == fastestRaw {
+                        HStack(spacing: 2) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 8, weight: .bold))
+                            Text(tr("быстрее всех", "fastest"))
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundColor(JT.green)
+                    }
+                }
             }
 
             Spacer(minLength: 8)
