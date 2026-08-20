@@ -44,7 +44,8 @@ final class LiveActivityController {
         #endif
     }
 
-    func start(serverName: String, flag: String, connectedAt: Date, latency: Int?) {
+    func start(serverName: String, flag: String, connectedAt: Date,
+               latency: Int?, detail: String = "") {
         guard AppSettings.shared.liveActivity, isSupported else { return }
 
         // Систему не обмануть: создать плашку можно только пока приложение на
@@ -57,7 +58,8 @@ final class LiveActivityController {
             connectedAt: connectedAt,
             serverName: serverName,
             flag: flag,
-            latency: latency
+            latency: latency,
+            detail: detail
         )
 
         // После перезапуска приложения ссылка теряется, а плашка на экране
@@ -82,13 +84,15 @@ final class LiveActivityController {
         }
     }
 
-    func update(serverName: String, flag: String, connectedAt: Date, latency: Int?) {
+    func update(serverName: String, flag: String, connectedAt: Date,
+                latency: Int?, detail: String = "") {
         guard activity != nil else { return }
         update(TunnelActivityAttributes.ContentState(
             connectedAt: connectedAt,
             serverName: serverName,
             flag: flag,
-            latency: latency
+            latency: latency,
+            detail: detail
         ))
     }
 

@@ -288,7 +288,8 @@ struct ContentView: View {
                 serverName: selected?.name ?? "Zyng",
                 flag: selected?.flag ?? "🌐",
                 connectedAt: started,
-                latency: ping.latency
+                latency: ping.latency,
+                detail: activityDetail
             )
             #endif
         }
@@ -355,9 +356,16 @@ struct ContentView: View {
             serverName: selected?.name ?? "Zyng",
             flag: selected?.flag ?? "🌐",
             connectedAt: started,
-            latency: ping.latency
+            latency: ping.latency,
+            detail: activityDetail
         )
         #endif
+    }
+
+    /// Подпись под названием сервера в плашке: протокол и транспорт.
+    private var activityDetail: String {
+        guard let selected else { return "" }
+        return "\(selected.proto) · \(selected.transport)"
     }
 
     private var header: some View {
