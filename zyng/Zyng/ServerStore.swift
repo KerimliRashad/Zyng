@@ -314,6 +314,23 @@ final class ServerStore: ObservableObject {
         return out
     }
 
+    /// Ошибка про отсутствие связи, а не про поведение панели.
+    private static func isNetworkDown(_ error: Error) -> Bool {
+        let error = error as NSError
+        guard error.domain == NSURLErrorDomain else { return false }
+        switch error.code {
+        case NSURLErrorNetworkConnectionLost,
+             NSURLErrorNotConnectedToInternet,
+             NSURLErrorCannotConnectToHost,
+             NSURLErrorCannotFindHost,
+             NSURLErrorDNSLookupFailed,
+             NSURLErrorTimedOut:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func fetchProfile(from url: String) async throws -> Profile {
         let variants = Self.urlVariants(of: url)
 
@@ -323,9 +340,12 @@ final class ServerStore: ObservableObject {
             let agents = index == 0 ? Self.userAgents : Array(Self.userAgents.prefix(3))
             // Пустой профиль за успех не считаем: запасной адрес мог ответить
             // и не отдать ни одного ключа.
-            if let profile = try? await fetchProfile(from: variant, agents: agents),
-               !profile.keys.isEmpty {
-                return profile
+            do {
+                let profile = try await fetchProfile(from: variant, agents: agents)
+                if !profile.keys.isEmpty { return profile }
+            } catch {
+                // Связи нет — остальные варианты адреса тоже не ответят.
+                if Self.isNetworkDown(error) { throw error }
             }
         }
 
@@ -389,6 +409,15 @@ final class ServerStore: ObservableObject {
                 }
                 return profile
             } catch {
+                // Сеть недоступна — перебирать дальше бессмысленно.
+                //
+                // Вариантов адреса и User-Agent в сумме больше сорока. Когда
+                // связи нет вовсе (например, поднят туннель, через который
+                // ничего не ходит), каждый из них честно ждёт свой таймаут, и
+                // добавление подписки растягивается на минуты, заваливая лог
+                // одинаковыми ошибками. Панель тут ни при чём — сдаёмся сразу
+                // и показываем настоящую причину.
+                if Self.isNetworkDown(error) { throw error }
                 lastError = error
             }
         }
