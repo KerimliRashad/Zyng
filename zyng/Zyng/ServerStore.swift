@@ -477,9 +477,52 @@ final class ServerStore: ObservableObject {
         if !direct.isEmpty { return direct }
 
         if let data = Data(base64Encoded: padBase64(text)) {
-            return lines(of: String(decoding: data, as: UTF8.self))
+            let decoded = String(decoding: data, as: UTF8.self)
+            let fromBase64 = lines(of: decoded)
+            if !fromBase64.isEmpty { return fromBase64 }
+
+            let scanned = scatteredKeys(in: decoded)
+            if !scanned.isEmpty { return scanned }
         }
-        return []
+
+        // Последняя попытка: ищем ключи по всему тексту.
+        //
+        // Выше строка засчитывается, только если начинается с протокола. Но
+        // часть панелей вместо списка отдаёт свою HTML-страницу, а ключи лежат
+        // внутри неё — в JavaScript, в JSON или в атрибуте кнопки «скопировать».
+        // Тогда ни одна строка с протокола не начинается, и подписка выглядела
+        // пустой при живом ответе.
+        return scatteredKeys(in: text)
+    }
+
+    /// Ключи, разбросанные по тексту, а не стоящие по одному на строке.
+    private func scatteredKeys(in text: String) -> [String] {
+        // Перед ключом — начало, пробел, кавычка или скобка, но не буква и не
+        // «/», иначе ss:// внутри обычной ссылки принимается за ключ.
+        let pattern = #"(?<![A-Za-z0-9/:._-])"#
+                    + #"(?:vless|vmess|trojan|ss|socks5?|hysteria2?|hy2|tuic)://"#
+                    + #"[^\s"'<>\\\]\},]+"#
+
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        // Панели нередко отдают HTML, где амперсанды экранированы, — без этого
+        // у ключа терялись бы все параметры после первого.
+        let source = text
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "\\/", with: "/")
+
+        let full = NSRange(source.startIndex..<source.endIndex, in: source)
+        var found: [String] = []
+
+        for match in regex.matches(in: source, range: full) {
+            guard let range = Range(match.range, in: source) else { continue }
+            let key = String(source[range])
+                .trimmingCharacters(in: CharacterSet(charactersIn: ".,;"))
+            if parseServer(key) != nil, !found.contains(key) {
+                found.append(key)
+            }
+        }
+        return found
     }
 
     private func lines(of text: String) -> [String] {
