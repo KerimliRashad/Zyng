@@ -136,11 +136,25 @@ enum XrayBridge {
 
     /// Полный конфиг Xray: локальный SOCKS внутрь, сервер наружу.
     static func makeConfig(from link: String) throws -> String {
-        var outbounds = try outbounds(fromShareLink: link)
+        let parsed = try outbounds(fromShareLink: link)
 
-        // Первый outbound — наш сервер. Тег задаём свой: у ссылок он приходит
-        // произвольным, а маршрут ниже ссылается на него по имени.
-        outbounds[0]["tag"] = "proxy"
+        // Берём только первый: ссылка описывает один сервер, а лишние выходы
+        // с чужими тегами только мешали бы маршруту.
+        var server = parsed[0]
+
+        // Тег задаём свой: у ссылок он приходит произвольным, а маршрут ниже
+        // ссылается на него по имени.
+        server["tag"] = "proxy"
+
+        // ОБЯЗАТЕЛЬНО убрать sendThrough.
+        //
+        // libXray прячет в это поле отображаемое имя сервера — у Xray просто
+        // нет поля под название выхода. Само оно об этом знает и вычищает поле
+        // перед своей проверкой, но в отданном нам конфиге оставляет. А для
+        // Xray sendThrough — это локальный адрес, с которого выходить наружу,
+        // и он честно пытался привязаться к «🇫🇷 France — быстрый»:
+        // «unable to send through».
+        server.removeValue(forKey: "sendThrough")
 
         let config: [String: Any] = [
             // Как и у sing-box, уровень warning: на info ядро пишет каждое
@@ -161,7 +175,7 @@ enum XrayBridge {
                 ]
             ]],
 
-            "outbounds": outbounds,
+            "outbounds": [server],
 
             "routing": ["rules": [[
                 "type": "field",
