@@ -41,6 +41,9 @@ enum XrayBridge {
     /// стандартного.
     static let socksPort = 10808
 
+    /// Версия протокола libXray. Соответствует тегу, закреплённому в core/go.mod.
+    private static let apiVersion = 1
+
     enum Failure: LocalizedError {
         case unavailable
         case rejected(String)
@@ -82,9 +85,13 @@ enum XrayBridge {
     private static func invoke(method: String, payload: [String: Any]) throws -> Any? {
         #if canImport(Libcore)
         let request: [String: Any] = [
-            // Версию проверяет само ядро и отвергает чужую. Держим её здесь
-            // одним числом: когда libXray её поднимет, править одно место.
-            "apiVersion": 2,
+            // Версию проверяет само ядро и отвергает чужую.
+            //
+            // Именно 1, а не 2. Двойка стоит в главной ветке libXray, но у нас
+            // закреплён тег v1.260728.0, а он принимает только 0 или 1 и
+            // отвечает «unsupported apiVersion». Число обязано соответствовать
+            // версии из core/go.mod — меняются они вместе.
+            "apiVersion": Self.apiVersion,
             "method": method,
             "payload": payload
         ]
@@ -172,10 +179,14 @@ enum XrayBridge {
     static func start(link: String) throws {
         let config = try makeConfig(from: link)
 
-        // Проверяем до запуска: иначе ошибка всплыла бы уже внутри ядра, а
-        // туннель завис бы в состоянии «подключение» без объяснений.
-        try invoke(method: "testXray", payload: ["xrayJson": config])
-        try invoke(method: "runXray", payload: ["xrayJson": config])
+        // runXrayFromJson, а не runXray.
+        //
+        // runXray в этой версии принимает ПУТЬ К ФАЙЛУ, а не сам конфиг — то же
+        // и у testXray. Значит, чтобы ими воспользоваться, конфиг пришлось бы
+        // класть на диск, а в нём пароль и UUID сервера. Держать это в файле
+        // ради проверки не стоит: ошибку конфигурации запуск возвращает и сам,
+        // с тем же текстом от ядра.
+        try invoke(method: "runXrayFromJson", payload: ["configJSON": config])
     }
 
     static func stop() {
