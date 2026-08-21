@@ -72,7 +72,7 @@ rm -rf Zyng.xcodeproj && ./setup.sh && open Zyng.xcodeproj
 ```bash
 cd ~/Developer/KerimliRashad/zyng
 rm -rf Frameworks .build
-./build-libbox.sh
+./build-core.sh
 rm -rf Zyng.xcodeproj && ./setup.sh
 ```
 
@@ -82,7 +82,7 @@ libbox иногда меняет API между версиями, и связк�
 Зафиксировать конкретную версию ядра:
 
 ```bash
-SB_VERSION=v1.13.14 ./build-libbox.sh
+# Версии закреплены в core/go.mod — правь их там и запускай ./build-core.sh
 ```
 
 ---

@@ -87,7 +87,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng
         PRODUCT_NAME: Zyng
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "29"
+        CURRENT_PROJECT_VERSION: "30"
         CODE_SIGN_ENTITLEMENTS: Zyng/Zyng.entitlements
         INFOPLIST_FILE: Zyng/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -102,21 +102,18 @@ targets:
       - path: Shared
     dependencies:
       - sdk: NetworkExtension.framework
-      # Ядро sing-box. Собирается скриптом ./build-libbox.sh — в git не хранится.
+      # Оба ядра одной библиотекой: sing-box (Libbox*) держит туннель, Xray
+      # (LibXray*) исполняет транспорт xhttp, которого в sing-box нет.
+      #
+      # Именно одной, а не двумя. gomobile кладёт в каждую библиотеку полную
+      # копию среды выполнения Go, и две таких в одном бинарнике линковщик не
+      # принимает — падает на дубликатах __cgo_topofstack, _crosscall2,
+      # _IncGoRef и прочих внутренностей Go. Собирается ./build-core.sh,
+      # в git не хранится: большая и пересобирается командой.
+      #
       # Библиотека статическая: её код попадает прямо в бинарник расширения,
       # поэтому embed выключен — копировать в бандл нечего.
-      - framework: Frameworks/Libbox.xcframework
-        embed: false
-        link: true
-      # Ядро Xray. Собирается скриптом ./build-libxray.sh — в git не хранится.
-      # Нужно только ради транспорта xhttp, которого нет в sing-box; всё
-      # остальное по-прежнему исполняет Libbox. Тоже статическая библиотека,
-      # поэтому embed выключен.
-      #
-      # Линкуется ТОЛЬКО с расширением. В приложении ядра не нужны: там лишь
-      # разбор ключей и интерфейс, а лишние сорок мегабайт в бандле — это
-      # лишние сорок мегабайт при каждой загрузке из App Store.
-      - framework: Frameworks/LibXray.xcframework
+      - framework: Frameworks/Libcore.xcframework
         embed: false
         link: true
       # Сетевой код Go зовёт системный резолвер (res_9_ninit и соседи).
@@ -128,7 +125,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngTunnel
         PRODUCT_NAME: ZyngTunnel
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "29"
+        CURRENT_PROJECT_VERSION: "30"
         CODE_SIGN_ENTITLEMENTS: ZyngTunnel/ZyngTunnel.entitlements
         INFOPLIST_FILE: ZyngTunnel/Info.plist
         GENERATE_INFOPLIST_FILE: NO
@@ -159,7 +156,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: online.zyng.Zyng.ZyngWidgets
         PRODUCT_NAME: ZyngWidgets
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "29"
+        CURRENT_PROJECT_VERSION: "30"
         CODE_SIGN_ENTITLEMENTS: ZyngWidgets/ZyngWidgets.entitlements
         INFOPLIST_FILE: ZyngWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: NO

@@ -1,7 +1,10 @@
 import Foundation
 
-#if canImport(LibXray)
-import LibXray
+// Оба ядра лежат в одной библиотеке: gomobile кладёт в каждую полную копию
+// среды выполнения Go, и две таких линковщик в один бинарник не пускает.
+// Приставки при этом остаются разными — Libbox* и LibXray*.
+#if canImport(Libcore)
+import Libcore
 #endif
 
 /// Мост к ядру Xray.
@@ -45,8 +48,8 @@ enum XrayBridge {
         var errorDescription: String? {
             switch self {
             case .unavailable:
-                return tr("Ядро Xray не собрано. Выполни ./build-libxray.sh",
-                          "The Xray core is not built. Run ./build-libxray.sh")
+                return tr("Ядро Xray не собрано. Выполни ./build-core.sh",
+                          "The Xray core is not built. Run ./build-core.sh")
             case .rejected(let why):
                 return tr("Xray отверг конфигурацию: \(why)",
                           "Xray rejected the configuration: \(why)")
@@ -64,7 +67,7 @@ enum XrayBridge {
     /// подключении будет внятная ошибка «ядро не собрано», чем сервер, молча
     /// пропавший из списка.
     static var isAvailable: Bool {
-        #if canImport(LibXray)
+        #if canImport(Libcore)
         return true
         #else
         return false
@@ -77,7 +80,7 @@ enum XrayBridge {
     /// Здесь она обёрнута так, чтобы наружу торчали обычные ошибки Swift.
     @discardableResult
     private static func invoke(method: String, payload: [String: Any]) throws -> Any? {
-        #if canImport(LibXray)
+        #if canImport(Libcore)
         let request: [String: Any] = [
             // Версию проверяет само ядро и отвергает чужую. Держим её здесь
             // одним числом: когда libXray её поднимет, править одно место.

@@ -8,15 +8,15 @@
 #      «Info.plist of framework … was empty».
 #
 # Скрипт чинит и то, и другое. Он идемпотентный — запускать можно сколько угодно.
-# Вызывается автоматически из build-libbox.sh, но можно и отдельно:
-#   ./flatten-libbox.sh
+# Вызывается автоматически из build-core.sh, но можно и отдельно:
+#   ./flatten-framework.sh Libcore
 set -e
 
 cd "$(dirname "$0")"
 # Имя фреймворка можно передать первым аргументом: ядер у нас два — Libbox
 # (sing-box, держит туннель) и LibXray (Xray, исполняет транспорт xhttp).
 # Оба выходят из gomobile с одними и теми же изъянами.
-NAME="${1:-Libbox}"
+NAME="${1:-Libcore}"
 XCFW="$PWD/Frameworks/$NAME.xcframework"
 
 # Должно совпадать с deploymentTarget из project.yml.

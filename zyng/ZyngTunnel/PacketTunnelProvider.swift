@@ -1,6 +1,6 @@
 import NetworkExtension
 import Foundation
-import Libbox
+import Libcore
 
 /// Packet tunnel расширение Zyng.
 ///

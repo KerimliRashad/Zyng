@@ -8,6 +8,9 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 
-# Ядро sing-box: собирается ./build-libbox.sh, в git не хранится (сотни МБ).
+# Ядра (sing-box + Xray): собираются ./build-core.sh, в git не хранятся (сотни МБ).
 Frameworks/
 .build/
+
+# Кэш модулей Go для сборки ядер.
+core/vendor/
