@@ -505,16 +505,24 @@ struct ContentView: View {
                         .font(.system(size: 40, weight: .bold))
                         .foregroundColor(color)
                         .scaleEffect(state == .on ? boltScale : 1)
+                        // Значок не подменяется в кадре, а перетекает —
+                        // системная замена символа, ради неё же и одинаковый
+                        // размер шрифта у обоих.
+                        .contentTransition(.symbolEffect(.replace))
 
                     Text(state == .on ? tr("ВКЛ", "ON")
                                      : (state == .connecting ? "…" : tr("ВЫКЛ", "OFF")))
                         .font(.system(size: 13, weight: .bold)).tracking(2)
                         .foregroundColor(JT.sub)
+                        .contentTransition(.opacity)
                 }
                 .scaleEffect(pressed ? 0.94 : 1)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pressed)
-            .animation(.easeInOut(duration: 0.4), value: state)
+            // Пружина, а не easeInOut: смена состояния — главное событие на
+            // экране, и лёгкий доводчик в конце делает её событием, а
+            // не переключением флажка. Длительность та же.
+            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: state)
         }
         .buttonStyle(.plain)
         // Нажатие отслеживаем сами: у кнопки со своим оформлением нет
@@ -539,6 +547,20 @@ struct ContentView: View {
         case .connecting: outerDuration = 1.6; innerDuration = 2.4
         case .on:         outerDuration = 9;   innerDuration = 13
         case .off:        outerDuration = 26;  innerDuration = 34
+        }
+
+        // Сначала возвращаем углы в ноль БЕЗ анимации.
+        //
+        // Иначе кольца замирали. Первый вызов доводил угол до 360 и там его
+        // оставлял; при следующей смене состояния мы снова просили
+        // «анимируй до 360», то есть из 360 в 360 — движения на ноль
+        // градусов, и вращение прекращалось насовсем. Ровно это и выглядело
+        // как «включил VPN, и всё застыло».
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) {
+            outerAngle = 0
+            innerAngle = 0
         }
 
         withAnimation(.linear(duration: outerDuration).repeatForever(autoreverses: false)) {
