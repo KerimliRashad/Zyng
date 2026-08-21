@@ -1,5 +1,5 @@
 #!/bin/bash
-# Приводит Libbox.xcframework к виду, который требует iOS.
+# Приводит собранный gomobile xcframework к виду, который требует iOS.
 #
 # gomobile оставляет после себя два изъяна:
 #   1. бандл в формате macOS — каталог Versions/Current/ и символьные ссылки
@@ -13,13 +13,17 @@
 set -e
 
 cd "$(dirname "$0")"
-XCFW="$PWD/Frameworks/Libbox.xcframework"
+# Имя фреймворка можно передать первым аргументом: ядер у нас два — Libbox
+# (sing-box, держит туннель) и LibXray (Xray, исполняет транспорт xhttp).
+# Оба выходят из gomobile с одними и теми же изъянами.
+NAME="${1:-Libbox}"
+XCFW="$PWD/Frameworks/$NAME.xcframework"
 
 # Должно совпадать с deploymentTarget из project.yml.
 MIN_IOS="17.0"
 
 if [ ! -d "$XCFW" ]; then
-  echo "❌ Не найден $XCFW — сначала собери ядро: ./build-libbox.sh"
+  echo "❌ Не найден $XCFW — сначала собери ядро."
   exit 1
 fi
 
@@ -74,13 +78,13 @@ write_plist() {
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>Libbox</string>
+	<string>$NAME</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.sagernet.libbox</string>
+	<string>online.zyng.$NAME</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Libbox</string>
+	<string>$NAME</string>
 	<key>CFBundlePackageType</key>
 	<string>FMWK</string>
 	<key>CFBundleShortVersionString</key>
@@ -110,7 +114,7 @@ PLIST
 
 fix_header() {
   local FW="$1"
-  local HEADER="$FW/Headers/Libbox.objc.h"
+  local HEADER="$FW/Headers/$NAME.objc.h"
   [ -f "$HEADER" ] || return 0
 
   # gomobile объявляет init как nullable у классов, где базовый NSObject
@@ -127,7 +131,7 @@ fix_header() {
 
 found=0
 
-for FW in "$XCFW"/*/Libbox.framework; do
+for FW in "$XCFW"/*/$NAME.framework; do
   [ -d "$FW" ] || continue
   found=1
 
@@ -144,8 +148,8 @@ for FW in "$XCFW"/*/Libbox.framework; do
 
   write_plist "$FW" "$platform"
 
-  if [ ! -f "$FW/Libbox" ]; then
-    echo "  ❌ нет бинарника Libbox — фреймворк собран неправильно"
+  if [ ! -f "$FW/$NAME" ]; then
+    echo "  ❌ нет бинарника $NAME — фреймворк собран неправильно"
     exit 1
   fi
 
@@ -153,7 +157,7 @@ for FW in "$XCFW"/*/Libbox.framework; do
 done
 
 if [ "$found" -eq 0 ]; then
-  echo "❌ Внутри $XCFW нет ни одного Libbox.framework"
+  echo "❌ Внутри $XCFW нет ни одного $NAME.framework"
   exit 1
 fi
 

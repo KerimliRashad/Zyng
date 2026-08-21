@@ -12,6 +12,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private var commandServer: LibboxCommandServer?
     private var platform: PlatformInterface?
+    /// Поднимали ли мы второе ядро — чтобы знать, кого гасить при остановке.
+    private var usesXray = false
 
     // MARK: - Запуск
 
@@ -38,6 +40,19 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             NSLog("🔵 Zyng: протокол \(key.prefix(while: { $0 != ":" }))")
 
             let config = try SingBoxConfig.makeConfig(from: key, dns: readDNS())
+
+            // Ядро Xray поднимаем ПЕРВЫМ.
+            //
+            // Для ключей с xhttp конфиг sing-box уже указывает на локальный
+            // SOCKS, и если Xray там ещё не слушает, sing-box откроет туннель
+            // в никуда: соединение считается установленным, а трафик молча
+            // пропадает. Порядок здесь существенный.
+            if SingBoxConfig.needsXray(key) {
+                NSLog("🔵 Zyng: транспорт требует Xray, поднимаю второе ядро")
+                try XrayBridge.start(link: key)
+                usesXray = true
+                NSLog("✅ Zyng: Xray \(XrayBridge.version) слушает 127.0.0.1:\(XrayBridge.socksPort)")
+            }
 
             try setupCore()
 
@@ -78,6 +93,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             completionHandler(nil)
 
         } catch {
+            // Если Xray успел подняться, а дальше что-то не сложилось, его
+            // нужно погасить: иначе он останется слушать порт, и следующая
+            // попытка подключения упрётся в занятый адрес.
+            if usesXray {
+                XrayBridge.stop()
+                usesXray = false
+            }
             NSLog("❌ Zyng: запуск не удался: \(error.localizedDescription)")
             // Приложение прочитает это и покажет на экране: своих логов
             // расширения оно не видит.
@@ -175,6 +197,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         commandServer = nil
         platform = nil
+
+        if usesXray {
+            XrayBridge.stop()
+            usesXray = false
+        }
 
         completionHandler()
     }

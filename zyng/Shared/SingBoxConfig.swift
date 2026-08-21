@@ -20,12 +20,12 @@ enum SingBoxConfig {
             case .unsupportedScheme(let s):
                 return tr("Протокол «\(s)» не поддерживается", "The «\(s)» protocol is not supported")
             case .unsupportedTransport(let t):
-                return tr("Транспорт «\(t)» умеет только Xray, а Zyng работает "
-                        + "на sing-box. Выбери в этой же подписке сервер той же "
-                        + "страны с пометкой tcp, ws, grpc, http или httpupgrade.",
-                          "Only Xray supports the «\(t)» transport, and Zyng runs on "
-                        + "sing-box. Pick a server for the same country in this "
-                        + "subscription marked tcp, ws, grpc, http or httpupgrade.")
+                return tr("Транспорт «\(t)» не умеет ни одно из ядер Zyng. "
+                        + "Выбери в этой же подписке сервер той же страны "
+                        + "с пометкой tcp, ws, grpc, http, httpupgrade или xhttp.",
+                          "Neither of Zyng's cores supports the «\(t)» transport. "
+                        + "Pick a server for the same country in this subscription "
+                        + "marked tcp, ws, grpc, http, httpupgrade or xhttp.")
             case .malformed(let why):
                 return tr("Ключ повреждён: \(why)", "The key is malformed: \(why)")
             }
@@ -39,7 +39,21 @@ enum SingBoxConfig {
     /// `dns` — адрес резолвера из настроек приложения. Через него пойдут
     /// запросы внутри туннеля.
     static func makeConfig(from key: String, dns: String = "1.1.1.1") throws -> String {
-        let outbound = try makeOutbound(from: key)
+        // Транспорт, которого нет в этом ядре, исполняет Xray. Тогда sing-box
+        // остаётся туннелем, а весь трафик отдаёт в локальный SOCKS, который
+        // Xray слушает внутри того же процесса расширения.
+        let outbound: [String: Any]
+        if needsXray(key) {
+            outbound = [
+                "type": "socks",
+                "tag": "proxy",
+                "version": "5",
+                "server": "127.0.0.1",
+                "server_port": XrayBridge.socksPort
+            ]
+        } else {
+            outbound = try makeOutbound(from: key)
+        }
 
         let config: [String: Any] = [
             // ВАЖНО для приватности: не info.
@@ -180,6 +194,17 @@ enum SingBoxConfig {
 
     /// Адрес и порт сервера — для замера задержки, без построения конфига.
     static func serverEndpoint(from key: String) throws -> (host: String, port: Int) {
+        // Ключи с транспортом Xray этим разборщиком не строятся — он их
+        // намеренно отвергает. Адрес и порт в них при этом обычные, и замер
+        // задержки должен работать: без него такой сервер выглядел бы в
+        // списке мёртвым, хотя подключение к нему проходит.
+        if needsXray(key),
+           let components = URLComponents(string: key.trimmingCharacters(in: .whitespacesAndNewlines)),
+           let host = components.host, !host.isEmpty,
+           let port = components.port, port > 0 {
+            return (host, port)
+        }
+
         let outbound = try makeOutbound(from: key)
         guard let host = outbound["server"] as? String,
               let port = outbound["server_port"] as? Int else {
@@ -538,8 +563,38 @@ enum SingBoxConfig {
         "", "tcp", "raw", "none", "ws", "grpc", "http", "h2", "httpupgrade", "quic"
     ]
 
+    /// Транспорты, которые умеет только Xray. Их исполняет второе ядро —
+    /// см. XrayBridge, там же объяснено, почему без него никак.
+    static let xrayTransports: Set<String> = ["xhttp", "splithttp"]
+
     static func supports(transport: String) -> Bool {
-        supportedTransports.contains(transport.lowercased())
+        let transport = transport.lowercased()
+        return supportedTransports.contains(transport)
+            || xrayTransports.contains(transport)
+    }
+
+    /// Нужно ли для этого ключа поднимать Xray.
+    static func needsXray(_ key: String) -> Bool {
+        guard let transport = try? transportName(of: key) else { return false }
+        return xrayTransports.contains(transport)
+    }
+
+    /// Имя транспорта прямо из ключа — без построения всего конфига.
+    static func transportName(of key: String) throws -> String {
+        let raw = key.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if raw.lowercased().hasPrefix("vmess://") {
+            guard let data = base64Decode(String(raw.dropFirst(8))),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let net = json["net"] as? String else {
+                return "tcp"
+            }
+            return net.lowercased()
+        }
+
+        guard let components = URLComponents(string: raw) else { return "tcp" }
+        let type = components.queryItems?.first { $0.name == "type" }?.value ?? ""
+        return type.isEmpty ? "tcp" : type.lowercased()
     }
 
     /// Путь транспорта. Ссылки приходят с процентным кодированием, а vmess-JSON
