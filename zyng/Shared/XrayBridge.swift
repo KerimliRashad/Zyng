@@ -156,6 +156,22 @@ enum XrayBridge {
         // «unable to send through».
         server.removeValue(forKey: "sendThrough")
 
+        // Выбрасываем все null.
+        //
+        // Это не косметика, без неё конфиг с Reality не собирается вовсе.
+        // Структура REALITYConfig в Xray объявляет поля target и dest БЕЗ
+        // omitempty, поэтому при переводе в JSON они выходят как null. А при
+        // обратном чтении null — это уже не пустота: Xray видит заполненный
+        // dest, решает, что перед ним конфиг СЕРВЕРА, и требует serverNames
+        // с приватным ключом, которых у клиента нет и быть не может. Отсюда
+        // «Failed to build REALITY config > empty serverNames».
+        //
+        // Чистим по всему дереву, а не только у Reality: поле без omitempty
+        // здесь не единственное, и ловить их по одному — занятие без конца.
+        // Для Xray отсутствующее поле и поле со значением null равнозначны
+        // всюду, кроме этой самой проверки на присутствие.
+        server = Self.strippingNulls(server)
+
         let config: [String: Any] = [
             // Как и у sing-box, уровень warning: на info ядро пишет каждое
             // соединение вместе с адресом назначения, то есть историю
@@ -186,6 +202,26 @@ enum XrayBridge {
 
         let data = try JSONSerialization.data(withJSONObject: config, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// Рекурсивно убирает null из разобранного JSON.
+    private static func strippingNulls(_ value: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, item) in value {
+            if item is NSNull { continue }
+            if let nested = item as? [String: Any] {
+                result[key] = strippingNulls(nested)
+            } else if let list = item as? [Any] {
+                result[key] = list.compactMap { element -> Any? in
+                    if element is NSNull { return nil }
+                    if let nested = element as? [String: Any] { return strippingNulls(nested) }
+                    return element
+                }
+            } else {
+                result[key] = item
+            }
+        }
+        return result
     }
 
     // MARK: - Управление ядром
