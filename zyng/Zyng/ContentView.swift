@@ -255,9 +255,9 @@ struct ContentView: View {
                 header
                 Spacer(minLength: 8)
                 orb
-                statusPill.padding(.top, 18)
-                timerLabel.padding(.top, 6)
-                pingLabel.padding(.top, 4)
+                statusPill.padding(.top, 20)
+                timerLabel.padding(.top, 10)
+                pingLabel.padding(.top, 8)
                 if let err = vpn.errorMessage {
                     // Сообщение от ядра бывает длинным, а скопировать его нужно
                     // целиком — иначе причину сбоя не разобрать.
@@ -396,7 +396,7 @@ struct ContentView: View {
         .offset(y: -70)
         .allowsHitTesting(false)
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.5), value: state)
+        .animation(.easeInOut(duration: 1.0), value: state)
     }
 
     private var header: some View {
@@ -457,6 +457,15 @@ struct ContentView: View {
                     .scaleEffect(glow)
                     .opacity(state == .off ? 0.5 : 1)
 
+                // Неподвижная дорожка под дугами.
+                //
+                // Без неё кольца читались как две случайные чёрточки в пустоте:
+                // видно движение, но не видно круга, по которому оно идёт.
+                // Дорожка задаёт форму, и дуги превращаются в стрелку на шкале.
+                Circle()
+                    .stroke(JT.stroke.opacity(0.55), lineWidth: 1)
+                    .frame(width: 236, height: 236)
+
                 // Внешнее кольцо: разомкнутая дуга, вращается по часовой.
                 Circle()
                     .trim(from: 0, to: 0.72)
@@ -465,7 +474,7 @@ struct ContentView: View {
                             colors: [color.opacity(0), color.opacity(0.55), color.opacity(0)],
                             center: .center
                         ),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                     )
                     .frame(width: 236, height: 236)
                     .rotationEffect(.degrees(outerAngle))
@@ -479,7 +488,7 @@ struct ContentView: View {
                             colors: [color.opacity(0), color.opacity(0.7), color.opacity(0)],
                             center: .center
                         ),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                     )
                     .frame(width: 196, height: 196)
                     .rotationEffect(.degrees(innerAngle))
@@ -495,9 +504,22 @@ struct ContentView: View {
                         LinearGradient(colors: [JT.cardHi, JT.card],
                                        startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
+                    // Блик сверху. Плоский круг выглядел наклейкой; светлое
+                    // пятно у верхнего края делает из него физическую кнопку,
+                    // которую хочется нажать.
+                    .overlay(
+                        Circle().fill(
+                            RadialGradient(
+                                colors: [.white.opacity(0.10), .clear],
+                                center: .init(x: 0.32, y: 0.20),
+                                startRadius: 2, endRadius: 130
+                            )
+                        )
+                    )
                     .frame(width: 168, height: 168)
                     .overlay(Circle().stroke(color.opacity(0.55), lineWidth: 2))
                     .shadow(color: color.opacity(0.4), radius: 26)
+                    .shadow(color: .black.opacity(0.35), radius: 18, y: 10)
                     .scaleEffect(pressed ? 0.94 : 1)
 
                 VStack(spacing: 8) {
@@ -519,10 +541,14 @@ struct ContentView: View {
                 .scaleEffect(pressed ? 0.94 : 1)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pressed)
-            // Пружина, а не easeInOut: смена состояния — главное событие на
-            // экране, и лёгкий доводчик в конце делает её событием, а
-            // не переключением флажка. Длительность та же.
-            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: state)
+            // Медленная мягкая пружина.
+            //
+            // Смена состояния — главное событие на экране, и раньше она
+            // проскакивала быстрее, чем взгляд успевал за ней: цвет менялся
+            // почти мгновенно, и переход не читался. Секунда с небольшим
+            // доводчиком превращает его в движение, за которым приятно
+            // наблюдать. Быстрее здесь не лучше.
+            .animation(.spring(response: 1.0, dampingFraction: 0.82), value: state)
         }
         .buttonStyle(.plain)
         // Нажатие отслеживаем сами: у кнопки со своим оформлением нет
@@ -543,10 +569,16 @@ struct ContentView: View {
         let outerDuration: Double
         let innerDuration: Double
 
+        // Все три состояния заметно спокойнее прежнего.
+        //
+        // В покое кольца почти стоят — движение угадывается, но не отвлекает.
+        // В работе идут неспешно, как секундная стрелка. И только на время
+        // подключения ускоряются, чтобы ожидание читалось как ожидание, —
+        // но и там без суеты.
         switch state {
-        case .connecting: outerDuration = 1.6; innerDuration = 2.4
-        case .on:         outerDuration = 9;   innerDuration = 13
-        case .off:        outerDuration = 26;  innerDuration = 34
+        case .connecting: outerDuration = 2.6; innerDuration = 3.6
+        case .on:         outerDuration = 16;  innerDuration = 22
+        case .off:        outerDuration = 44;  innerDuration = 58
         }
 
         // Сначала возвращаем углы в ноль БЕЗ анимации.
@@ -571,17 +603,20 @@ struct ContentView: View {
         }
 
         if state == .off {
-            withAnimation(.easeInOut(duration: 0.4)) {
+            withAnimation(.easeInOut(duration: 0.9)) {
                 glow = 1
                 boltScale = 1
             }
         } else {
-            withAnimation(.easeInOut(duration: state == .on ? 2.4 : 1).repeatForever()) {
-                glow = state == .on ? 1.08 : 1.14
+            // Дыхание замедлено почти вдвое: на глаз это спокойный вдох-выдох,
+            // а не мигание. Размах тоже меньше — движение должно ощущаться,
+            // а не бросаться в глаза.
+            withAnimation(.easeInOut(duration: state == .on ? 4.0 : 1.6).repeatForever()) {
+                glow = state == .on ? 1.06 : 1.11
             }
             if state == .on {
-                withAnimation(.easeInOut(duration: 1.8).repeatForever()) {
-                    boltScale = 1.1
+                withAnimation(.easeInOut(duration: 3.2).repeatForever()) {
+                    boltScale = 1.07
                 }
             }
         }
@@ -602,7 +637,7 @@ struct ContentView: View {
         .background(Capsule().fill(JT.card).overlay(Capsule().stroke(JT.stroke, lineWidth: 1)))
         // Надпись меняется мягко, а не подменяется рывком в тот же кадр, что и
         // цвет кнопки: переход читается как одно движение.
-        .animation(.easeInOut(duration: 0.3), value: state)
+        .animation(.easeInOut(duration: 0.8), value: state)
     }
 
     /// Время считается прямо при отрисовке из момента подключения, который
@@ -616,9 +651,16 @@ struct ContentView: View {
             }()
 
             Text(timeString(seconds))
-                .font(.system(size: 15, weight: .medium, design: .monospaced))
-                .foregroundColor(state == .on ? JT.text : JT.sub.opacity(0.5))
+                // Крупнее и округлым начертанием.
+                //
+                // Пока туннель поднят, это единственная живая цифра на экране,
+                // и прежним мелким моноширинным шрифтом она читалась как
+                // служебная строчка. Округлое начертание с широкими цифрами
+                // выглядит как время на часах — чем оно, по сути, и является.
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundColor(state == .on ? JT.text : JT.sub.opacity(0.45))
                 .monospacedDigit()
+                .animation(.easeInOut(duration: 0.8), value: state)
         }
     }
 
