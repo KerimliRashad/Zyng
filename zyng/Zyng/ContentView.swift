@@ -569,16 +569,18 @@ struct ContentView: View {
         let outerDuration: Double
         let innerDuration: Double
 
-        // Все три состояния заметно спокойнее прежнего.
+        // Медленно. Очень медленно — и это намеренно.
         //
-        // В покое кольца почти стоят — движение угадывается, но не отвлекает.
-        // В работе идут неспешно, как секундная стрелка. И только на время
-        // подключения ускоряются, чтобы ожидание читалось как ожидание, —
-        // но и там без суеты.
+        // Круг диаметром в четверть экрана при обороте за десяток секунд
+        // выглядит вертушкой: движение перетягивает на себя всё внимание, хотя
+        // сообщать ему нечего. Здесь оборот занимает полторы-две минуты в
+        // покое и полминуты в работе — глаз замечает, что живое, но следить не
+        // тянет. Даже на время подключения оборот идёт шесть секунд: этого с
+        // избытком хватает, чтобы прочитать «идёт работа».
         switch state {
-        case .connecting: outerDuration = 2.6; innerDuration = 3.6
-        case .on:         outerDuration = 16;  innerDuration = 22
-        case .off:        outerDuration = 44;  innerDuration = 58
+        case .connecting: outerDuration = 6;   innerDuration = 8
+        case .on:         outerDuration = 34;  innerDuration = 46
+        case .off:        outerDuration = 90;  innerDuration = 120
         }
 
         // Сначала возвращаем углы в ноль БЕЗ анимации.
@@ -611,12 +613,12 @@ struct ContentView: View {
             // Дыхание замедлено почти вдвое: на глаз это спокойный вдох-выдох,
             // а не мигание. Размах тоже меньше — движение должно ощущаться,
             // а не бросаться в глаза.
-            withAnimation(.easeInOut(duration: state == .on ? 4.0 : 1.6).repeatForever()) {
+            withAnimation(.easeInOut(duration: state == .on ? 6.0 : 2.6).repeatForever()) {
                 glow = state == .on ? 1.06 : 1.11
             }
             if state == .on {
-                withAnimation(.easeInOut(duration: 3.2).repeatForever()) {
-                    boltScale = 1.07
+                withAnimation(.easeInOut(duration: 5.0).repeatForever()) {
+                    boltScale = 1.05
                 }
             }
         }
