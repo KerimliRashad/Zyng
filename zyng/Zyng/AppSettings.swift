@@ -8,8 +8,10 @@ final class AppSettings: ObservableObject {
 
     static let shared = AppSettings()
 
-    private let defaults = UserDefaults(suiteName: TunnelDiagnostics.appGroup)
-        ?? .standard
+    // Тот же объект, что и у остальных: см. TunnelDiagnostics.shared —
+    // повторное создание заставляло систему переоткрывать домен и ворчать
+    // в лог на каждое обращение.
+    private let defaults = TunnelDiagnostics.shared ?? .standard
 
     private enum Key {
         static let dns = "settings_dns"

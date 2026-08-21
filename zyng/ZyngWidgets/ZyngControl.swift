@@ -59,8 +59,7 @@ struct ToggleTunnelIntent: SetValueIntent {
     /// Виджет — отдельный процесс и до `AppSettings` не дотягивается, но сама
     /// настройка лежит в общей группе, так что читаем её оттуда напрямую.
     private var keepConnected: Bool {
-        UserDefaults(suiteName: TunnelDiagnostics.appGroup)?
-            .bool(forKey: "settings_autoconnect") ?? false
+        TunnelDiagnostics.shared?.bool(forKey: "settings_autoconnect") ?? false
     }
 
     func perform() async throws -> some IntentResult {

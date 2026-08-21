@@ -12,6 +12,25 @@ enum TunnelDiagnostics {
 
     static let appGroup = "group.online.zyng.Zyng"
 
+    /// Общие настройки группы. Один объект на процесс.
+    ///
+    /// Раньше он создавался заново на каждое обращение, и каждое такое
+    /// создание заставляло систему заново открывать домен. Когда домен пуст,
+    /// она на это ворчит в лог: «Couldn't read values in CFPrefsPlistSource…
+    /// detaching from cfprefsd». Сообщение безвредное, но сыпалось оно
+    /// постоянно и мешало читать всё остальное.
+    static let shared: UserDefaults? = {
+        let defaults = UserDefaults(suiteName: appGroup)
+        // Домен не должен оставаться пустым: пустой — это отсутствующий файл,
+        // а именно на него система и ворчит. clear() удаляет обе записи об
+        // ошибке, и без этой отметки после первой же удачной попытки
+        // подключения там снова не оставалось бы ничего.
+        if defaults?.object(forKey: "schema") == nil {
+            defaults?.set(1, forKey: "schema")
+        }
+        return defaults
+    }()
+
     /// Куда ядро пишет свой вывод, включая панику Go.
     static var stderrPath: String? {
         container?.appendingPathComponent("core/stderr.log").path
@@ -25,13 +44,13 @@ enum TunnelDiagnostics {
 
     /// Наши собственные ошибки — те, до которых ядро даже не дошло.
     static func record(_ message: String) {
-        guard let defaults = UserDefaults(suiteName: appGroup) else { return }
+        guard let defaults = shared else { return }
         defaults.set(message, forKey: "lastError")
         defaults.set(Date(), forKey: "lastErrorAt")
     }
 
     static func clear() {
-        guard let defaults = UserDefaults(suiteName: appGroup) else { return }
+        guard let defaults = shared else { return }
         defaults.removeObject(forKey: "lastError")
         defaults.removeObject(forKey: "lastErrorAt")
 
@@ -46,7 +65,7 @@ enum TunnelDiagnostics {
 
     /// Последняя причина сбоя: сначала наша ошибка, иначе — вывод ядра.
     static func lastFailure() -> String? {
-        if let defaults = UserDefaults(suiteName: appGroup),
+        if let defaults = shared,
            let message = defaults.string(forKey: "lastError"),
            !message.isEmpty {
             return message
