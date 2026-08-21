@@ -77,11 +77,11 @@ mkdir -p "$OUT"
 
 # Только ios и iossimulator: maccatalyst gomobile собирать не умеет.
 #
-# -libname=Xray даёт на выходе LibXray.xcframework — gomobile сам добавляет
-# приставку «Lib», как и в случае с Libbox.
+# Флага -libname здесь нет намеренно: он есть в форке SagerNet, которым
+# собирается sing-box, но не в оригинальном gomobile. Здесь имя фреймворка
+# берётся из -o, поэтому на выходе получается ровно LibXray.xcframework.
 gomobile bind -v \
   -target ios,iossimulator \
-  -libname=Xray \
   -trimpath -ldflags="-s -w" \
   -o "$OUT/LibXray.xcframework" \
   .
