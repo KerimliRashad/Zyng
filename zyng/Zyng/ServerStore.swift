@@ -134,7 +134,15 @@ final class ServerStore: ObservableObject {
     }
 
     var selected: Server? {
-        if let chosen = allServers.first(where: { $0.raw == selectedRaw }) {
+        // Прямо из кэша по ключу, без сборки всего списка.
+        //
+        // Раньше здесь строился allServers — то есть склеивались массивы всех
+        // подписок и одиночных ключей, — и только потом в нём искалась одна
+        // строка. А `selected` читается на каждой перерисовке главного экрана,
+        // включая ежесекундный тик таймера. Разбор был закэширован, но сборка
+        // и склейка массивов повторялись всё равно.
+        if !selectedRaw.isEmpty, let chosen = server(for: selectedRaw),
+           containsKey(selectedRaw) {
             return chosen
         }
         // Запасной вариант выбираем среди рабочих: сервер с транспортом,
@@ -588,7 +596,22 @@ final class ServerStore: ObservableObject {
 
     // MARK: - Хранение
 
+    /// Есть ли такой ключ в списках. Сравниваются строки, ничего не разбирается.
+    private func containsKey(_ raw: String) -> Bool {
+        if singleKeys.contains(raw) { return true }
+        return subscriptions.contains { $0.rawKeys.contains(raw) }
+    }
+
     private func fixSelectionIfNeeded() {
+        // Сначала дешёвая проверка по строкам.
+        //
+        // Она выполняется при запуске приложения, а раньше начиналась с
+        // построения allServers — то есть разбора КАЖДОГО ключа всех подписок
+        // на главном потоке, ещё до появления первого кадра. При сотне серверов
+        // это заметная задержка на ровном месте, хотя в подавляющем большинстве
+        // случаев выбранный ключ на месте и делать нечего.
+        if !selectedRaw.isEmpty, containsKey(selectedRaw) { return }
+
         let available = allServers
         guard selectedRaw.isEmpty || !available.contains(where: { $0.raw == selectedRaw }) else {
             return
@@ -647,7 +670,10 @@ final class ServerStore: ObservableObject {
            let data = try? Data(contentsOf: url),
            let vault = try? JSONDecoder().decode(Vault.self, from: data) {
             subscriptions = vault.subscriptions
-            singleKeys = vault.singleKeys.filter { server(for: $0) != nil }
+            // Без проверки разбором: она заставляла разбирать все одиночные
+            // ключи ещё до первого кадра, а нечитаемые и так отсеиваются при
+            // построении singleServers.
+            singleKeys = vault.singleKeys
         } else {
             migrateFromDefaults()
         }

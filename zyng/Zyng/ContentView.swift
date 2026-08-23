@@ -713,6 +713,23 @@ struct ContentView: View {
     }
 
     private var locationCard: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            // Подпись над карточкой.
+            //
+            // Без неё карточка читалась как обычная надпись: флаг, название,
+            // стрелка — и совсем не очевидно, что это выбор сервера и что по
+            // ней нужно нажать. Одно слово снимает вопрос.
+            Text(tr("СЕРВЕР", "SERVER"))
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.4)
+                .foregroundColor(JT.sub.opacity(0.7))
+                .padding(.leading, 4)
+
+            locationButton
+        }
+    }
+
+    private var locationButton: some View {
         Button { showList = true } label: {
             HStack(spacing: 14) {
                 Text(selected?.flag ?? "🌐").font(.system(size: 30))
