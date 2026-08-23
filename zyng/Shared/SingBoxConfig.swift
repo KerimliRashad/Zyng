@@ -49,7 +49,15 @@ enum SingBoxConfig {
                 "tag": "proxy",
                 "version": "5",
                 "server": "127.0.0.1",
-                "server_port": XrayBridge.socksPort
+                "server_port": XrayBridge.socksPort,
+                // Имена разрешает sing-box, а Xray получает готовый адрес.
+                //
+                // Иначе выходит замкнутый круг: Xray просит у системы разрешить
+                // имя, системный резолвер направлен в наш же туннель, запрос
+                // возвращается к sing-box, тот отправляет его в этот самый
+                // SOCKS — и снова к Xray, который всё ещё ждёт первого ответа.
+                // Снаружи это выглядит как «подключено, но ничего не грузится».
+                "domain_strategy": "ipv4_only"
             ]
         } else {
             outbound = try makeOutbound(from: key)

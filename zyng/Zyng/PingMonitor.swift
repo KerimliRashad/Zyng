@@ -42,24 +42,43 @@ final class PingMonitor: ObservableObject {
     /// Адрес, ответивший последним, чтобы не перебирать список каждый раз.
     private var preferred: URL?
 
-    /// Одноразовая сессия — принципиально.
+    /// Новая сессия на КАЖДЫЙ замер.
     ///
-    /// Постоянная переиспользует соединение между замерами, и после поднятия
-    /// туннеля продолжает держать то, что было открыто на старом интерфейсе.
-    /// Запросы уходят в никуда и отваливаются по таймауту, хотя туннель жив.
-    private let session: URLSession = {
+    /// Здесь раньше стояла одна сессия на всё время работы приложения, и рядом
+    /// лежало объяснение, почему так нельзя: постоянная сессия переиспользует
+    /// уже открытые соединения, а после поднятия туннеля они остаются на старом
+    /// интерфейсе, и запросы уходят в никуда. Объяснение было верным, а код ему
+    /// не соответствовал: ephemeral отключает кэш и куки, но переиспользование
+    /// соединений — нет. Ровно это и происходило: туннель поднимался, и все три
+    /// проверки подряд отваливались по таймауту при живом соединении.
+    ///
+    /// Сессия на один замер стоит недорого — замер и так уходит в сеть, — зато
+    /// каждый раз начинается с чистого листа.
+    private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        config.timeoutIntervalForRequest = 5
+        config.timeoutIntervalForRequest = 4
+        config.timeoutIntervalForResource = 6
         config.urlCache = nil
+        // Соединение не переживает свой запрос — на всякий случай и явно.
+        config.httpMaximumConnectionsPerHost = 1
+        config.httpShouldUsePipelining = false
         return URLSession(configuration: config)
-    }()
+    }
 
     func start() {
         guard task == nil else { return }
 
         task = Task { [weak self] in
-            // Первый замер сразу, дальше раз в 5 секунд.
+            // Полсекунды перед первым замером.
+            //
+            // Система сообщает «подключено», как только применены сетевые
+            // настройки, но маршруты в этот момент ещё перестраиваются. Замер,
+            // выпущенный в тот же миг, честно упирался в таймаут и показывал
+            // «нет ответа» на исправном туннеле.
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            // Дальше раз в 5 секунд.
             while !Task.isCancelled {
                 await self?.measure()
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -83,7 +102,14 @@ final class PingMonitor: ObservableObject {
     private func measure() async {
         guard !measuring else { return }
         measuring = true
-        defer { measuring = false }
+
+        let session = Self.makeSession()
+        defer {
+            // Обязательно: иначе сессия и её соединения живут до сборки мусора,
+            // а смысл именно в том, чтобы они не пережили этот замер.
+            session.invalidateAndCancel()
+            measuring = false
+        }
 
         // Начинаем с того, который отвечал в прошлый раз.
         var candidates = Self.probeURLs
