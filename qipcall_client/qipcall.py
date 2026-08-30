@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "Zyng VPN"
-APP_VERSION = "2.0.2"
+APP_VERSION = "2.1.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/zyng"
@@ -266,8 +266,36 @@ def link_host_port(link):
             raw = link[8:]; raw += "=" * (-len(raw) % 4)
             obj = json.loads(base64.b64decode(raw).decode())
             return obj.get("add"), int(obj.get("port", 443))
+        # ss:// целиком в base64 — разбираем ДО urlparse.
+        #
+        # Классический вид: ss://BASE64#имя, где внутри «метод:пароль@хост:порт».
+        # Полагаться здесь на urlparse нельзя, и это не очевидно: он не
+        # возвращает пустоту, а честно считает именем хоста сам блок base64,
+        # приведённый к нижнему регистру, и подставляет порт 443. Получался
+        # правдоподобный мусор, и замер задержки показывал «нет ответа» для
+        # живого сервера. Отличаем по «собачке»: если её нет, адрес спрятан.
+        if link.lower().startswith("ss://"):
+            body = link[5:].split("#", 1)[0].split("?", 1)[0]
+            if "@" not in body:
+                body += "=" * (-len(body) % 4)
+                try:
+                    plain = base64.urlsafe_b64decode(body).decode("utf-8", "replace")
+                except Exception:
+                    return None, None
+                if "@" in plain:
+                    hostpart = plain.rsplit("@", 1)[1]
+                    if ":" in hostpart:
+                        h, _, prt = hostpart.rpartition(":")
+                        try:
+                            return h, int(prt)
+                        except ValueError:
+                            return h, 443
+                return None, None
+
         u = urlparse(link)
-        return u.hostname, u.port or 443
+        if u.hostname:
+            return u.hostname, u.port or 443
+        return None, None
     except Exception:
         return None, None
 
@@ -1286,6 +1314,36 @@ def _sub_title(url):
         return "Подписка"
 
 
+def _port_open(host, port, timeout=0.4):
+    """Слушает ли кто-нибудь этот порт. Так проверяем, что ядро поднялось."""
+    try:
+        c = socket.create_connection((host, int(port)), timeout=timeout)
+        c.close()
+        return True
+    except Exception:
+        return False
+
+
+def _last_core_error(path, limit=240):
+    """Внятная строка из журнала ядра — для показа человеку.
+
+    Ядра пишут много служебного, а важна обычно последняя содержательная
+    строка. Если журнала нет вовсе, честно так и говорим, а не молчим.
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = [l.strip() for l in f if l.strip()]
+    except Exception:
+        lines = []
+    if not lines:
+        return tr("причина неизвестна", "reason unknown")
+    for line in reversed(lines):
+        low = line.lower()
+        if "error" in low or "failed" in low or "invalid" in low or "panic" in low:
+            return line[-limit:]
+    return lines[-1][-limit:]
+
+
 def tcp_ping(host, port, timeout=4.0):
     """Лучший из 2 замеров TCP-хендшейка. Домены резолвим заранее (система может
     блокировать DNS — тогда пробуем как есть)."""
@@ -1623,7 +1681,12 @@ class ZyngApp:
                       command=self.speed_test).grid(row=9, column=0, sticky="ew",
                                                     padx=22, pady=(12, 4))
 
-        foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/zyngfast",
+        # Без номера версии.
+        #
+        # Постоянно висящая версия человеку ничего не даёт: она интересна ровно
+        # в один момент — когда вышла новая. Тогда её и покажем, в плашке
+        # обновления внизу окна.
+        foot = ctk.CTkLabel(right, text="t.me/zyngfast",
                             font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED, cursor="hand2")
         foot.grid(row=10, column=0, pady=(2, 16))
         foot.bind("<Button-1>", lambda e: self._open_tg())
@@ -2231,11 +2294,57 @@ class ZyngApp:
                 cmd = [engine, "run", "-config", cfg]
         except Exception as e:
             self._flash(tr(f"Неверный ключ: {e}", f"Invalid key: {e}"), DANGER); return
+        # Вывод ядра — в файл, а не в никуда.
+        #
+        # Раньше стоял DEVNULL, и когда ядро отказывалось стартовать, причина
+        # пропадала бесследно. Теперь при неудаче мы можем показать её словами.
+        errlog = os.path.join(cfgdir, ".zyng_core.log")
+        try:
+            ef = open(errlog, "w", encoding="utf-8", errors="replace")
+        except Exception:
+            ef = subprocess.DEVNULL
+
         try:
             self.proc = subprocess.Popen(cmd, env=env,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+                stdout=ef, stderr=subprocess.STDOUT, creationflags=flags)
         except Exception as e:
             self._flash(tr(f"Ядро: {e}", f"Core: {e}"), DANGER); return
+
+        # ПРОВЕРЯЕМ, что ядро действительно поднялось.
+        #
+        # Здесь была главная беда: сразу после запуска процесса приложение
+        # писало «Подключено» и включало системный прокси. Если ядро падало на
+        # старте — неверный ключ, занятый порт, отсутствующий geoip, — человек
+        # видел «Подключено», а страницы не открывались вообще ничего, и понять
+        # причину было неоткуда.
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                break
+            if _port_open("127.0.0.1", HTTP_PORT) or _port_open("127.0.0.1", SOCKS_PORT):
+                break
+            time.sleep(0.1)
+
+        if self.proc.poll() is not None:
+            try:
+                ef.close()
+            except Exception:
+                pass
+            self.proc = None
+            self._flash(tr(f"Ядро не запустилось: {_last_core_error(errlog)}",
+                           f"The core did not start: {_last_core_error(errlog)}"), DANGER)
+            return
+
+        if not (_port_open("127.0.0.1", HTTP_PORT) or _port_open("127.0.0.1", SOCKS_PORT)):
+            # Процесс жив, но порт не слушает — трафику идти некуда.
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+            self.proc = None
+            self._flash(tr(f"Ядро не открыло порт: {_last_core_error(errlog)}",
+                           f"The core opened no port: {_last_core_error(errlog)}"), DANGER)
+            return
         # TUN-режим: весь трафик системы через sing-box tun → наш локальный socks
         self.tun_proc = None
         if self.prefs.get("tun_mode"):
@@ -2483,19 +2592,46 @@ class ZyngApp:
     def _show_update(self, latest, notes=""):
         self._latest = latest
         if self.update_bar: return
-        self.update_bar = ctk.CTkFrame(self.root, fg_color=UPDCARD, corner_radius=14, border_width=1, border_color=OK)
-        self.update_bar.place(relx=0.5, rely=0.02, anchor="n")
+        # Внизу окна, а не сверху.
+        #
+        # Сверху плашка ложилась поверх шапки и списка серверов и закрывала
+        # работу. Внизу она на виду, но ничему не мешает, и её видно целиком
+        # вместе с описанием того, что изменилось.
+        self.update_bar = ctk.CTkFrame(self.root, fg_color=UPDCARD, corner_radius=16,
+                                       border_width=1, border_color=OK)
+        self.update_bar.place(relx=0.5, rely=0.975, anchor="s")
+
         top = ctk.CTkFrame(self.update_bar, fg_color="transparent"); top.pack(fill="x")
-        self._ulbl = ctk.CTkLabel(top, text=tr(f"🎉 Новая версия {latest}", f"🎉 New version {latest}"),
-                                  font=ctk.CTkFont(FONT, 12, "bold"), text_color=OK)
-        self._ulbl.pack(side="left", padx=14, pady=(8, 4))
-        ctk.CTkButton(top, text=tr("Обновить", "Update"), width=90, height=28, corner_radius=14,
+        self._ulbl = ctk.CTkLabel(
+            top, text=tr(f"🎉 Доступна версия {latest}", f"🎉 Version {latest} is available"),
+            font=ctk.CTkFont(FONT, 13, "bold"), text_color=OK)
+        self._ulbl.pack(side="left", padx=(16, 10), pady=(10, 4))
+
+        # Крестик: обновление — предложение, а не требование. Без него плашка
+        # висела до перезапуска, и закрыть её было нечем.
+        ctk.CTkButton(top, text="✕", width=28, height=28, corner_radius=14,
+                      fg_color="transparent", hover_color=CARD2, text_color=MUTED,
+                      font=ctk.CTkFont(FONT, 13, "bold"),
+                      command=self._hide_update).pack(side="right", padx=(4, 10), pady=6)
+        ctk.CTkButton(top, text=tr("Обновить", "Update"), width=104, height=30, corner_radius=15,
                       fg_color=OK, hover_color="#2FB37A", text_color="#08160c",
-                      font=ctk.CTkFont(FONT, 12, "bold"), command=self.do_self_update).pack(side="right", padx=8, pady=6)
+                      font=ctk.CTkFont(FONT, 12, "bold"),
+                      command=self.do_self_update).pack(side="right", padx=4, pady=6)
+
         if notes:
-            ctk.CTkLabel(self.update_bar, text=notes, font=ctk.CTkFont(FONT, 10),
-                         text_color=MUTED, wraplength=360, justify="left").pack(
-                         side="top", anchor="w", padx=14, pady=(0, 8))
+            ctk.CTkLabel(self.update_bar, text=notes, font=ctk.CTkFont(FONT, 11),
+                         text_color=MUTED, wraplength=420, justify="left").pack(
+                         side="top", anchor="w", padx=16, pady=(0, 12))
+
+    def _hide_update(self):
+        """Убирает плашку. Следующая проверка покажет её снова — это не отказ
+        от обновления, а «сейчас не до того»."""
+        try:
+            if self.update_bar:
+                self.update_bar.destroy()
+        except Exception:
+            pass
+        self.update_bar = None
 
     def do_self_update(self):
         # macOS-сборки больше нет — на Mac (и в dev-режиме) открываем страницу релиза

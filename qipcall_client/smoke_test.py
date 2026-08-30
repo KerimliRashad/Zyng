@@ -126,3 +126,29 @@ for ln in app.links:
     except Exception:
         print(f"  ✗ конфиг не собрался: {ln[:45]}"); traceback.print_exc(); sys.exit(1)
 print(f"  конфиги xray ({built} ключа), транспорты на месте: ок")
+
+# ── Плашка обновления ────────────────────────────────────────────────────────
+# Она показывается редко — только когда вышла новая версия, — поэтому ломается
+# незаметно и живёт сломанной до следующего релиза. Проверяем на каждом прогоне.
+app._show_update("9.9.9", "Тестовое описание изменений")
+assert app.update_bar is not None, "плашка обновления не появилась"
+app._hide_update()
+assert app.update_bar is None, "плашка обновления не закрывается"
+app._show_update("9.9.9", "")
+app._hide_update()
+print("  плашка обновления: ок")
+
+# ── Разбор адреса для замера задержки ────────────────────────────────────────
+cases = [
+    ("vless://uuid@example.com:443?type=tcp#N", "example.com", 443),
+    ("trojan://pass@t.example.org:8443#N", "t.example.org", 8443),
+]
+for link, host, port in cases:
+    h, p = qipcall.link_host_port(link)
+    assert (h, p) == (host, port), (link, h, p)
+
+import base64 as _b64
+inner = _b64.urlsafe_b64encode(b"aes-256-gcm:secret@ss.example.net:8388").decode().rstrip("=")
+h, p = qipcall.link_host_port("ss://" + inner + "#Node")
+assert (h, p) == ("ss.example.net", 8388), ("ss base64", h, p)
+print("  адреса для пинга, включая ss:// в base64: ок")
