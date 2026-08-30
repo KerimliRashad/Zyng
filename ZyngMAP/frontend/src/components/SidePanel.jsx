@@ -21,35 +21,9 @@ const SidePanel = ({
   onSelectPoint
 }) => {
   const [showSavedRoutes, setShowSavedRoutes] = useState(false)
-  const [startInput, setStartInput] = useState('')
-  const [endInput, setEndInput] = useState('')
   const [activeTab, setActiveTab] = useState('route')
 
   const limits = truckHeightLimits[region] || truckHeightLimits.usa
-
-  const parseCoordinates = (input) => {
-    const coords = input.split(',').map(c => parseFloat(c.trim()))
-    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-      return { lat: coords[0], lng: coords[1] }
-    }
-    return null
-  }
-
-  const handleSetStart = () => {
-    const coords = parseCoordinates(startInput)
-    if (coords) {
-      onSelectPoint(coords, 'start')
-      setStartInput('')
-    }
-  }
-
-  const handleSetEnd = () => {
-    const coords = parseCoordinates(endInput)
-    if (coords) {
-      onSelectPoint(coords, 'end')
-      setEndInput('')
-    }
-  }
 
   return (
     <div className="side-panel">
@@ -110,12 +84,12 @@ const SidePanel = ({
         {/* ROUTE TAB */}
         {activeTab === 'route' && (
           <>
-            {/* Start Point - Beautiful Input */}
+            {/* Start Point */}
             <div style={{ marginBottom: '16px' }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                marginBottom: '10px',
+                marginBottom: '12px',
                 fontSize: '13px',
                 fontWeight: '700',
                 color: '#1f2937',
@@ -125,63 +99,26 @@ const SidePanel = ({
                 <span style={{ fontSize: '18px', marginRight: '8px' }}>🟢</span>
                 Start Point
               </div>
-              {startPoint && (
-                <div style={{
-                  padding: '12px 14px',
-                  background: 'linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%)',
-                  borderLeft: '4px solid #3b82f6',
-                  borderRadius: '8px',
-                  marginBottom: '10px',
-                  fontSize: '13px',
-                  color: '#0c4a6e',
-                  fontWeight: '600'
-                }}>
-                  ✅ {startPoint.lat.toFixed(4)}, {startPoint.lng.toFixed(4)}
-                </div>
-              )}
-              <input
-                type="text"
-                placeholder="Enter: 55.75, 37.62"
-                value={startInput}
-                onChange={(e) => setStartInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSetStart()}
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  marginBottom: '8px',
-                  fontFamily: 'inherit',
-                  transition: 'all 0.2s',
-                  boxSizing: 'border-box'
-                }}
-              />
-              <button
-                onClick={handleSetStart}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  transition: 'all 0.2s'
-                }}
-              >
-                SET START
-              </button>
+              <div style={{
+                padding: '16px',
+                background: startPoint ? 'linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%)' : '#f3f4f6',
+                borderLeft: startPoint ? '4px solid #3b82f6' : '4px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                color: startPoint ? '#0c4a6e' : '#6b7280',
+                fontWeight: startPoint ? '600' : '500',
+                textAlign: 'center'
+              }}>
+                {startPoint ? '✅ SET' : '👆 CLICK ON MAP'}
+              </div>
             </div>
 
-            {/* End Point - Beautiful Input */}
+            {/* End Point */}
             <div style={{ marginBottom: '16px' }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                marginBottom: '10px',
+                marginBottom: '12px',
                 fontSize: '13px',
                 fontWeight: '700',
                 color: '#1f2937',
@@ -191,55 +128,18 @@ const SidePanel = ({
                 <span style={{ fontSize: '18px', marginRight: '8px' }}>🔴</span>
                 End Point
               </div>
-              {endPoint && (
-                <div style={{
-                  padding: '12px 14px',
-                  background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
-                  borderLeft: '4px solid #ef4444',
-                  borderRadius: '8px',
-                  marginBottom: '10px',
-                  fontSize: '13px',
-                  color: '#7c2d12',
-                  fontWeight: '600'
-                }}>
-                  ✅ {endPoint.lat.toFixed(4)}, {endPoint.lng.toFixed(4)}
-                </div>
-              )}
-              <input
-                type="text"
-                placeholder="Enter: 55.75, 37.62"
-                value={endInput}
-                onChange={(e) => setEndInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSetEnd()}
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  marginBottom: '8px',
-                  fontFamily: 'inherit',
-                  transition: 'all 0.2s',
-                  boxSizing: 'border-box'
-                }}
-              />
-              <button
-                onClick={handleSetEnd}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  transition: 'all 0.2s'
-                }}
-              >
-                SET END
-              </button>
+              <div style={{
+                padding: '16px',
+                background: endPoint ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)' : '#f3f4f6',
+                borderLeft: endPoint ? '4px solid #ef4444' : '4px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                color: endPoint ? '#7c2d12' : '#6b7280',
+                fontWeight: endPoint ? '600' : '500',
+                textAlign: 'center'
+              }}>
+                {endPoint ? '✅ SET' : '👆 CLICK ON MAP'}
+              </div>
             </div>
 
             {/* Route Information */}
