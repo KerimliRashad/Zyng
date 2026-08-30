@@ -1,0 +1,17 @@
+{
+  "name": "zyngmap-navigator",
+  "version": "1.0.0",
+  "description": "ZyngMAP - Browser Navigator for Trucks and Cars Worldwide",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm start",
+    "build": "cd frontend && npm run build",
+    "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "docker:build": "docker build -t zyngmap:latest .",
+    "docker:run": "docker run -p 3000:3000 -p 5000:5000 zyngmap:latest"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
