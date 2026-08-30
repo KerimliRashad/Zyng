@@ -149,6 +149,10 @@ function App() {
         onSaveRoute={saveRoute}
         savedRoutes={savedRoutes}
         onLoadRoute={loadRoute}
+        onSelectPoint={(point, type) => {
+          if (type === 'start') setStartPoint(point)
+          else setEndPoint(point)
+        }}
       />
     </div>
   )

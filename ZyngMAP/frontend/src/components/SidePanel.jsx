@@ -17,11 +17,42 @@ const SidePanel = ({
   onClearRoute,
   onSaveRoute,
   savedRoutes,
-  onLoadRoute
+  onLoadRoute,
+  onSelectPoint
 }) => {
   const [showSavedRoutes, setShowSavedRoutes] = useState(false)
+  const [startInput, setStartInput] = useState('')
+  const [endInput, setEndInput] = useState('')
 
   const limits = truckHeightLimits[region] || truckHeightLimits.usa
+
+  const parseCoordinates = (input) => {
+    const coords = input.split(',').map(c => parseFloat(c.trim()))
+    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+      return { lat: coords[0], lng: coords[1] }
+    }
+    return null
+  }
+
+  const handleSetStart = () => {
+    const coords = parseCoordinates(startInput)
+    if (coords) {
+      onSelectPoint(coords, 'start')
+      setStartInput('')
+    } else {
+      alert('❌ Invalid format! Use: latitude, longitude (e.g., 55.75, 37.62)')
+    }
+  }
+
+  const handleSetEnd = () => {
+    const coords = parseCoordinates(endInput)
+    if (coords) {
+      onSelectPoint(coords, 'end')
+      setEndInput('')
+    } else {
+      alert('❌ Invalid format! Use: latitude, longitude (e.g., 55.75, 37.62)')
+    }
+  }
 
   return (
     <div className="side-panel">
@@ -33,23 +64,87 @@ const SidePanel = ({
         {/* Start Point */}
         <div className="form-group">
           <label>📍 Start Point</label>
+          {startPoint && (
+            <div style={{
+              padding: '10px',
+              background: '#e0e7ff',
+              borderRadius: '6px',
+              marginBottom: '8px',
+              fontSize: '13px',
+              color: '#1f2937',
+              fontWeight: '600'
+            }}>
+              ✅ {startPoint.lat.toFixed(4)}, {startPoint.lng.toFixed(4)}
+            </div>
+          )}
           <input
             type="text"
-            readOnly
-            placeholder="Click on map or enter coordinates"
-            value={startPoint ? `${startPoint.lat.toFixed(4)}, ${startPoint.lng.toFixed(4)}` : ''}
+            placeholder="lat, lng (e.g., 55.75, 37.62)"
+            value={startInput}
+            onChange={(e) => setStartInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSetStart()}
           />
+          <button
+            onClick={handleSetStart}
+            style={{
+              width: '100%',
+              marginTop: '6px',
+              padding: '8px',
+              background: '#4f46e5',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}
+          >
+            Set Start
+          </button>
+          <p style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>Or click on map →</p>
         </div>
 
         {/* End Point */}
         <div className="form-group">
           <label>🎯 End Point</label>
+          {endPoint && (
+            <div style={{
+              padding: '10px',
+              background: '#e0e7ff',
+              borderRadius: '6px',
+              marginBottom: '8px',
+              fontSize: '13px',
+              color: '#1f2937',
+              fontWeight: '600'
+            }}>
+              ✅ {endPoint.lat.toFixed(4)}, {endPoint.lng.toFixed(4)}
+            </div>
+          )}
           <input
             type="text"
-            readOnly
-            placeholder="Click on map or enter coordinates"
-            value={endPoint ? `${endPoint.lat.toFixed(4)}, ${endPoint.lng.toFixed(4)}` : ''}
+            placeholder="lat, lng (e.g., 55.75, 37.62)"
+            value={endInput}
+            onChange={(e) => setEndInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSetEnd()}
           />
+          <button
+            onClick={handleSetEnd}
+            style={{
+              width: '100%',
+              marginTop: '6px',
+              padding: '8px',
+              background: '#4f46e5',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}
+          >
+            Set End
+          </button>
+          <p style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>Or click on map →</p>
         </div>
 
         {/* Vehicle Type */}
