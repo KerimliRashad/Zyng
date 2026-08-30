@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "Zyng VPN"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/zyng"
@@ -1419,9 +1419,9 @@ class _PillLabel:
         cv.create_line(r, 0, w - r, 0, fill=BORDER)
         cv.create_line(r, h - 1, w - r, h - 1, fill=BORDER)
         # Точка состояния и подпись.
-        cv.create_oval(16, r - 4, 24, r + 4, fill=self._color, outline="")
-        cv.create_text(w // 2 + 6, r, text=self._text, fill=self._color,
-                       font=(FONT, 12, "bold"))
+        cv.create_oval(18, r - 5, 28, r + 5, fill=self._color, outline="")
+        cv.create_text(w // 2 + 8, r, text=self._text, fill=self._color,
+                       font=(FONT, 13, "bold"))
 
 
 # ══ ПРИЛОЖЕНИЕ ═══════════════════════════════════════════════════════════════
@@ -1513,11 +1513,11 @@ class ZyngApp:
         right.grid(row=0, column=1, sticky="nsew")
         right.grid_columnconfigure(0, weight=1)
         right.grid_rowconfigure(1, weight=1)   # воздух над кнопкой
-        right.grid_rowconfigure(7, weight=1)   # воздух под ней
+        right.grid_rowconfigure(6, weight=1)   # воздух между группами
 
         # Шапка: логотип и название — единственное, что осталось от прежнего вида.
         h = ctk.CTkFrame(right, fg_color="transparent")
-        h.grid(row=0, column=0, pady=(20, 0))
+        h.grid(row=0, column=0, pady=(24, 0))
         self._logo_ref = None
         try:
             from PIL import Image
@@ -1543,7 +1543,7 @@ class ZyngApp:
                     tint = Image.new("RGBA", im.size, (r, g, b, 0))
                     tint.putalpha(im.getchannel("A"))
                     im = tint
-                H = 40
+                H = 48
                 img = ctk.CTkImage(im, size=(int(H * ratio * 1.08), H))
                 ctk.CTkLabel(h, image=img, text="").pack()
                 self._logo_ref = img
@@ -1556,34 +1556,50 @@ class ZyngApp:
         # Тумблер — тот же, что был до 6.0. Круглая кнопка со сферой в Tkinter
         # получилась плохо: символ питания ⏻ в системных шрифтах Windows
         # отсутствует и разъезжается, а дуги без сглаживания выглядят рваными.
-        self.toggle_w, self.toggle_h = 132, 62
+        # Крупнее прежнего. Это главный орган управления на экране, а он был
+        # одного роста с подписью под ним и терялся в пустоте правой колонки.
+        self.toggle_w, self.toggle_h = 170, 80
         self._tgl_pos = 0.0
         self.toggle_cv = tk.Canvas(right, width=self.toggle_w, height=self.toggle_h,
                                    bg=BG, highlightthickness=0, bd=0, cursor="hand2")
-        self.toggle_cv.grid(row=2, column=0, pady=(10, 0))
+        self.toggle_cv.grid(row=2, column=0, pady=(4, 0))
         self.toggle_cv.bind("<Button-1>", lambda e: self.toggle())
         self._draw_toggle()
 
         # Статус-пилюля
-        self.status_cv = tk.Canvas(right, width=190, height=34, bg=BG,
+        self.status_cv = tk.Canvas(right, width=208, height=38, bg=BG,
                                    highlightthickness=0, bd=0)
-        self.status_cv.grid(row=3, column=0, pady=(16, 0))
+        self.status_cv.grid(row=3, column=0, pady=(14, 0))
         self.status = _PillLabel(self.status_cv, self)
         self.status.configure(text=tr("Отключено", "Disconnected"), text_color=MUTED)
 
+        # Крупно и моноширинным.
+        #
+        # Пока туннель поднят, это единственная живая цифра на экране, а
+        # шестнадцатым кеглем она читалась как служебная строчка. Моноширинный
+        # шрифт здесь обязателен: у пропорционального цифры разной ширины, и
+        # строка дёргалась бы каждую секунду.
         self.timer_lbl = ctk.CTkLabel(right, text="00:00:00", text_color=MUTED,
                                       font=ctk.CTkFont("Consolas" if os.name == "nt" else "monospace",
-                                                       16, "bold"))
-        self.timer_lbl.grid(row=4, column=0, pady=(10, 0))
+                                                       27, "bold"))
+        self.timer_lbl.grid(row=4, column=0, pady=(12, 0))
 
-        self.ping_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 12, "bold"),
+        self.ping_lbl = ctk.CTkLabel(right, text="", font=ctk.CTkFont(FONT, 13, "bold"),
                                      text_color=MUTED)
-        self.ping_lbl.grid(row=5, column=0, pady=(6, 0))
+        self.ping_lbl.grid(row=5, column=0, pady=(4, 0))
 
         # Карточка выбранного сервера — открывает список слева.
+        #
+        # Над ней подпись: без неё карточка читалась как обычная надпись и было
+        # неочевидно, что это выбор сервера. Ровно та же правка, что и в
+        # версии для iPhone, — приложения должны вести себя одинаково.
+        ctk.CTkLabel(right, text=tr("СЕРВЕР", "SERVER"),
+                     font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED,
+                     anchor="w").grid(row=7, column=0, sticky="w", padx=26, pady=(0, 4))
+
         card = ctk.CTkFrame(right, fg_color=CARD, corner_radius=18,
                             border_width=1, border_color=BORDER)
-        card.grid(row=6, column=0, sticky="ew", padx=22, pady=(18, 0))
+        card.grid(row=8, column=0, sticky="ew", padx=22, pady=(0, 0))
         inner = ctk.CTkFrame(card, fg_color="transparent")
         inner.pack(fill="x", padx=14, pady=12)
         self.cur_flag = tk.Label(inner, bg=CARD)
@@ -1604,12 +1620,12 @@ class ZyngApp:
                       fg_color=CARD, hover_color=CARD2, text_color=ACC,
                       border_width=1, border_color=BORDER,
                       font=ctk.CTkFont(FONT, 12, "bold"),
-                      command=self.speed_test).grid(row=8, column=0, sticky="ew",
-                                                    padx=22, pady=(10, 4))
+                      command=self.speed_test).grid(row=9, column=0, sticky="ew",
+                                                    padx=22, pady=(12, 4))
 
         foot = ctk.CTkLabel(right, text=f"v{APP_VERSION} · t.me/zyngfast",
                             font=ctk.CTkFont(FONT, 10, "bold"), text_color=MUTED, cursor="hand2")
-        foot.grid(row=9, column=0, pady=(0, 14))
+        foot.grid(row=10, column=0, pady=(2, 16))
         foot.bind("<Button-1>", lambda e: self._open_tg())
         self._connect_time = None
 
