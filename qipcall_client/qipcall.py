@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "Zyng VPN"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/zyng"
@@ -1524,8 +1524,21 @@ class ZyngApp:
             lp = resource_path("logo_white.png")
             if os.path.exists(lp):
                 im = Image.open(lp).convert("RGBA"); ratio = im.width / im.height
-                # Логотип белый — на светлой теме он сливался с фоном.
-                if TEXT.upper() != "#FFFFFF":
+
+                # Перекрашиваем ТОЛЬКО силуэт с прозрачным фоном.
+                #
+                # Перекраска выбрасывает цвета и оставляет один альфа-канал.
+                # Для силуэта это ровно то, что нужно, а для непрозрачной
+                # картинки — катастрофа: альфа у неё везде 255, и на месте
+                # логотипа появляется сплошной прямоугольник цвета текста.
+                # Именно это и случилось, когда сюда подложили значок
+                # приложения вместо метки. Считаем долю непрозрачного и, если
+                # картинка сплошная, показываем её как есть.
+                alpha = im.getchannel("A")
+                solid = sum(1 for v in alpha.getdata() if v > 250)
+                is_silhouette = solid < im.width * im.height * 0.9
+
+                if is_silhouette and TEXT.upper() != "#FFFFFF":
                     r, g, b = (int(TEXT[i:i + 2], 16) for i in (1, 3, 5))
                     tint = Image.new("RGBA", im.size, (r, g, b, 0))
                     tint.putalpha(im.getchannel("A"))
@@ -1608,6 +1621,15 @@ class ZyngApp:
         _t = self.prefs.get("theme", "Тёмная")
         ctk.set_appearance_mode({"Светлая": "light", "Тёмная": "dark", "Системная": "system"}.get(_t, "dark"))
         self.render_servers()
+
+        # Показываем выбранный сервер сразу при запуске.
+        #
+        # Раньше правая колонка обновлялась только при подключении или ручном
+        # выборе, а до этого держала заготовку «Сервер не выбран». Получалось
+        # противоречие: слева у сервера стоит галочка, справа написано, что не
+        # выбран ничего. Выбор при этом был настоящий — не показывали его.
+        self._restore_current_label()
+
         self.check_update()
         if self.links:
             self.root.after(400, self.do_ping)
@@ -2224,6 +2246,19 @@ class ZyngApp:
         self._animate_toggle()
         self._connect_time = time.time()
         self._tick()
+
+    def _restore_current_label(self):
+        """Подставляет в правую колонку сервер, выбранный в прошлый раз."""
+        try:
+            link = self._current_link()
+            if not link:
+                return
+            nm = (clean_name(unquote(link.split("#", 1)[1]))
+                  if "#" in link else tr("Сервер", "Server"))
+            self._update_current(nm)
+        except Exception:
+            # Не показать имя — досадно, но не повод не запуститься.
+            pass
 
     def _update_current(self, nm):
         self.cur_lbl.configure(text=nm)
