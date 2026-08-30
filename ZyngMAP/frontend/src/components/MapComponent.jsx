@@ -19,8 +19,9 @@ const MapComponent = ({ startPoint, endPoint, route, userLocation, onSelectPoint
 
       mapInstanceRef.current.on('click', (e) => {
         const { lat, lng } = e.latlng
-        // Determine if clicking on start or end based on UI state
-        onSelectPoint({ lat, lng }, 'end')
+        // If start is not set, set start. Otherwise set end.
+        const pointType = !startPoint ? 'start' : 'end'
+        onSelectPoint({ lat, lng }, pointType)
       })
     }
 
@@ -29,7 +30,7 @@ const MapComponent = ({ startPoint, endPoint, route, userLocation, onSelectPoint
         mapInstanceRef.current.remove()
       }
     }
-  }, [])
+  }, [startPoint])
 
   // Update user location
   useEffect(() => {
