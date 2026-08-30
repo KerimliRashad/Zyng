@@ -16,6 +16,17 @@ function App() {
   const [savedRoutes, setSavedRoutes] = useState([])
 
   useEffect(() => {
+    // Handle custom events from SidePanel
+    const handleSetStart = (e) => {
+      setStartPoint(e.detail)
+    }
+    const handleSetEnd = (e) => {
+      setEndPoint(e.detail)
+    }
+
+    window.addEventListener('setStart', handleSetStart)
+    window.addEventListener('setEnd', handleSetEnd)
+
     // Get user location with high accuracy
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -41,6 +52,11 @@ function App() {
     }
     const stored = localStorage.getItem('savedRoutes')
     if (stored) setSavedRoutes(JSON.parse(stored))
+
+    return () => {
+      window.removeEventListener('setStart', handleSetStart)
+      window.removeEventListener('setEnd', handleSetEnd)
+    }
   }, [])
 
   const truckHeightLimits = {
