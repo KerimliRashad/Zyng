@@ -152,3 +152,22 @@ inner = _b64.urlsafe_b64encode(b"aes-256-gcm:secret@ss.example.net:8388").decode
 h, p = qipcall.link_host_port("ss://" + inner + "#Node")
 assert (h, p) == ("ss.example.net", 8388), ("ss base64", h, p)
 print("  адреса для пинга, включая ss:// в base64: ок")
+
+# ── Проверка прохождения трафика ─────────────────────────────────────────────
+# Она превращает «подключено, но ничего не грузится» в понятное сообщение,
+# поэтому её собственная поломка была бы особенно обидной.
+ok, why = qipcall._proxy_works(1, timeout=2)
+assert ok is False and why, "проверка трафика должна сообщать причину"
+
+import socket as _sk, threading as _th
+_srv = _sk.socket(); _srv.bind(("127.0.0.1", 0)); _srv.listen(1)
+_port = _srv.getsockname()[1]
+def _fake():
+    c, _ = _srv.accept()
+    c.recv(3); c.sendall(b"\x05\x00")
+    c.recv(64); c.sendall(bytes([5, 4, 0, 1, 0, 0, 0, 0, 0, 0]))
+    c.close()
+_th.Thread(target=_fake, daemon=True).start()
+ok, why = qipcall._proxy_works(_port, timeout=3)
+assert ok is False and "недоступ" in why, ("отказ SOCKS не расшифрован", why)
+print("  проверка прохождения трафика: ок")

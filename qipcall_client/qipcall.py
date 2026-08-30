@@ -20,7 +20,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 APP_NAME = "Zyng VPN"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.1.1"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
 RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/zyng"
@@ -1344,6 +1344,46 @@ def _last_core_error(path, limit=240):
     return lines[-1][-limit:]
 
 
+def _proxy_works(socks_port, timeout=8.0):
+    """Идёт ли трафик через локальный SOCKS. Возвращает (успех, причина).
+
+    Через SOCKS, а не через системный прокси: системный ещё может быть не
+    подхвачен приложениями, а нам нужно проверить именно ядро.
+    """
+    try:
+        import socket as _s
+        c = _s.create_connection(("127.0.0.1", int(socks_port)), timeout=3)
+        c.settimeout(timeout)
+        # SOCKS5: приветствие без авторизации.
+        c.sendall(b"\x05\x01\x00")
+        if c.recv(2) != b"\x05\x00":
+            c.close()
+            return False, tr("прокси не отвечает", "the proxy does not answer")
+        # CONNECT к cp.cloudflare.com:80 по имени — заодно проверяем DNS сервера.
+        host = b"cp.cloudflare.com"
+        c.sendall(b"\x05\x01\x00\x03" + bytes([len(host)]) + host + (80).to_bytes(2, "big"))
+        rep = c.recv(4)
+        if len(rep) < 2 or rep[1] != 0x00:
+            c.close()
+            codes = {1: "общий сбой", 2: "запрещено", 3: "сеть недоступна",
+                     4: "хост недоступен", 5: "соединение отклонено",
+                     6: "истекло время", 7: "команда не поддержана"}
+            code = rep[1] if len(rep) > 1 else -1
+            return False, tr(f"сервер ответил «{codes.get(code, code)}»",
+                             f"the server replied with error {code}")
+        # Дочитываем адрес в ответе и шлём настоящий запрос.
+        c.recv(256)
+        c.sendall(b"GET /generate_204 HTTP/1.1\r\nHost: cp.cloudflare.com\r\n"
+                  b"Connection: close\r\n\r\n")
+        data = c.recv(64)
+        c.close()
+        if data.startswith(b"HTTP/"):
+            return True, ""
+        return False, tr("ответ не получен", "no answer received")
+    except Exception as e:
+        return False, str(e)[:120] or tr("нет связи", "no connection")
+
+
 def tcp_ping(host, port, timeout=4.0):
     """Лучший из 2 замеров TCP-хендшейка. Домены резолвим заранее (система может
     блокировать DNS — тогда пробуем как есть)."""
@@ -2371,6 +2411,35 @@ class ZyngApp:
         self._animate_toggle()
         self._connect_time = time.time()
         self._tick()
+        self._verify_traffic()
+
+    def _verify_traffic(self):
+        """Проверяет, что через поднятый прокси реально ходит трафик.
+
+        Ядро может запуститься, открыть порт и при этом не пропускать ничего:
+        неверный пароль, сервер не отвечает, транспорт не совпал. Порт слушает,
+        приложение говорит «Подключено», а страницы не открываются — и человеку
+        неоткуда узнать, что не так. Поэтому спрашиваем у самого прокси.
+        """
+        gen = getattr(self, "_verify_gen", 0) + 1
+        self._verify_gen = gen
+
+        def worker():
+            time.sleep(1.0)                      # даём ядру договориться с сервером
+            if gen != self._verify_gen or not self.connected:
+                return
+            ok, why = _proxy_works(SOCKS_PORT)
+            if gen != self._verify_gen or not self.connected:
+                return
+            if ok:
+                self.root.after(0, lambda: self._flash(
+                    tr("Подключено", "Connected"), OK))
+            else:
+                self.root.after(0, lambda w=why: self._flash(
+                    tr(f"Туннель поднят, но трафик не идёт: {w}",
+                       f"The tunnel is up but no traffic passes: {w}"), DANGER))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _restore_current_label(self):
         """Подставляет в правую колонку сервер, выбранный в прошлый раз."""
@@ -2599,29 +2668,29 @@ class ZyngApp:
         # вместе с описанием того, что изменилось.
         self.update_bar = ctk.CTkFrame(self.root, fg_color=UPDCARD, corner_radius=16,
                                        border_width=1, border_color=OK)
-        self.update_bar.place(relx=0.5, rely=0.975, anchor="s")
+        self.update_bar.place(relx=0.5, rely=0.985, anchor="s")
 
+        # Одна строка, ничего лишнего.
+        #
+        # Раньше плашка разворачивала под собой весь список изменений и
+        # занимала половину окна. Уведомление должно сообщать факт и давать
+        # действие, а подробности человек прочитает на странице релиза.
         top = ctk.CTkFrame(self.update_bar, fg_color="transparent"); top.pack(fill="x")
         self._ulbl = ctk.CTkLabel(
-            top, text=tr(f"🎉 Доступна версия {latest}", f"🎉 Version {latest} is available"),
-            font=ctk.CTkFont(FONT, 13, "bold"), text_color=OK)
-        self._ulbl.pack(side="left", padx=(16, 10), pady=(10, 4))
+            top, text=tr(f"Версия {latest}", f"Version {latest}"),
+            font=ctk.CTkFont(FONT, 12, "bold"), text_color=OK)
+        self._ulbl.pack(side="left", padx=(14, 8), pady=7)
 
         # Крестик: обновление — предложение, а не требование. Без него плашка
         # висела до перезапуска, и закрыть её было нечем.
-        ctk.CTkButton(top, text="✕", width=28, height=28, corner_radius=14,
+        ctk.CTkButton(top, text="✕", width=24, height=24, corner_radius=12,
                       fg_color="transparent", hover_color=CARD2, text_color=MUTED,
-                      font=ctk.CTkFont(FONT, 13, "bold"),
-                      command=self._hide_update).pack(side="right", padx=(4, 10), pady=6)
-        ctk.CTkButton(top, text=tr("Обновить", "Update"), width=104, height=30, corner_radius=15,
-                      fg_color=OK, hover_color="#2FB37A", text_color="#08160c",
                       font=ctk.CTkFont(FONT, 12, "bold"),
-                      command=self.do_self_update).pack(side="right", padx=4, pady=6)
-
-        if notes:
-            ctk.CTkLabel(self.update_bar, text=notes, font=ctk.CTkFont(FONT, 11),
-                         text_color=MUTED, wraplength=420, justify="left").pack(
-                         side="top", anchor="w", padx=16, pady=(0, 12))
+                      command=self._hide_update).pack(side="right", padx=(2, 8), pady=7)
+        ctk.CTkButton(top, text=tr("Обновить", "Update"), width=88, height=26, corner_radius=13,
+                      fg_color=OK, hover_color="#2FB37A", text_color="#08160c",
+                      font=ctk.CTkFont(FONT, 11, "bold"),
+                      command=self.do_self_update).pack(side="right", padx=2, pady=7)
 
     def _hide_update(self):
         """Убирает плашку. Следующая проверка покажет её снова — это не отказ
