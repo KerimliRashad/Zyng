@@ -1,5 +1,5 @@
 """
-JeffTUN VPN — десктопный клиент (Windows/Linux) в стиле Happ.
+Zyng VPN — десктопный клиент (Windows/Linux). Одно приложение с iOS-версией.
 Слева иконки, посередине серверы с поиском, справа круглая кнопка включения.
 UI: CustomTkinter. Ядро: xray-core. Системный прокси.
 """
@@ -19,16 +19,44 @@ import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
 
-APP_NAME = "JeffTUN VPN"
-APP_VERSION = "6.0.2"
+APP_NAME = "Zyng VPN"
+APP_VERSION = "2.0.0"
 VERSION_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/version.txt"
 RELEASE_JSON_URL = "https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/RELEASE.json"
-RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
-DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun"
-TELEGRAM_URL = "https://t.me/jeffvpn"
+RELEASES_URL = "https://github.com/kerimlirashad/kerimlirashad/releases/tag/zyng"
+DOWNLOAD_BASE = "https://github.com/kerimlirashad/kerimlirashad/releases/download/zyng"
+TELEGRAM_URL = "https://t.me/zyngfast"
 SOCKS_PORT = 10808
 HTTP_PORT = 10809
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".zyng_config.json")
+
+# Файлы от версий, когда приложение называлось JeffTUN.
+#
+# Просто переименовать нельзя: в конфиге лежат ключи и подписки пользователя,
+# а в hwid — идентификатор устройства. Панели с лимитом устройств считают
+# именно по нему, и новый идентификатор занял бы ещё одно место в лимите, а
+# старое осталось бы висеть занятым. Поэтому при первом запуске переносим и
+# то, и другое, а старые файлы оставляем на месте — на случай отката.
+LEGACY_CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_config.json")
+LEGACY_HWID_FILE = os.path.join(os.path.expanduser("~"), ".jeffton_hwid")
+
+
+def _migrate_legacy_files():
+    """Переносит настройки и HWID из файлов JeffTUN. Идемпотентно."""
+    import shutil
+    for old_path, new_path in ((LEGACY_CONFIG_FILE, CONFIG_FILE),
+                               (LEGACY_HWID_FILE,
+                                os.path.join(os.path.dirname(CONFIG_FILE), ".zyng_hwid"))):
+        try:
+            if os.path.exists(old_path) and not os.path.exists(new_path):
+                shutil.copy2(old_path, new_path)
+        except Exception:
+            # Перенос — удобство, а не условие работы: не вышло, значит человек
+            # добавит ключи заново. Падать из-за этого на старте нельзя.
+            pass
+
+
+_migrate_legacy_files()
 
 # ── Темы ──────────────────────────────────────────────────────────────────
 #
@@ -906,7 +934,7 @@ def build_tun_config(prefs=None):
     return {
         "log": {"level": "warn"},
         "inbounds": [{
-            "type": "tun", "tag": "tun-in", "interface_name": "jefftun",
+            "type": "tun", "tag": "tun-in", "interface_name": "zyng",
             "address": ["172.19.0.1/30"], "mtu": 1500,
             "auto_route": True, "strict_route": True, "stack": "system",
         }],
@@ -972,7 +1000,7 @@ def _set_linux_proxy(enable):
 
 def _linux_autostart_path():
     d = os.path.join(os.path.expanduser("~"), ".config", "autostart")
-    return os.path.join(d, "jefftun.desktop")
+    return os.path.join(d, "zyng.desktop")
 
 
 def set_autostart(enable):
@@ -980,9 +1008,9 @@ def set_autostart(enable):
     if os.name == "nt":
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
-        if enable: winreg.SetValueEx(key, "JeffTUN", 0, winreg.REG_SZ, f'"{sys.executable}"')
+        if enable: winreg.SetValueEx(key, "Zyng", 0, winreg.REG_SZ, f'"{sys.executable}"')
         else:
-            try: winreg.DeleteValue(key, "JeffTUN")
+            try: winreg.DeleteValue(key, "Zyng")
             except Exception: pass
         winreg.CloseKey(key)
     elif sys.platform != "darwin":
@@ -992,7 +1020,7 @@ def set_autostart(enable):
             if enable:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as f:
-                    f.write("[Desktop Entry]\nType=Application\nName=JeffTUN VPN\n"
+                    f.write("[Desktop Entry]\nType=Application\nName=Zyng VPN\n"
                             f"Exec=\"{sys.executable}\"\nX-GNOME-Autostart-enabled=true\nTerminal=false\n")
             elif os.path.exists(path):
                 os.remove(path)
@@ -1005,7 +1033,7 @@ def get_autostart():
         try:
             import winreg
             k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run")
-            winreg.QueryValueEx(k, "JeffTUN"); winreg.CloseKey(k); return True
+            winreg.QueryValueEx(k, "Zyng"); winreg.CloseKey(k); return True
         except Exception:
             return False
     if sys.platform != "darwin":
@@ -1046,7 +1074,7 @@ def _norm_sub_url(url):
 def _hwid():
     """Стабильный идентификатор устройства (HWID). Панели с лимитом устройств
     (Remnawave/Happ-совместимые) требуют его, иначе отдают заглушку вместо серверов."""
-    path = os.path.join(os.path.dirname(CONFIG_FILE), ".jeffton_hwid")
+    path = os.path.join(os.path.dirname(CONFIG_FILE), ".zyng_hwid")
     try:
         with open(path, encoding="utf-8") as f:
             h = f.read().strip()
@@ -1076,7 +1104,7 @@ def _sub_headers(ua):
         "x-hwid": _hwid(),
         "x-device-os": osname,
         "x-ver-os": osver,
-        "x-device-model": "JeffTUN " + APP_VERSION,
+        "x-device-model": "Zyng " + APP_VERSION,
     }
 
 
@@ -1222,7 +1250,7 @@ def _decode_title(title):
 
 def _parse_userinfo(userinfo, title):
     """Разбирает 'upload=..; download=..; total=..; expire=..' в понятный вид."""
-    d = {"title": _decode_title(title) or "JeffTUN VPN"}
+    d = {"title": _decode_title(title) or "Zyng VPN"}
     parts = {}
     for kv in userinfo.replace(",", ";").split(";"):
         if "=" in kv:
@@ -1397,7 +1425,7 @@ class _PillLabel:
 
 
 # ══ ПРИЛОЖЕНИЕ ═══════════════════════════════════════════════════════════════
-class JeffTUN:
+class ZyngApp:
     def __init__(self, root):
         self.root = root
         self.proc = None
@@ -1509,7 +1537,7 @@ class JeffTUN:
         except Exception:
             pass
         if self._logo_ref is None:
-            ctk.CTkLabel(h, text="JeffTUN", font=ctk.CTkFont(FONT, 22, "bold"),
+            ctk.CTkLabel(h, text="Zyng", font=ctk.CTkFont(FONT, 22, "bold"),
                          text_color=TEXT).pack()
 
         # Тумблер — тот же, что был до 6.0. Круглая кнопка со сферой в Tkinter
@@ -1687,7 +1715,7 @@ class JeffTUN:
                         f"$x[0].AppendChild($t.CreateTextNode('{title}'))|Out-Null;"
                         f"$x[1].AppendChild($t.CreateTextNode('{msg}'))|Out-Null;"
                         "$n=[Windows.UI.Notifications.ToastNotification]::new($t);"
-                        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('JeffTUN VPN').Show($n);"
+                        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Zyng VPN').Show($n);"
                     )
                     subprocess.Popen(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps],
                                      creationflags=subprocess.CREATE_NO_WINDOW,
@@ -1697,7 +1725,7 @@ class JeffTUN:
                                       f'display notification "{msg}" with title "{title}"'],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 else:
-                    subprocess.Popen(["notify-send", "-a", "JeffTUN VPN", title, msg],
+                    subprocess.Popen(["notify-send", "-a", "Zyng VPN", title, msg],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
@@ -2148,7 +2176,7 @@ class JeffTUN:
                 engine = resource_path("sing-box.exe" if os.name == "nt" else "sing-box")
                 if not os.path.exists(engine):
                     self._flash(tr("Не найден sing-box", "sing-box not found"), DANGER); return
-                cfg = os.path.join(cfgdir, ".jeffton_singbox.json")
+                cfg = os.path.join(cfgdir, ".zyng_singbox.json")
                 with open(cfg, "w", encoding="utf-8") as f:
                     json.dump(build_singbox_config(outbound, self.prefs), f)
                 cmd = [engine, "run", "-c", cfg]
@@ -2159,7 +2187,7 @@ class JeffTUN:
                     self._flash(tr("Не найден xray", "xray not found"), DANGER); return
                 # geoip.dat/geosite.dat лежат рядом с ядром — укажем ядру, где их искать
                 env["XRAY_LOCATION_ASSET"] = os.path.dirname(engine)
-                cfg = os.path.join(cfgdir, ".jeffton_xray.json")
+                cfg = os.path.join(cfgdir, ".zyng_xray.json")
                 with open(cfg, "w", encoding="utf-8") as f:
                     json.dump(build_xray_config(outbound, self.prefs), f)
                 cmd = [engine, "run", "-config", cfg]
@@ -2176,7 +2204,7 @@ class JeffTUN:
             sb = resource_path("sing-box.exe" if os.name == "nt" else "sing-box")
             if os.path.exists(sb):
                 try:
-                    tcfg = os.path.join(cfgdir, ".jeffton_tun.json")
+                    tcfg = os.path.join(cfgdir, ".zyng_tun.json")
                     with open(tcfg, "w", encoding="utf-8") as f:
                         json.dump(build_tun_config(self.prefs), f)
                     self.tun_proc = subprocess.Popen([sb, "run", "-c", tcfg], env=env,
@@ -2374,7 +2402,7 @@ class JeffTUN:
                 # cache-buster: raw.githubusercontent кэшируется ~5 мин на CDN,
                 # из-за этого «у одних сразу, у других долго». Обходим кэш.
                 cb = "?t=%d" % int(time.time())
-                hdr = {"User-Agent": "JeffTUN", "Cache-Control": "no-cache", "Pragma": "no-cache"}
+                hdr = {"User-Agent": "Zyng", "Cache-Control": "no-cache", "Pragma": "no-cache"}
                 latest = ""; notes = ""
                 # 1) манифест RELEASE.json (версия + «что нового»); 2) фолбэк на version.txt
                 try:
@@ -2422,7 +2450,7 @@ class JeffTUN:
         # macOS-сборки больше нет — на Mac (и в dev-режиме) открываем страницу релиза
         if not getattr(sys, "frozen", False) or sys.platform == "darwin":
             import webbrowser; webbrowser.open(RELEASES_URL); return
-        asset = "JeffTUN.exe" if os.name == "nt" else "JeffTUN-linux"
+        asset = "Zyng.exe" if os.name == "nt" else "Zyng-linux"
         url = f"{DOWNLOAD_BASE}/{asset}"; cur = sys.executable; new = cur + ".new"
         def setl(t):
             if hasattr(self, "_ulbl"):
@@ -2432,7 +2460,7 @@ class JeffTUN:
             try:
                 import ssl
                 ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-                req = urllib.request.Request(url, headers={"User-Agent": "JeffTUN"})
+                req = urllib.request.Request(url, headers={"User-Agent": "Zyng"})
                 try:
                     if os.path.exists(new): os.remove(new)
                 except Exception: pass
@@ -2613,7 +2641,7 @@ class JeffTUN:
         c = section(tr("ПОДРОБНЕЕ", "MORE"))
         link(c, tr(f"⬆ Проверить обновление (v{APP_VERSION})", f"⬆ Check for updates (v{APP_VERSION})"), self.do_self_update)
         link(c, tr("❓ FAQ", "❓ FAQ"), self._faq)
-        link(c, "✈ Telegram  @jeffvpn", lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
+        link(c, "✈ Telegram  @zyngfast", lambda: __import__("webbrowser").open(TELEGRAM_URL), color=ACC)
         link(c, tr("ℹ О приложении", "ℹ About"), self._about)
 
     def _need_restart(self, win):
@@ -2672,7 +2700,7 @@ class JeffTUN:
                 opener = urllib.request.build_opener(handler, urllib.request.HTTPSHandler(context=ctx))
                 url = "https://speed.cloudflare.com/__down?bytes=10000000"   # 10 МБ
                 t0 = time.time(); got = 0
-                with opener.open(urllib.request.Request(url, headers={"User-Agent": "JeffTUN"}), timeout=30) as r:
+                with opener.open(urllib.request.Request(url, headers={"User-Agent": "Zyng"}), timeout=30) as r:
                     while True:
                         chunk = r.read(65536)
                         if not chunk: break
@@ -2688,10 +2716,10 @@ class JeffTUN:
     def _about(self):
         messagebox.showinfo(
             tr("О приложении", "About"),
-            tr(f"JeffTUN VPN v{APP_VERSION}\n\nБыстрый VPN с обходом блокировок.\n"
-               "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/jeffvpn",
-               f"JeffTUN VPN v{APP_VERSION}\n\nA fast VPN that gets around blocking.\n"
-               "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/jeffvpn"))
+            tr(f"Zyng VPN v{APP_VERSION}\n\nБыстрый VPN с обходом блокировок.\n"
+               "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/zyngfast",
+               f"Zyng VPN v{APP_VERSION}\n\nA fast VPN that gets around blocking.\n"
+               "VLESS (Reality), VMess, Trojan, Shadowsocks.\n\nTelegram: t.me/zyngfast"))
 
     def _stats(self):
         st = tr("Подключено", "Connected") if self.connected else tr("Отключено", "Disconnected")
@@ -2705,9 +2733,9 @@ class JeffTUN:
     def _faq(self):
         messagebox.showinfo("FAQ", tr(
             "• ＋ или «Вставить» — добавь ключ/подписку.\n• Выбери страну слева.\n"
-            "• Нажми круглую кнопку — подключение.\n• «Пинг» — отклик сервера.\n\nt.me/jeffvpn",
+            "• Нажми круглую кнопку — подключение.\n• «Пинг» — отклик сервера.\n\nt.me/zyngfast",
             "• ＋ or the Add button — add a key or subscription.\n• Pick a country on the left.\n"
-            "• Press the round button to connect.\n• “Ping” shows server response time.\n\nt.me/jeffvpn"))
+            "• Press the round button to connect.\n• “Ping” shows server response time.\n\nt.me/zyngfast"))
 
     def on_close(self):
         if self.connected: self.disconnect()
@@ -2738,7 +2766,7 @@ def main():
         ctk.set_appearance_mode("light" if BG.upper() == "#F2F4F8" else "dark")
         ctk.set_default_color_theme("blue")
         root = ctk.CTk(); root.configure(fg_color=BG)
-        JeffTUN(root); root.mainloop()
+        ZyngApp(root); root.mainloop()
     except Exception:
         # Раньше здесь стояло молчание: ошибка писалась в файл, и всё. Из-за
         # этого сбой при запуске выглядел как «скачал, а оно не открывается» —
@@ -2747,7 +2775,7 @@ def main():
         try:
             import traceback
             text = traceback.format_exc()
-            log = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "jefftun_error.log")
+            log = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "zyng_error.log")
             with open(log, "a", encoding="utf-8") as f:
                 f.write(text + "\n")
         except Exception:
@@ -2759,7 +2787,7 @@ def main():
                 APP_NAME,
                 "Не удалось запустить приложение.\n\n"
                 + last[0][:300]
-                + "\n\nПодробности — в файле jefftun_error.log рядом с программой.\n"
+                + "\n\nПодробности — в файле zyng_error.log рядом с программой.\n"
                   "Пришли его нам: t.me/zyngfast")
         except Exception:
             pass

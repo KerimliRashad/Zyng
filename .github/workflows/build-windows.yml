@@ -1,4 +1,4 @@
-name: Build JeffTUN Clients
+name: Build Zyng Desktop
 
 on:
   push:
@@ -63,7 +63,7 @@ jobs:
         working-directory: qipcall_client
         run: |
           pyinstaller --noconfirm --onefile --windowed `
-            --name "JeffTUN" `
+            --name "Zyng" `
             --icon "icon.ico" `
             --collect-all customtkinter `
             --hidden-import yaml `
@@ -79,58 +79,53 @@ jobs:
             --add-data "icon.ico;." `
             --add-data "flags;flags" `
             qipcall.py
-      - name: Publish release (jefftun)
+      - name: Publish release (zyng)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: jefftun
-          name: JeffTUN VPN
-          files: qipcall_client/dist/JeffTUN.exe
+          tag_name: zyng
+          name: Zyng VPN
+          files: qipcall_client/dist/Zyng.exe
           body: |
-            <p align="center"><img src="https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/jeff_banner.png" width="440" alt="JeffTUN"></p>
-            <h2 align="center">JeffTUN VPN</h2>
+            <p align="center"><img src="https://raw.githubusercontent.com/kerimlirashad/kerimlirashad/claude/icq-messenger-b0bt2n/qipcall_client/zyng_banner.png" width="440" alt="Zyng"></p>
+            <h2 align="center">Zyng VPN 2.0</h2>
             <p align="center">Вставь ключ <code>vless:// · vmess:// · trojan:// · ss://</code> или ссылку-подписку — и нажми «Подключиться».</p>
+
+            <p align="center"><sub>Раньше приложение называлось JeffTUN. Это оно же: ключи и подписки переносятся при первом запуске сами.</sub></p>
 
             <table>
               <tr>
                 <td><b>🪟 Windows</b></td>
                 <td>
-                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe"><img src="https://img.shields.io/badge/Setup-x64-2ea043?style=for-the-badge&logo=windows&logoColor=white"></a>
-                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe"><img src="https://img.shields.io/badge/Setup-x64_(mirror)-1f6feb?style=for-the-badge"></a>
-                </td>
-              </tr>
-              <tr>
-                <td><b>📺 TV Android</b></td>
-                <td>
-                  <a href="https://github.com/Happ-proxy/happ-android/releases/latest"><img src="https://img.shields.io/badge/JeffTUN-Android_TV-2ea043?style=for-the-badge&logo=android&logoColor=white"></a>
-                  <sub>установи на Android TV и вставь подписку JeffTUN</sub>
-                </td>
-              </tr>
-              <tr>
-                <td><b>🍎 TV Apple</b></td>
-                <td>
-                  <a href="https://apps.apple.com/app/happ-proxy-utility/id6504287215"><img src="https://img.shields.io/badge/JeffTUN-Apple_TV-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
-                  <sub>установи на Apple TV (tvOS) и вставь подписку JeffTUN</sub>
-                </td>
-              </tr>
-              <tr>
-                <td><b>🔴 Jeff Browser</b></td>
-                <td>
-                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jeffbrowser/JeffBrowser-Setup.exe"><img src="https://img.shields.io/badge/Браузер-Windows-2ea043?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
-                  <sub>собственный браузер Jeff с поиском Google (Windows 10/11)</sub>
-                </td>
-              </tr>
-              <tr>
-                <td><b>📱 Zyng для iOS</b></td>
-                <td>
-                  <a href="https://zyng.online"><img src="https://img.shields.io/badge/Zyng-iPhone-5B8CFF?style=for-the-badge&logo=apple&logoColor=white"></a>
-                  <sub>скоро в App Store · сайт <a href="https://zyng.online">zyng.online</a></sub>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/zyng/Zyng.exe"><img src="https://img.shields.io/badge/Скачать-x64-5B8CFF?style=for-the-badge&logo=windows&logoColor=white"></a>
+                  <sub>Windows 7 · 8 · 10 · 11</sub>
                 </td>
               </tr>
               <tr>
                 <td><b>🐧 Linux</b></td>
                 <td>
-                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux"><img src="https://img.shields.io/badge/Binary-x64-2ea043?style=for-the-badge&logo=linux&logoColor=white"></a>
-                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux"><img src="https://img.shields.io/badge/Binary-x64_(mirror)-1f6feb?style=for-the-badge"></a>
+                  <a href="https://github.com/kerimlirashad/kerimlirashad/releases/download/zyng/Zyng-linux"><img src="https://img.shields.io/badge/Скачать-x64-5B8CFF?style=for-the-badge&logo=linux&logoColor=white"></a>
+                  <sub><code>chmod +x Zyng-linux</code> и запускай</sub>
+                </td>
+              </tr>
+              <tr>
+                <td><b>📱 iPhone</b></td>
+                <td>
+                  <a href="https://zyng.online"><img src="https://img.shields.io/badge/Zyng-iOS-5B8CFF?style=for-the-badge&logo=apple&logoColor=white"></a>
+                  <sub>скоро в App Store · <a href="https://zyng.online">zyng.online</a></sub>
+                </td>
+              </tr>
+              <tr>
+                <td><b>📺 Android TV</b></td>
+                <td>
+                  <a href="https://github.com/Happ-proxy/happ-android/releases/latest"><img src="https://img.shields.io/badge/Zyng-Android_TV-39D98A?style=for-the-badge&logo=android&logoColor=white"></a>
+                  <sub>установи и вставь свою подписку Zyng</sub>
+                </td>
+              </tr>
+              <tr>
+                <td><b>🍎 Apple TV</b></td>
+                <td>
+                  <a href="https://apps.apple.com/app/happ-proxy-utility/id6504287215"><img src="https://img.shields.io/badge/Zyng-Apple_TV-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
+                  <sub>установи на tvOS и вставь свою подписку Zyng</sub>
                 </td>
               </tr>
             </table>
@@ -141,10 +136,9 @@ jobs:
             <b>«Подробнее» → «Выполнить в любом случае»</b> — приложение безопасно.
             </blockquote>
 
-            <p align="center"><sub>Linux: <code>chmod +x JeffTUN-linux</code> и запускай. Обновления ставятся внутри приложения.</sub></p>
-
             <p align="center">
-              <a href="https://zyng.online"><img src="https://img.shields.io/badge/🌐_Наш_сайт-zyng.online-5B8CFF?style=for-the-badge"></a>
+              <a href="https://zyng.online"><img src="https://img.shields.io/badge/🌐_Сайт-zyng.online-5B8CFF?style=for-the-badge"></a>
+              <a href="https://t.me/zyngfast"><img src="https://img.shields.io/badge/Telegram-@zyngfast-2AABEE?style=for-the-badge&logo=telegram&logoColor=white"></a>
             </p>
           fail_on_unmatched_files: false
         env:
@@ -196,7 +190,7 @@ jobs:
         working-directory: qipcall_client
         run: |
           pyinstaller --noconfirm --onefile \
-            --name "JeffTUN-linux" \
+            --name "Zyng-linux" \
             --collect-all customtkinter \
             --hidden-import yaml \
             --add-binary "xray:." \
@@ -209,12 +203,12 @@ jobs:
             --add-data "orb_off.png:." \
             --add-data "flags:flags" \
             qipcall.py
-      - name: Publish release (jefftun)
+      - name: Publish release (zyng)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: jefftun
-          name: JeffTUN VPN
-          files: qipcall_client/dist/JeffTUN-linux
+          tag_name: zyng
+          name: Zyng VPN
+          files: qipcall_client/dist/Zyng-linux
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,17 +1,17 @@
 {
-  "version": "6.0.2",
-  "name": "JeffTUN VPN 6.0.2",
+  "version": "2.0.0",
+  "name": "Zyng VPN 2.0.0",
   "channel": "stable",
-  "mandatory": true,
-  "notes": "Срочное исправление: версии 6.0.0 и 6.0.1 не запускались — окно не появлялось. Причина устранена, обновитесь.",
+  "mandatory": false,
+  "notes": "JeffTUN стал Zyng — то же приложение под именем и оформлением iOS-версии. Ключи и подписки переносятся при первом запуске сами, заново вводить ничего не нужно.",
   "changelog": {
     "added": [
-      "Если приложение всё же не запустится — теперь покажет причину, а не промолчит"
+      "Новое имя, значок и логотип — общие с приложением Zyng для iPhone",
+      "Настройки и идентификатор устройства переносятся из JeffTUN автоматически"
     ],
-    "fixed": [
-      "6.0.0 и 6.0.1 падали при запуске: пропал метод отрисовки тумблера",
-      "xhttp, httpupgrade, HTTP/2, QUIC и kcp подключаются",
-      "Подписки читаются даже когда панель отдаёт HTML-страницу"
+    "changed": [
+      "Файлы обновлений называются Zyng.exe и Zyng-linux",
+      "Telegram-канал: @zyngfast"
     ],
     "known": [
       "Режим TUN требует запуска от имени администратора",
@@ -19,10 +19,10 @@
     ]
   },
   "windows": {
-    "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN.exe"
+    "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/zyng/Zyng.exe"
   },
   "linux": {
-    "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/jefftun/JeffTUN-linux"
+    "x64": "https://github.com/kerimlirashad/kerimlirashad/releases/download/zyng/Zyng-linux"
   },
-  "releases": "https://github.com/kerimlirashad/kerimlirashad/releases/tag/jefftun"
+  "releases": "https://github.com/kerimlirashad/kerimlirashad/releases/tag/zyng"
 }

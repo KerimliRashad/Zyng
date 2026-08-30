@@ -1,4 +1,4 @@
-"""Проверка запуска JeffTUN без графики.
+"""Проверка запуска Zyng без графики.
 
 Подменяет tkinter и customtkinter заглушками и прогоняет сборку интерфейса:
 создание окна во всех темах и языках, экран настроек, список серверов с
@@ -61,7 +61,7 @@ for theme in ("dark","light","black","system"):
     for lang in ("ru","en"):
         qipcall.apply_lang(lang); qipcall.apply_theme(theme)
         try:
-            qipcall.JeffTUN(W())
+            qipcall.ZyngApp(W())
         except Exception:
             print(f"  ✗ ПАДЕНИЕ: тема={theme} язык={lang}")
             traceback.print_exc(); fails += 1; break
@@ -71,7 +71,7 @@ if not fails:
 
 qipcall.apply_theme("dark"); qipcall.apply_lang("ru")
 try:
-    app = qipcall.JeffTUN(W())
+    app = qipcall.ZyngApp(W())
     for name in ("render_tabs","render_servers","open_settings","_about","_faq","_stats"):
         getattr(app, name)()
     print("  настройки, список серверов, диалоги: ок")
@@ -79,7 +79,7 @@ except Exception:
     print("  ✗ ПАДЕНИЕ на экранах"); traceback.print_exc(); fails += 1
 
 # ── С реальными данными ──────────────────────────────────────────────────────
-app = qipcall.JeffTUN(W())
+app = qipcall.ZyngApp(W())
 app.links = [
     "vless://11111111-2222-3333-4444-555555555555@de.example.com:443?type=xhttp&security=reality&pbk=AAA&sid=01&sni=a.com#%F0%9F%87%A9%F0%9F%87%AA%20Germany",
     "vless://11111111-2222-3333-4444-555555555555@nl.example.com:443?type=ws&path=/x&security=tls#Netherlands",
