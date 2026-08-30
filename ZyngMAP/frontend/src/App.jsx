@@ -16,13 +16,28 @@ function App() {
   const [savedRoutes, setSavedRoutes] = useState([])
 
   useEffect(() => {
+    // Get user location with high accuracy
     if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        })
-      })
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          })
+        },
+        (error) => console.log('Geolocation error:', error),
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+
+      // Watch position for real-time updates
+      navigator.geolocation.watchPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          })
+        }
+      )
     }
     const stored = localStorage.getItem('savedRoutes')
     if (stored) setSavedRoutes(JSON.parse(stored))
@@ -44,7 +59,11 @@ function App() {
     setError(null)
 
     try {
-      const response = await fetch(`http://localhost:5000/api/route`, {
+      const apiUrl = window.location.pathname.includes('/map')
+        ? '/map/api/route'
+        : 'http://localhost:5000/api/route'
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
